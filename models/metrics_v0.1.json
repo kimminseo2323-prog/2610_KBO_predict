@@ -1,0 +1,19 @@
+{
+  "model_version": "v0.1",
+  "trained_at": "2026-10-28T00:34:24+09:00",
+  "split_date": "2026-08-01",
+  "train_n": 478,
+  "test_n": 224,
+  "n": 224,
+  "accuracy": 0.6026785714285714,
+  "log_loss": 0.6816722750467089,
+  "brier": 0.24427308043163865,
+  "baseline_home_always": 0.5357142857142857,
+  "baseline_better_win_pct": 0.59375,
+  "coefficients": {
+    "win_pct_diff": 0.1046750495584692,
+    "last10_diff": 0.06591743479774288,
+    "run_diff_diff": 0.046900041967004286,
+    "intercept": 0.017216153929858435
+  }
+}
