@@ -104,7 +104,7 @@ def test_package_imports():
 **Interfaces:**
 - Produces:
   - `teams.TEAMS: dict[str, dict]` — 풀네임 키: `{"Doosan Bears": {"code": "OB", "ko": "두산"}, "Lotte Giants": {"code": "LT", "ko": "롯데"}, "KT Wiz": {"code": "KT", "ko": "KT"}, "Kiwoom Heroes": {"code": "WO", "ko": "키움"}, "SSG Landers": {"code": "SK", "ko": "SSG"}, "Samsung Lions": {"code": "SS", "ko": "삼성"}, "Hanwha Eagles": {"code": "HH", "ko": "한화"}, "Kia Tigers": {"code": "HT", "ko": "KIA"}, "LG Twins": {"code": "LG", "ko": "LG"}, "NC Dinos": {"code": "NC", "ko": "NC"}}`; `teams.code_for(full_name: str) -> str` (모르는 이름이면 `KeyError`); `teams.short_to_code(short: str) -> str` — 박스스코어 표 헤더의 짧은 이름(`"Kia"`, `"Samsung"`, `"KT"`, `"SSG"`, `"LG"`, `"NC"`, `"Doosan"`, `"Lotte"`, `"Kiwoom"`, `"Hanwha"`) → 코드
-  - `seasons.REGULAR_SEASON: dict[int, tuple[date, date]]` — `{2026: (start, end)}`. 값은 Step 13 백필 후 주간 일정에서 확인해 채운다: start = 3월 이후 하루에 ≥4경기가 처음 열린 날, end = 하루 ≥4경기가 마지막으로 열린 날. `seasons.is_regular(season: int, d: date) -> bool`
+  - `seasons.REGULAR_SEASON: dict[int, tuple[date, date]]` — `{2026: (date(2026, 3, 28), date(2026, 10, 12))}` (백필 데이터로 확정: 3/20~3/24는 시범경기, 10/9~10/12는 하루 2~3경기의 추가 편성 경기, 포스트시즌은 10/14부터 하루 1경기. 3/28~10/12 FINAL 718경기 + 사이트에 LIVE로 남은 2경기 = 720). `seasons.is_regular(season: int, d: date) -> bool`
   - `mykbo_client.USER_AGENT`, `BASE_URL = "https://mykbostats.com"`, `SLEEP_S = 5.0`
   - `mykbo_client.fetch_html(path: str, *, session=None, sleep_s: float = SLEEP_S, cache_dir: Path | None = None) -> str` — `time.sleep(sleep_s)` 후 GET(`timeout=20`), 실패 1회 재시도 후 예외. `cache_dir`가 주어지고 `cache_dir/<path를 파일명으로 안전하게 바꾼 것>.html`이 있으면 요청 없이 그 내용을 반환, 없으면 요청 후 저장. 기본 cache_dir은 `raw_store.data_dir()/"cache"/"html"`.
   - `mykbo_client.week_path(d: date) -> str` — `/schedule/week_of/YYYY-MM-DD`
@@ -150,7 +150,7 @@ def test_parse_week_postseason_scheduled(fixture_html):
 def test_parse_game_final(fixture_html):
     g = parse_game(fixture_html("mykbo_game_14048_final.html"))
     assert g["game_id"] == 14048 and g["date"] == "2026-10-26" and g["status"] == "FINAL"
-    assert g["away"] == {"name": "Kia Tigers", "code": "HT", "score": 1} and g["home"]["code"] == "SS" and g["home"]["score"] == 5
+    assert g["away"] == {"name": "Kia Tigers", "code": "HT", "score": 5} and g["home"]["code"] == "SS" and g["home"]["score"] == 1
     assert g["batting"]["away"][0] == {**g["batting"]["away"][0], "order": 1, "name": "Park Jung-woo", "pos": "RF", "ab": 5, "h": 0, "so": 2}
     p = g["pitching"]["away"][0]
     assert p["name"] == "Naile" and p["ip_outs"] == 13 and p["er"] == 1 and p["so"] == 3 and p["order"] == 1
