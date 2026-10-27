@@ -59,20 +59,22 @@
 
 ### 4.1 소스
 
+**2026-10-27 변경: 네이버 스포츠 API → MyKBOStats.** 네이버 `api-gw.sports.naver.com`은 curl(브라우저형 TLS)에는 응답하지만 Python `requests`/`urllib`/raw SSL에는 응답하지 않고(이 PC와 GitHub Actions ubuntu 러너 모두에서 확인, probe 워크플로 실행 #1), `python-requests` UA도 차단한다 — 봇 클라이언트를 TLS 지문·UA 수준에서 걸러내는 것으로 판단. 지문 위조로 우회하는 것은 이 프로젝트의 반목표(공개 포트폴리오에 차단 우회 코드)이므로 하지 않는다.
+
 | 용도 | 소스 | 비고 |
 |---|---|---|
-| 경기 일정·결과·선발투수·박스스코어·순위·최근 맞대결 | **네이버 스포츠 내부 JSON API** `api-gw.sports.naver.com` — `/schedule/games?...categoryId=kbo`, `/schedule/games/{gameId}/record` | 로그인 불필요, GET, 2010~현재 확인. 비공식이므로 README에 "비공식 API, 개인 학습용" 명시. |
-| 2001~2009 경기 결과 (선택) | `dentearl/kbo-data` 정적 JSON | 결과만 있고 선발투수 없음 → 승패 모델 학습엔 안 쓰고, 팀 분석 페이지의 장기 추세에만 쓸 수 있음. 우선순위 낮음. |
-| 선수 시즌 스탯 (폴백) | MyKBOStats (2014~, Crawl-delay 5초) | 아래 4.2의 1안이 안 될 때만. 영문 선수명이라 네이버와 조인이 까다로움. |
+| 경기 일정·결과·상태·구장·시간 | **MyKBOStats** `https://mykbostats.com/schedule/week_of/YYYY-MM-DD` (주간 HTML, 화요일 시작) | 로그인 불필요, robots.txt `Crawl-delay: 5` 준수. 게임 라인에 `game-line-{id}`, `data-game-datetime`(UTC), 팀명, 점수, 상태(`Final`/`Live`/`Canceled …`/시간+구장). |
+| 경기 박스스코어 (타자·투수, 선수 ID) | MyKBOStats `/games/{id}-{Away}-vs-{Home}-{YYYYMMDD}` | 타자: Pos, BA, AB, R, H, HR, RBI, BB, SO, HBP. 투수: ERA, IP(`4 ⅓`), NP, R, ER, H, HR, SO, BB, HB, GS(게임스코어). 선수 링크 `/players/{id}-…`. 첫 행 = 선발. |
+| **경기 전 예상 선발투수** | **현재 없음.** MyKBOStats 미래 경기 페이지는 "Scheduled"·전적·구장·중계만 표시. | v0.1은 선발 피처 없이 간다 (5.1). 2단계에서 소스를 다시 찾는다 (KBO 공식 보도자료·뉴스 등). |
+| 2001~2009 경기 결과 (선택) | `dentearl/kbo-data` 정적 JSON | 우선순위 낮음. |
 
 ### 4.2 선수 시즌 스탯은 박스스코어 집계로 만든다 (내 결정)
 
-네이버 `/record`의 `battersBoxscore` / `pitchersBoxscore`에는 선수 코드(`pcode`)가 있다. **경기별 박스스코어를 시즌 단위로 합산**하면 타자(AB, H, 2B, 3B, HR, BB, K, SB 등)·투수(IP, BF, H, HR, BB, K, R, ER 등) 시즌 스탯이 나온다. 이렇게 하면:
+MyKBOStats 박스스코어의 선수 ID(`/players/{id}`)를 키로 **경기별 박스스코어를 시즌 단위로 합산**하면 타자(AB, H, HR, BB, K, HBP)·투수(IP, R, ER, H, HR, K, BB, HBP, NP) 시즌 스탯이 나온다. 소스가 하나라서 선수명 조인 문제가 없고, "경기 날짜 기준 누적"이 자연스러워 누수 방지가 쉽다.
 
-- 소스가 하나라서 선수명 조인 문제가 없다.
-- "경기 날짜 기준 누적 스탯"을 자연스럽게 만들 수 있어 누수 방지가 쉽다 (아래 5.2).
+박스스코어에 2B/3B/SB가 없다 → 클러스터링(5.2)의 ISO·주루 지표는 선수 페이지(`/players/{id}`)의 시즌 행이나 경기 페이지 하단 "2B/3B/SB" 요약 텍스트에서 보완한다 (3단계에서 결정).
 
-빌더는 첫 단계에서 `battersBoxscore` 필드에 2B/3B/SB/CS/SAC/SF가 있는지 확인해야 한다. 없으면 클러스터링용 세부 지표는 MyKBOStats로 보완한다. (조사에서 `pitchersBoxscore` 필드는 확인됐고 `battersBoxscore` 세부 필드는 미확인.)
+저장 방식(내 결정): 주간 일정은 파싱한 행을 `data/raw/{season}/games.jsonl`, 박스스코어는 파싱한 JSON을 `data/raw/{season}/boxscores.jsonl.gz`로 커밋한다. 원본 HTML(경기당 ~150KB)은 git에 넣지 않고 로컬 캐시 `data/cache/html/`(gitignore)에만 둔다 — 파서는 버전 관리되고 MyKBOStats가 과거 페이지를 유지하므로 재현 가능하다.
 
 ### 4.3 범위
 
@@ -82,9 +84,9 @@
 
 ### 4.4 수집 규칙
 
-- 요청 간 1~2초 `sleep`, 브라우저 UA 명시, 실패 시 1회 재시도 후 중단 (차단 유발 방지).
-- 백필(2015~2026 전체, 약 8,600경기 × 2요청)은 **로컬에서 한 번** 실행해 `data/raw/`에 저장하고 저장소에 커밋한다. Actions는 증분(어제·오늘)만 수집한다.
-- 원본 JSON은 내용 그대로, **시즌별 `data/raw/{season}.jsonl.gz`** 로 압축 보관한다 (내 결정 — 경기당 수십 KB × 8,600경기는 비압축 커밋 시 저장소가 수백 MB로 커진다). 사람이 GitHub에서 바로 읽을 수 있도록 `data/raw/samples/`에 경기 3개는 비압축 JSON으로 둔다. 가공은 별도(`data/processed/*.parquet`). 원본이 있어야 노트북·py 동일성 검증이 가능하다.
+- 요청 간 **5초** `sleep`(robots.txt Crawl-delay), UA `Mozilla/5.0 (compatible; kbo-predict/0.1; +https://github.com/kimminseo2323-prog/2610_KBO_predict)`, 실패 시 1회 재시도 후 중단 (차단 유발 방지).
+- 백필(시즌당 주간 페이지 ~30 + 경기 ~720 ≈ 750요청 × 5초 ≈ 1시간/시즌)은 **로컬에서** 실행해 커밋한다. Actions는 증분(최근 1~2주)만 수집한다. 2015~2025 백필은 1단계에서 시즌별로 나눠 진행.
+- 파싱 결과를 커밋하고 HTML은 로컬 캐시에만 둔다 (4.2). 가공은 별도(`data/processed/*.parquet`). 커밋된 파싱 결과가 노트북·py 동일성 검증의 입력이다.
 
 ## 5. 모델
 
@@ -92,7 +94,7 @@
 
 - **문제 정의**: 경기 전날 밤 시점의 정보만으로 `P(홈팀 승)`. 무승부(KBO 정규시즌 12회 연장 후 무승부 가능)는 학습에서 제외하고, 예측 시엔 그냥 확률만 낸다.
 - **피처** (전부 "해당 경기 이전" 데이터로만 계산):
-  - 선발투수: 시즌 누적 ERA·FIP 근사(K, BB, HR 기반)·K/9·BB/9, 최근 3경기 평균 실점, 당해 시즌 이닝 수(표본 크기), 상대팀 상대 성적.
+  - 선발투수 (**경기 전 예상 선발 소스가 확보된 뒤 — 2단계**): 시즌 누적 ERA·FIP 근사(K, BB, HR 기반)·K/9·BB/9, 최근 3경기 평균 실점, 당해 시즌 이닝 수(표본 크기), 상대팀 상대 성적. v0.1은 선발 피처 없이 팀 승률·최근 10경기·득실차·홈으로만 간다.
   - 팀: 시즌 승률, 최근 10경기 승률, 피타고리안 승률(득실점), 팀 OPS·팀 ERA 누적, 홈/원정 승률.
   - 경기: 홈/원정, 구장, 요일, 맞대결 최근 전적.
   - **유형 상성**: 상대 선발의 유형(5.2 결과) × 자팀 타선의 유형 구성 비율. 이 피처는 "넣기 전/후"를 모델 성적표에 둘 다 보여준다.
