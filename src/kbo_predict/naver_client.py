@@ -17,7 +17,7 @@ def _get(session: requests.Session, url: str, sleep_s: float) -> dict:
     for _ in range(2):
         time.sleep(sleep_s)
         try:
-            resp = session.get(url, timeout=30)
+            resp = session.get(url, timeout=20)
             resp.raise_for_status()
             return resp.json()
         except requests.RequestException as exc:
