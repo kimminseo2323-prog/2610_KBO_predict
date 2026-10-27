@@ -1,0 +1,31 @@
+name: probe naver api
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install requests
+      - name: call naver sports api with plain requests
+        run: |
+          python - <<'EOF'
+          import requests, time
+          UA = "Mozilla/5.0 (compatible; kbo-predict/0.1; +https://github.com/kimminseo2323-prog/2610_KBO_predict)"
+          base = "https://api-gw.sports.naver.com"
+          urls = [
+            base + "/schedule/games?fields=basic,schedule,baseball&upperCategoryId=kbaseball&categoryId=kbo&fromDate=2026-10-27&toDate=2026-10-27&size=50",
+            base + "/schedule/games/55551026HTSS02026/record",
+          ]
+          for u in urls:
+              t = time.time()
+              try:
+                  r = requests.get(u, headers={"User-Agent": UA}, timeout=20)
+                  body = r.json()
+                  keys = list(body.get("result", {}).keys())
+                  print("OK", r.status_code, round(time.time() - t, 2), "s", u.split("?")[0], keys[:5])
+              except Exception as e:
+                  print("FAIL", type(e).__name__, round(time.time() - t, 2), "s", u.split("?")[0])
+              time.sleep(1)
+          EOF
