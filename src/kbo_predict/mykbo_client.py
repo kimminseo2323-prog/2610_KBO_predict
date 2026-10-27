@@ -22,11 +22,12 @@ def _cache_file(cache_dir: Path, path: str) -> Path:
     return cache_dir / (re.sub(r"[^A-Za-z0-9._-]+", "_", path.strip("/")) + ".html")
 
 
-def fetch_html(path: str, *, session=None, sleep_s: float = SLEEP_S, cache_dir: Path | None = None) -> str:
+def fetch_html(path: str, *, session=None, sleep_s: float = SLEEP_S, cache_dir: Path | None = None,
+               use_cache: bool = True) -> str:
     if cache_dir is None:
         cache_dir = raw_store.data_dir() / "cache" / "html"
     cached = _cache_file(cache_dir, path)
-    if cached.exists():
+    if use_cache and cached.exists():
         return cached.read_text(encoding="utf-8")
 
     session = session or requests.Session()

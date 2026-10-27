@@ -25,31 +25,35 @@ def collect_range(from_date: date, to_date: date, *, season: int | None = None, 
 
     fetched_games = 0
     d = from_date
-    while d <= to_date:
-        rows = [r for r in parse_week(fetch_html(week_path(d), sleep_s=sleep_s))
-                if lo <= r["date"] <= hi and (season is None or r["season"] == season)]
-        weeks += 1
-        by_season = defaultdict(list)
-        for r in rows:
-            by_season[r["season"]].append(r)
-        for s, s_rows in by_season.items():
-            raw_store.upsert_games(s, s_rows)
-            games += len(s_rows)
-            have = done.setdefault(s, set(raw_store.load_boxscores(s)))
-            for r in s_rows:
-                if r["status"] != "FINAL" or r["game_id"] in have:
-                    continue
-                box = parse_game(fetch_html(r["path"], sleep_s=sleep_s))
-                if box["game_id"] != r["game_id"]:
-                    raise ValueError(f"game_id mismatch: week={r['game_id']} page={box['game_id']} ({r['path']})")
-                pending[s][r["game_id"]] = box
-                have.add(r["game_id"])
-                fetched_games += 1
-                if fetched_games % PROGRESS_EVERY == 0:
-                    flush()
-                    print(f"[collect] {fetched_games} boxscores fetched (week of {d})", file=sys.stderr, flush=True)
+    try:
+        while d <= to_date:
+            rows = [r for r in parse_week(fetch_html(week_path(d), sleep_s=sleep_s, use_cache=False))
+                    if lo <= r["date"] <= hi and (season is None or r["season"] == season)]
+            weeks += 1
+            by_season = defaultdict(list)
+            for r in rows:
+                by_season[r["season"]].append(r)
+            for s, s_rows in by_season.items():
+                raw_store.upsert_games(s, s_rows)
+                games += len(s_rows)
+                if s not in done:
+                    done[s] = set(raw_store.load_boxscores(s))
+                have = done[s]
+                for r in s_rows:
+                    if r["status"] != "FINAL" or r["game_id"] in have:
+                        continue
+                    box = parse_game(fetch_html(r["path"], sleep_s=sleep_s))
+                    if box["game_id"] != r["game_id"]:
+                        raise ValueError(f"game_id mismatch: week={r['game_id']} page={box['game_id']} ({r['path']})")
+                    pending[s][r["game_id"]] = box
+                    have.add(r["game_id"])
+                    fetched_games += 1
+                    if fetched_games % PROGRESS_EVERY == 0:
+                        flush()
+                        print(f"[collect] {fetched_games} boxscores fetched (week of {d})", file=sys.stderr, flush=True)
+            d += timedelta(days=7)
+    finally:
         flush()
-        d += timedelta(days=7)
     return {"weeks": weeks, "games": games, "boxscores": boxscores}
 
 

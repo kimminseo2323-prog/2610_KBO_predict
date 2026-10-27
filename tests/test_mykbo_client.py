@@ -48,3 +48,12 @@ def test_fetch_html_retries_once_then_raises(monkeypatch, tmp_path):
 
 def test_week_path():
     assert week_path(date(2026, 8, 11)) == "/schedule/week_of/2026-08-11"
+
+
+def test_fetch_html_use_cache_false_refetches(monkeypatch, tmp_path):
+    texts = iter(["<html>old</html>", "<html>new</html>"])
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    monkeypatch.setattr(requests.Session, "get", lambda self, url, **kw: FakeResp(next(texts)))
+    assert fetch_html("/schedule/week_of/2026-08-11", cache_dir=tmp_path) == "<html>old</html>"
+    assert fetch_html("/schedule/week_of/2026-08-11", cache_dir=tmp_path, use_cache=False) == "<html>new</html>"
+    assert fetch_html("/schedule/week_of/2026-08-11", cache_dir=tmp_path) == "<html>new</html>"

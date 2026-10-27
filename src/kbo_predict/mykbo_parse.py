@@ -38,6 +38,9 @@ def _int(text: str) -> int:
     return int(text) if text.lstrip("-").isdigit() else 0
 
 
+_LIVE_RE = re.compile(r"\bLIVE\b|\b(?:Top|Bot|Mid|End)\s+\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
+
+
 def parse_week(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
     rows = []
@@ -61,14 +64,14 @@ def parse_week(html: str) -> list[dict]:
             note = _norm(note_span.get_text()) if note_span else None
         elif re.search(r"\bFinal\b", text):
             status = "FINAL"
-        elif re.search(r"\bLive\b", text):
+        elif _LIVE_RE.search(text):
             status = "LIVE"
         elif has_time:
             status = "SCHEDULED"
             st = a.find("span", class_="font-sans", string=True)
             stadium = _norm(st.get_text()) if st else None
         else:
-            status = "LIVE" if scores else "SCHEDULED"
+            raise ValueError(f"unrecognised game status in week row {game_id}: {text!r}")
         final = status in ("FINAL", "LIVE") and len(scores) == 2
         rows.append({
             "game_id": game_id,
@@ -91,7 +94,8 @@ def parse_week(html: str) -> list[dict]:
 
 
 _STATUS_WORDS = (("final", "FINAL"), ("scheduled", "SCHEDULED"), ("cancel", "CANCELED"),
-                 ("postpone", "CANCELED"), ("live", "LIVE"))
+                 ("postpone", "CANCELED"), ("live", "LIVE"), ("top ", "LIVE"), ("bot ", "LIVE"),
+                 ("mid ", "LIVE"), ("end ", "LIVE"))
 
 
 def _game_status(soup: BeautifulSoup) -> str:
@@ -100,7 +104,7 @@ def _game_status(soup: BeautifulSoup) -> str:
         for word, status in _STATUS_WORDS:
             if t.startswith(word):
                 return status
-    return "LIVE"
+    raise ValueError("unrecognised game status on game page")
 
 
 def _linescore(soup: BeautifulSoup, away_name: str, home_name: str):

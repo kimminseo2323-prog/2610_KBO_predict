@@ -55,3 +55,28 @@ def test_parse_game_scheduled_has_no_boxscore(fixture_html):
     assert g["game_id"] == 14050 and g["status"] != "FINAL"
     assert g["batting"] == {"away": [], "home": []} and g["pitching"] == {"away": [], "home": []}
     assert g["linescore"] is None
+
+
+def _week_with_label(fixture_html, label):
+    html = fixture_html("mykbo_week_2026-08-11.html")
+    start = html.index('id="game-line-13802"')
+    end = html.index("</a>", start)
+    row = html[start:end].replace("Final", label, 1)
+    return html[:start] + row + html[end:]
+
+
+def test_parse_week_live_label_is_live(fixture_html):
+    html = _week_with_label(fixture_html, 'Bot 9th</span><span class="font-mono">LIVE')
+    g = next(r for r in parse_week(html) if r["game_id"] == 13802)
+    assert g["status"] == "LIVE"
+
+
+def test_parse_week_unknown_label_raises(fixture_html):
+    with pytest.raises(ValueError, match="13802"):
+        parse_week(_week_with_label(fixture_html, "Mystery"))
+
+
+def test_parse_game_unknown_status_raises(fixture_html):
+    html = fixture_html("mykbo_game_14048_final.html").replace("Final", "Mystery")
+    with pytest.raises(ValueError):
+        parse_game(html)

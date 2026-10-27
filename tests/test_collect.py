@@ -4,10 +4,12 @@ from kbo_predict import collect
 
 
 def test_collect_range_fetches_boxscores_only_for_new_finals(monkeypatch, tmp_data_dir, fixture_html):
-    fetched = []
+    fetched, week_kw = [], []
 
     def fake_fetch(path, **kw):
         fetched.append(path)
+        if path.startswith("/schedule/week_of/"):
+            week_kw.append(kw.get("use_cache"))
         if path.startswith("/schedule/week_of/"):
             return fixture_html("mykbo_week_2026-10-27.html")
         # 어떤 경기 페이지든 이 fixture. 요청한 경기 id로 바꿔 collect의 game_id 일치 검사를 통과시킨다.
@@ -21,3 +23,4 @@ def test_collect_range_fetches_boxscores_only_for_new_finals(monkeypatch, tmp_da
     fetched.clear()
     assert collect.collect_range(date(2026, 10, 27), date(2026, 11, 1), sleep_s=0)["boxscores"] == 0
     assert not [p for p in fetched if p.startswith("/games/")]
+    assert week_kw == [False, False]  # 주간 페이지는 캐시를 쓰지 않는다
