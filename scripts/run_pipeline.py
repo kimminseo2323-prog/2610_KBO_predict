@@ -7,7 +7,7 @@ from pathlib import Path
 
 import requests
 
-from kbo_predict import KST, raw_store
+from kbo_predict import KST, raw_store, seasons
 from kbo_predict.collect import collect_range
 from kbo_predict.features import LeagueState
 from kbo_predict.predict import predict_game
@@ -37,19 +37,33 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     # ② 정산
     settled = settle_history(pub / "history.csv", games)
 
-    # ③ 상태 누적 (target 이전 FINAL 경기만)
+    # ③ 상태 누적 (target 이전 정규시즌 FINAL 경기만 — 학습 시 build_training_frame과 동일)
     state = LeagueState()
-    for g in sorted((g for g in games if g["status"] == "FINAL" and g["date"] < iso),
+    for g in sorted((g for g in games if g["status"] == "FINAL" and g["date"] < iso
+                     and seasons.is_regular(int(g["season"]), date.fromisoformat(g["date"]))),
                     key=lambda g: (g["date"], g["game_id"])):
         state.update(g)
 
-    # ④ 예측
-    today = [g for g in games if g["date"] == iso and g["status"] != "CANCELED"]
-    preds = [predict_game(bundle, g, state) for g in today]
+    # ④ 예측 (취소 경기는 예측 없이 표시만)
+    day = [g for g in games if g["date"] == iso]
+    entries = []
+    for g in day:
+        if g["status"] == "CANCELED":
+            entries.append({
+                "game_id": g["game_id"], "date": g["date"], "time": g.get("time_kst"),
+                "stadium": g.get("stadium"), "status": "CANCELED", "status_note": g.get("status_note"),
+                "home_win_prob": None, "factors": [],
+                "home": {"code": g["home_code"]}, "away": {"code": g["away_code"]},
+            })
+        else:
+            e = predict_game(bundle, g, state)
+            e["status_note"] = g.get("status_note")
+            entries.append(e)
+    preds = [e for e in entries if e["status"] != "CANCELED"]
 
-    # ⑤ 발행 (경기 없으면 latest 유지)
-    if preds:
-        write_latest(pub / "latest.json", date=iso, games=preds, meta=meta)
+    # ⑤ 발행 (경기 행이 아예 없으면 latest 유지)
+    if entries:
+        write_latest(pub / "latest.json", date=iso, games=entries, meta=meta)
         upsert_history(pub / "history.csv", preds, predicted_at=meta["generated_at"])
 
     # ⑥ status

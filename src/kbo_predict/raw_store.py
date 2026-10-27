@@ -34,6 +34,12 @@ def upsert_games(season: int, games: list[dict]) -> int:
     by_id = {g["game_id"]: g for g in load_games(season)}
     changed = 0
     for g in games:
+        old = by_id.get(g["game_id"])
+        if old:  # LIVE/FINAL 행은 시간·구장이 비어 오므로 저장된 값을 유지
+            g = dict(g)
+            for k in ("time_kst", "stadium"):
+                if g.get(k) is None and old.get(k) is not None:
+                    g[k] = old[k]
         if by_id.get(g["game_id"]) != g:
             by_id[g["game_id"]] = g
             changed += 1

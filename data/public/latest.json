@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-28T00:40:55+09:00",
+  "generated_at": "2026-10-28T00:53:26+09:00",
   "date": "2026-10-29",
   "mode": "live",
   "model_version": "v0.1",
@@ -17,23 +17,23 @@
         "code": "HT",
         "name": "KIA",
         "starter": null,
-        "win_pct_season": 0.563,
-        "last10": 0.8,
-        "run_diff": 0.77
+        "win_pct_season": 0.556,
+        "last10": 0.7,
+        "run_diff": 0.73
       },
       "away": {
         "code": "SS",
         "name": "삼성",
         "starter": null,
-        "win_pct_season": 0.581,
-        "last10": 0.3,
-        "run_diff": 0.94
+        "win_pct_season": 0.589,
+        "last10": 0.4,
+        "run_diff": 0.96
       },
-      "home_win_prob": 0.559,
+      "home_win_prob": 0.5368,
       "factors": [
         {
           "name": "최근 10경기 흐름",
-          "contribution_pp": 4.7
+          "contribution_pp": 2.8
         },
         {
           "name": "홈 어드밴티지",
@@ -41,13 +41,14 @@
         },
         {
           "name": "팀 승률 차이",
-          "contribution_pp": -0.5
+          "contribution_pp": -0.8
         },
         {
           "name": "경기당 득실차",
           "contribution_pp": 0.1
         }
-      ]
+      ],
+      "status_note": null
     }
   ]
 }

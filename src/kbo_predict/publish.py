@@ -66,6 +66,8 @@ def upsert_history(path, predictions: list[dict], *, predicted_at: str) -> None:
 
     df = _read_history(path)
     for p in predictions:
+        if p.get("status") != "SCHEDULED":  # 공개 기록은 경기 전 예측만
+            continue
         gid = str(p["game_id"])
         hit = df.index[df["game_id"] == gid]
         if len(hit):

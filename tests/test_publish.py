@@ -69,3 +69,13 @@ def test_write_latest_and_status_contain_meta(tmp_path):
     assert s["next_game_date"] == "2026-10-29" and s["games_today"] == 1 and s["mode"] == "live"
     assert s["commit_sha"] is None and s["run_url"] == "http://x/1" and s["model_version"] == "v0.1"
     assert set(s) == {"generated_at", "run_url", "commit_sha", "mode", "next_game_date", "games_today", "model_version"}
+
+
+def test_upsert_ignores_live_and_final_predictions(tmp_path):
+    p = tmp_path / "history.csv"
+    upsert_history(p, [pred("g1", 0.55)], predicted_at="t1")
+    before = p.read_bytes()
+    upsert_history(p, [dict(pred("g1", 0.90), status="LIVE"), dict(pred("g1", 0.95), status="FINAL"),
+                       dict(pred("g2", 0.70), status="LIVE"), dict(pred("g3", 0.70), status="FINAL")], predicted_at="t2")
+    assert p.read_bytes() == before
+    assert pd.read_csv(p).game_id.tolist() == ["g1"]
