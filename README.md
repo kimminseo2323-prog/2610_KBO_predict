@@ -11,6 +11,6 @@ KBO(한국야구위원회) 경기 일정과 기록 데이터를 수집·정리�
 
 ## 데이터 출처
 
-데이터 출처: 네이버 스포츠 (비공식 API), 개인 학습용
+데이터 출처: MyKBOStats (mykbostats.com, 비공식 팬 사이트, robots.txt Crawl-delay 5초 준수), 개인 학습용
 
 저장소: https://github.com/kimminseo2323-prog/2610_KBO_predict

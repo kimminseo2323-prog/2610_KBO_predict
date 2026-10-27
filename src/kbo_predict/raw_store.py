@@ -1,24 +1,24 @@
-"""원본 데이터 저장: games.jsonl (일정), records.jsonl.gz (박스스코어)."""
+"""원본(파싱된) 데이터 저장: games.jsonl, boxscores.jsonl.gz."""
 import gzip
 import json
 import os
 from pathlib import Path
 
 
-def _season_dir(season: int) -> Path:
-    return Path(os.environ.get("KBO_DATA_DIR", "data")) / "raw" / str(season)
+def data_dir() -> Path:
+    return Path(os.environ.get("KBO_DATA_DIR", "data"))
 
 
 def games_path(season: int) -> Path:
-    return _season_dir(season) / "games.jsonl"
+    return data_dir() / "raw" / str(season) / "games.jsonl"
 
 
-def records_path(season: int) -> Path:
-    return _season_dir(season) / "records.jsonl.gz"
+def boxscores_path(season: int) -> Path:
+    return data_dir() / "raw" / str(season) / "boxscores.jsonl.gz"
 
 
-def _dumps(obj) -> str:
-    return json.dumps(obj, ensure_ascii=False)
+def _dumps(obj: dict) -> str:
+    return json.dumps(obj, ensure_ascii=False, sort_keys=True)
 
 
 def load_games(season: int) -> list[dict]:
@@ -30,42 +30,40 @@ def load_games(season: int) -> list[dict]:
 
 
 def upsert_games(season: int, games: list[dict]) -> int:
-    by_id = {g["gameId"]: g for g in load_games(season)}
+    """game_id 기준 덮어쓰기. 신규 + 내용이 바뀐 경기 수를 반환."""
+    by_id = {g["game_id"]: g for g in load_games(season)}
     changed = 0
     for g in games:
-        if by_id.get(g["gameId"]) != g:
-            by_id[g["gameId"]] = g
+        if by_id.get(g["game_id"]) != g:
+            by_id[g["game_id"]] = g
             changed += 1
-    ordered = sorted(by_id.values(), key=lambda g: (g["gameDate"], g["gameId"]))
-    path = games_path(season)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as f:
-        for g in ordered:
-            f.write(_dumps(g) + "\n")
+    if changed:
+        path = games_path(season)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        ordered = sorted(by_id.values(), key=lambda g: (g["date"], g["game_id"]))
+        with path.open("w", encoding="utf-8", newline="\n") as f:
+            for g in ordered:
+                f.write(_dumps(g) + "\n")
     return changed
 
 
-def load_records(season: int) -> dict[str, dict]:
-    path = records_path(season)
+def load_boxscores(season: int) -> dict[int, dict]:
+    path = boxscores_path(season)
     if not path.exists():
         return {}
-    out = {}
     with gzip.open(path, "rt", encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                row = json.loads(line)
-                out[row["gameId"]] = row["recordData"]
-    return out
+        rows = [json.loads(line) for line in f if line.strip()]
+    return {r["game_id"]: r for r in rows}
 
 
-def append_records(season: int, records: dict[str, dict]) -> int:
-    existing = set(load_records(season))
-    new = {gid: rec for gid, rec in records.items() if gid not in existing}
-    if not new:
-        return 0
-    path = records_path(season)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with gzip.open(path, "at", encoding="utf-8", newline="\n") as f:
-        for gid, rec in new.items():
-            f.write(_dumps({"gameId": gid, "recordData": rec}) + "\n")
+def append_boxscores(season: int, boxscores: dict[int, dict]) -> int:
+    """이미 있는 game_id는 건너뛰고 새 박스스코어만 추가. 추가 수를 반환."""
+    existing = load_boxscores(season)
+    new = {gid: b for gid, b in boxscores.items() if gid not in existing}
+    if new:
+        path = boxscores_path(season)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with gzip.open(path, "at", encoding="utf-8", newline="\n") as f:
+            for gid, b in new.items():
+                f.write(_dumps({**b, "game_id": gid}) + "\n")
     return len(new)

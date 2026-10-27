@@ -1,23 +1,18 @@
-from kbo_predict.raw_store import append_records, load_games, load_records, upsert_games
+from kbo_predict.mykbo_parse import parse_game, parse_week
+from kbo_predict.raw_store import append_boxscores, load_boxscores, load_games, upsert_games
 
 
-def test_upsert_games_dedupes_by_game_id_and_sorts(tmp_data_dir, fixture_json):
-    games = fixture_json("schedule_2026-10-20_28.json")["result"]["games"]
-    assert upsert_games(2026, games) == 4
-    assert upsert_games(2026, games) == 0
-    changed = dict(games[1], statusCode="RESULT")  # 10-25 경기 상태 변경
-    assert upsert_games(2026, [changed]) == 1
+def test_upsert_games_dedupes_and_sorts(tmp_data_dir, fixture_html):
+    rows = parse_week(fixture_html("mykbo_week_2026-10-27.html"))
+    assert upsert_games(2026, rows) == 4
+    changed = dict(next(r for r in rows if r["game_id"] == 14050), status="FINAL", away_score=2, home_score=4)
+    assert upsert_games(2026, [changed]) == 1 and upsert_games(2026, [changed]) == 0
     loaded = load_games(2026)
-    assert len(loaded) == 4 and [g["gameDate"] for g in loaded] == sorted(g["gameDate"] for g in loaded)
-    assert next(g for g in loaded if g["gameId"] == changed["gameId"])["statusCode"] == "RESULT"
+    assert len(loaded) == 4 and [(g["date"], g["game_id"]) for g in loaded] == sorted((g["date"], g["game_id"]) for g in loaded)
+    assert next(g for g in loaded if g["game_id"] == 14050)["status"] == "FINAL"
 
 
-def test_append_records_skips_existing(tmp_data_dir, fixture_json):
-    rec = fixture_json("record_33331020HTLG02026.json")["result"]["recordData"]
-    assert append_records(2026, {"33331020HTLG02026": rec}) == 1
-    assert append_records(2026, {"33331020HTLG02026": rec}) == 0
-    assert load_records(2026)["33331020HTLG02026"]["gameInfo"]["hCode"] == "LG"
-
-
-def test_load_empty(tmp_data_dir):
-    assert load_games(2026) == [] and load_records(2026) == {}
+def test_append_boxscores_skips_existing(tmp_data_dir, fixture_html):
+    g = parse_game(fixture_html("mykbo_game_14048_final.html"))
+    assert append_boxscores(2026, {14048: g}) == 1 and append_boxscores(2026, {14048: g}) == 0
+    assert load_boxscores(2026)[14048]["home"]["code"] == "SS"

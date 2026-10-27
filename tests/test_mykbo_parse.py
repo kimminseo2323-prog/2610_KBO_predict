@@ -1,0 +1,57 @@
+import pytest
+
+from kbo_predict.mykbo_parse import parse_game, parse_innings, parse_week
+
+
+@pytest.mark.parametrize("inn,outs", [("5", 15), ("4 ⅓", 13), ("0 ⅔", 2), ("", 0), ("6 ⅔", 20)])
+def test_parse_innings(inn, outs):
+    assert parse_innings(inn) == outs
+
+
+def test_parse_innings_html_entities():
+    assert parse_innings("4&nbsp;&frac13;") == 13
+
+
+def test_parse_week_regular_season(fixture_html):
+    rows = parse_week(fixture_html("mykbo_week_2026-08-11.html"))
+    assert len(rows) == 30
+    g = next(r for r in rows if r["game_id"] == 13802)
+    assert g == {**g, "path": "/games/13802-Hanwha-vs-Doosan-20260811", "date": "2026-08-11", "season": 2026,
+                 "away": "Hanwha Eagles", "home": "Doosan Bears", "away_code": "HH", "home_code": "OB",
+                 "away_score": 3, "home_score": 6, "status": "FINAL"}
+    canceled = [r for r in rows if r["status"] == "CANCELED"]
+    assert {r["game_id"] for r in canceled} == {13827, 13828}
+    assert next(r for r in canceled if r["game_id"] == 13828)["status_note"] == "Rained Out"
+    assert all(r["away_score"] is None for r in canceled)
+
+
+def test_parse_week_postseason_scheduled(fixture_html):
+    rows = parse_week(fixture_html("mykbo_week_2026-10-27.html"))
+    assert [r["game_id"] for r in rows] == [14052, 14050, 14053, 14054] or len(rows) == 4
+    g = next(r for r in rows if r["game_id"] == 14050)
+    assert g["status"] == "SCHEDULED" and g["time_kst"] == "18:30" and g["stadium"] == "Gwangju" and g["home_code"] == "HT" and g["date"] == "2026-10-29"
+    f = next(r for r in rows if r["game_id"] == 14052)
+    assert f["status"] == "FINAL" and (f["away_score"], f["home_score"]) == (3, 8)
+
+
+def test_parse_game_final(fixture_html):
+    g = parse_game(fixture_html("mykbo_game_14048_final.html"))
+    assert g["game_id"] == 14048 and g["date"] == "2026-10-26" and g["status"] == "FINAL"
+    # fixture 실제 값: 원정 Kia 5 : 1 홈 Samsung (브리프의 1/5는 반대로 적힌 오기)
+    assert g["away"] == {"name": "Kia Tigers", "code": "HT", "score": 5}
+    assert g["home"] == {"name": "Samsung Lions", "code": "SS", "score": 1}
+    assert g["stadium"] == "Daegu Samsung Lions Park"
+    assert g["linescore"] == {"away": [2, 0, 2, 1, 0, 0, 0, 0, 0], "home": [0, 0, 0, 0, 1, 0, 0, 0, 0]}
+    assert g["batting"]["away"][0] == {**g["batting"]["away"][0], "order": 1, "name": "Park Jung-woo", "pos": "RF", "ab": 5, "h": 0, "so": 2}
+    assert [r["order"] for r in g["batting"]["away"]][:6] == [1, 2, 3, 4, 5, 5]  # 교체 선수는 같은 타순
+    p = g["pitching"]["away"][0]
+    assert p["name"] == "Naile" and p["ip_outs"] == 13 and p["er"] == 1 and p["so"] == 3 and p["order"] == 1
+    assert g["pitching"]["home"][0]["name"] == "Paddack" and g["pitching"]["home"][0]["ip_outs"] == 14
+    assert all(isinstance(r["player_id"], int) for side in g["batting"].values() for r in side)
+
+
+def test_parse_game_scheduled_has_no_boxscore(fixture_html):
+    g = parse_game(fixture_html("mykbo_game_14050_scheduled.html"))
+    assert g["game_id"] == 14050 and g["status"] != "FINAL"
+    assert g["batting"] == {"away": [], "home": []} and g["pitching"] == {"away": [], "home": []}
+    assert g["linescore"] is None

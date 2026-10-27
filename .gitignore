@@ -17,3 +17,6 @@ artifacts/
 .DS_Store
 Thumbs.db
 *.egg-info/
+
+# raw html cache
+data/cache/
