@@ -411,7 +411,7 @@ def test_write_latest_and_status_contain_meta(tmp_path):
 **Interfaces:**
 - Consumes: Task 2~5 전부
 - Produces:
-  - `run_pipeline.run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch=True) -> dict` — 순서: ① `collect_range(target-7일, target+14일)` (fetch=False면 생략; 주간 페이지 3~4개 + 새 FINAL 경기 페이지) ② `settle_history` ③ 해당 시즌 games로 `LeagueState`를 `date < target`까지 누적 ④ target 날짜 경기(`status != "CANCELED"`) 예측 ⑤ 경기 있으면 `write_latest` + `upsert_history`, 없으면 latest 생략 ⑥ `write_status` (next_game_date = target 이후 첫 경기 날짜 또는 None). 반환 `{"games_today": n, "settled": n}`
+  - `run_pipeline.run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch=True) -> dict` — 순서: ① `collect_range(target-7일, target+14일)` (fetch=False면 생략; 주간 페이지 3~4개 + 새 FINAL 경기 페이지) ② `settle_history` ③ 해당 시즌 games 중 `is_regular(season, date)`이고 FINAL이며 `date < target`인 경기로 `LeagueState` 누적 (학습과 동일 범위; 시범경기·포스트시즌 제외 — 최종 리뷰 반영) ④ target 날짜의 모든 경기를 `latest.json`에 싣되 `status != "CANCELED"`만 예측(취소 경기는 `home_win_prob: null`, `factors: []`) ⑤ 그날 경기 행이 하나라도 있으면 `write_latest`; `upsert_history`는 SCHEDULED 예측만 삽입/갱신(LIVE/FINAL 무시 — 공개 기록은 사전 예측만); 경기 행이 없으면 latest 생략 ⑥ `write_status` (next_game_date = target 이후 첫 경기 날짜 또는 None, games_today = 취소 제외 수). 반환 `{"games_today": n, "settled": n}`
   - CLI: `python scripts/run_pipeline.py [--date YYYY-MM-DD] [--no-fetch]` — 기본 날짜는 KST 오늘. meta는 환경변수 `GITHUB_SHA`, `RUN_URL`에서 읽고 없으면 `null`.
 
 - [ ] **Step 1: `tests/test_pipeline.py` 작성** — fixture 일정을 `tmp_data_dir`의 games.jsonl에 넣고 `fetch=False`, 합성 번들 저장 후 실행.

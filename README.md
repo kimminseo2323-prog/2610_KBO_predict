@@ -12,7 +12,7 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 수집 (MyKBOStats)
   → 피처 (경기 날짜 이전 기록만 사용)
     → 모델 (로지스틱 회귀)
-      → GitHub Actions (매일 09:00, 17:00 KST)
+      → GitHub Actions (매일 09:07, 17:07 KST)
         → data/public/*.json, *.csv
           → 사이트 (예정)
 ```
@@ -67,7 +67,7 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 
 ## 자동 실행
 
-[`.github/workflows/daily.yml`](.github/workflows/daily.yml)이 매일 09:00, 17:00 KST(UTC `0 0`, `0 8`)와 수동 실행(`workflow_dispatch`)으로 [`scripts/run_pipeline.py`](scripts/run_pipeline.py)를 돌립니다. 결과는 `github-actions[bot]`이 `data/raw`, `data/public`을 `auto: predictions YYYY-MM-DD-HHMM` 메시지로 커밋합니다. 첫 실제 실행: [Actions run](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40533547898).
+[`.github/workflows/daily.yml`](.github/workflows/daily.yml)이 매일 09:07, 17:07 KST(UTC `7 0`, `7 8`)와 수동 실행(`workflow_dispatch`)으로 [`scripts/run_pipeline.py`](scripts/run_pipeline.py)를 돌립니다. 결과는 `github-actions[bot]`이 `data/raw`, `data/public`을 `auto: predictions YYYY-MM-DD-HHMM` 메시지로 커밋합니다. 첫 실제 실행: [Actions run](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40533547898).
 
 ## 로컬 실행
 
