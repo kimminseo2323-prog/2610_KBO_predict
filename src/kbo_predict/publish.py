@@ -28,7 +28,8 @@ def write_latest(path, *, date: str, games: list[dict], meta: dict) -> None:
     })
 
 
-def write_status(path, *, mode: str, next_game_date: str | None, games_today: int, meta: dict) -> None:
+def write_status(path, *, mode: str, next_game_date: str | None, games_today: int, meta: dict,
+                 collect_errors: list[str] | None = None) -> None:
     _write_json(path, {
         "generated_at": meta.get("generated_at"),
         "run_url": meta.get("run_url"),
@@ -37,6 +38,7 @@ def write_status(path, *, mode: str, next_game_date: str | None, games_today: in
         "next_game_date": next_game_date,
         "games_today": games_today,
         "model_version": meta.get("model_version"),
+        "collect_errors": list(collect_errors or []),
     })
 
 

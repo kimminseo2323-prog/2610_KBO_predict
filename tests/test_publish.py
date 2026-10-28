@@ -68,7 +68,12 @@ def test_write_latest_and_status_contain_meta(tmp_path):
     s = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
     assert s["next_game_date"] == "2026-10-29" and s["games_today"] == 1 and s["mode"] == "live"
     assert s["commit_sha"] is None and s["run_url"] == "http://x/1" and s["model_version"] == "v0.1"
-    assert set(s) == {"generated_at", "run_url", "commit_sha", "mode", "next_game_date", "games_today", "model_version"}
+    assert set(s) == {"generated_at", "run_url", "commit_sha", "mode", "next_game_date", "games_today", "model_version",
+                    "collect_errors"}
+    assert s["collect_errors"] == []
+    write_status(tmp_path / "status.json", mode="live", next_game_date=None, games_today=0, meta=meta,
+                 collect_errors=["/games/1: boom"])
+    assert json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))["collect_errors"] == ["/games/1: boom"]
 
 
 def test_upsert_ignores_live_and_final_predictions(tmp_path):

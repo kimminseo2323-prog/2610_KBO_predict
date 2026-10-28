@@ -22,10 +22,13 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     pub = data_dir / "public"
 
     # ① 수집
+    collect_errors: list[str] = []
     if fetch:
         try:
-            collect_range(target - timedelta(days=7), target + timedelta(days=14))
+            out = collect_range(target - timedelta(days=7), target + timedelta(days=14))
+            collect_errors = [f"{e['path']}: {e['error']}" for e in out["errors"]]
         except requests.RequestException as e:
+            collect_errors = [repr(e)]
             print(f"[pipeline] collect failed, continuing with existing data: {e!r}", file=sys.stderr)
             if not raw_store.load_games(season):
                 raise
@@ -69,7 +72,7 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     # ⑥ status
     upcoming = [g["date"] for g in games if g["date"] > iso and g["status"] != "CANCELED"]
     write_status(pub / "status.json", mode="live", next_game_date=min(upcoming) if upcoming else None,
-                 games_today=len(preds), meta=meta)
+                 games_today=len(preds), meta=meta, collect_errors=collect_errors)
     return {"games_today": len(preds), "settled": settled}
 
 

@@ -166,7 +166,10 @@ _PIT_COLS = [("ip_outs", "IP")] + [(h.lower(), h) for h in ("NP", "R", "ER", "H"
 
 def parse_game(html: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
-    og = soup.find("meta", property="og:url")["content"]
+    og_tag = soup.find("meta", property="og:url")
+    if og_tag is None:
+        raise ValueError("unrecognised game page: no og:url")
+    og = og_tag["content"]
     game_id = int(re.search(r"/games/(\d+)-", og).group(1))
     away_name, home_name = (_norm(x) for x in soup.title.get_text().split(" - ")[0].split(" vs. "))
     away_code, home_code = code_for(away_name), code_for(home_name)

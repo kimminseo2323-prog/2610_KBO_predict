@@ -114,9 +114,21 @@ def test_fetch_failure_with_stored_games_continues(tmp_data_dir, bundle_path, fi
     monkeypatch.setattr(rp, "collect_range", _boom)
     run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
     assert (tmp_data_dir / "public/status.json").exists()
+    status = json.loads((tmp_data_dir / "public/status.json").read_text(encoding="utf-8"))
+    assert len(status["collect_errors"]) == 1
 
 
 def test_fetch_failure_with_empty_store_raises(tmp_data_dir, bundle_path, monkeypatch):
     monkeypatch.setattr(rp, "collect_range", _boom)
     with pytest.raises(requests.ConnectionError):
         run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
+
+
+def test_collect_errors_are_recorded_in_status(tmp_data_dir, bundle_path, fixture_html, monkeypatch):
+    _seed(fixture_html)
+    monkeypatch.setattr(rp, "collect_range", lambda *a, **k: {
+        "weeks": 1, "games": 0, "boxscores": 0,
+        "errors": [{"game_id": 1, "path": "/games/1", "error": "boom"}]})
+    run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
+    status = json.loads((tmp_data_dir / "public/status.json").read_text(encoding="utf-8"))
+    assert status["collect_errors"] == ["/games/1: boom"]
