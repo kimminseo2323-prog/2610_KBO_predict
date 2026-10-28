@@ -132,6 +132,17 @@ def test_parse_game_skips_table_rows_without_cells(fixture_html):
     assert parse_game(broken)["pitching"] == base["pitching"]
 
 
+def test_parse_game_live_page_with_partial_rows(fixture_html):
+    # 2022-05-25 LT@SSG(9809): LIVE 상태로 멈춘 페이지. 타자 행 사이에 셀 1~2개짜리 보조 행이 끼어 있어도
+    # 선수 행만 읽고, 상태는 LIVE로 돌려준다 (결과를 지어내지 않음)
+    from kbo_predict.mykbo_parse import parse_game
+    box = parse_game(fixture_html("mykbo_game_9809_live.html"))
+    assert box["game_id"] == 9809 and box["status"] == "LIVE" and box["date"] == "2022-05-25"
+    assert len(box["batting"]["away"]) >= 9 and len(box["batting"]["home"]) >= 9
+    assert len(box["pitching"]["away"]) >= 1 and len(box["pitching"]["home"]) >= 1
+    assert all(len(r) == len(box["batting"]["away"][0]) for r in box["batting"]["away"])
+
+
 def test_parse_week_bottom_with_symbol_is_live(fixture_html):
     html = fixture_html("mykbo_week_2026-10-27.html").replace("Final", "▼ Bottom 9th · 0 out", 1)
     g = next(r for r in parse_week(html) if r["game_id"] == 14052)

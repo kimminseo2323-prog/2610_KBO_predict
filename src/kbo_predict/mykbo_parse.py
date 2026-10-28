@@ -142,7 +142,7 @@ def _table_rows(table, columns: list[tuple[str, str]], kind: str) -> list[dict]:
     out, order = [], 0
     for tr in table.find("tbody").find_all("tr"):
         tds = tr.find_all("td")
-        if not tds:  # 빈 행이나 <th>만 있는 행 (2022~2024 일부 페이지)
+        if len(tds) < len(headers):  # 빈 행, <th>만 있는 행, LIVE 페이지의 보조 행(셀 1~2개)은 건너뜀
             continue
         link = tds[0].find("a", href=re.compile(r"^/players/\d+"))
         if link is None:
