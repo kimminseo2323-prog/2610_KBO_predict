@@ -23,11 +23,18 @@ REGULAR_SEASON: dict[int, tuple[date, date]] = {
     2026: (date(2026, 3, 28), date(2026, 10, 12)),
 }
 
+# 날짜 범위만으로 걸러지지 않는 비정규 경기(game_id). 2024-10-01 5위 결정전(SSG@KT, 12234)은
+# 정규시즌 마지막 날(720번째 경기 12233과 같은 날)이라 날짜로는 못 거른다.
+# 2021-10-31 1위 결정전은 종료일(10-30) 뒤라 날짜로 이미 제외된다.
+EXCLUDED_GAMES: dict[int, set[int]] = {2024: {12234}}
 
-def is_regular(season: int, d: date) -> bool:
+
+def is_regular(season: int, d: date, game_id: int | None = None) -> bool:
+    if game_id is not None and game_id in EXCLUDED_GAMES.get(season, set()):
+        return False
     if season not in REGULAR_SEASON:
         # 새 시즌이 아직 등록되기 전에도 파이프라인이 멈추지 않도록 보수적인 3/1~10/31로 대체
-        warnings.warn(f"season {season} not in REGULAR_SEASON; using fallback 03-01..10-31")
+        warnings.warn(f"season {season} not in REGULAR_SEASON; using fallback 03-01..10-31", stacklevel=2)
         return date(season, 3, 1) <= d <= date(season, 10, 31)
     start, end = REGULAR_SEASON[season]
     return start <= d <= end

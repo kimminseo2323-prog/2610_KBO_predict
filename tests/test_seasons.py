@@ -25,3 +25,19 @@ def test_unknown_season_falls_back_with_warning():
         warnings.simplefilter("always")
         assert is_regular(2027, date(2027, 5, 1)) and not is_regular(2027, date(2027, 11, 1))
     assert w and "fallback" in str(w[0].message)
+
+
+def test_excluded_tiebreaker_game_is_not_regular():
+    assert not is_regular(2024, date(2024, 10, 1), 12234)  # 5위 결정전
+    assert is_regular(2024, date(2024, 10, 1), 12233)  # 720번째 경기
+
+
+def test_each_backfilled_season_has_720_regular_games_144_per_team():
+    from collections import Counter
+    from kbo_predict.raw_store import load_games
+    for s in range(2015, 2026):
+        reg = [g for g in load_games(s)
+               if g["status"] in ("FINAL", "LIVE") and is_regular(s, date.fromisoformat(g["date"]), g["game_id"])]
+        assert len(reg) == 720, s
+        teams = Counter(c for g in reg for c in (g["home_code"], g["away_code"]))
+        assert len(teams) == 10 and set(teams.values()) == {144}, s

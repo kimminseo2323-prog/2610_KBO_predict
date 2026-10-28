@@ -90,7 +90,7 @@ def build_training_frame(games: list[dict], *, season: int) -> pd.DataFrame:
     for day, grp in groupby(ordered, key=lambda g: g["date"]):
         day_games = [
             g for g in grp
-            if g["status"] == "FINAL" and is_regular(season, _date.fromisoformat(g["date"]))
+            if g["status"] == "FINAL" and is_regular(season, _date.fromisoformat(g["date"]), g["game_id"])
         ]
         for g in day_games:
             if g["home_score"] == g["away_score"]:
