@@ -31,7 +31,7 @@ def _fetch_box(row: dict, sleep_s: float, errors: list[dict]) -> dict | None:
         if box["status"] != "FINAL":
             drop_cache(row["path"])
         return box
-    except (ValueError, KeyError, AttributeError, TypeError, requests.RequestException) as e:
+    except (ValueError, KeyError, AttributeError, TypeError, IndexError, requests.RequestException) as e:
         drop_cache(row["path"])
         err = {"game_id": row["game_id"], "path": row["path"], "error": f"{type(e).__name__}: {e}"}
         errors.append(err)

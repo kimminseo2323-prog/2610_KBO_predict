@@ -1,3 +1,4 @@
+import re
 import pytest
 
 from kbo_predict.mykbo_parse import parse_game, parse_innings, parse_week
@@ -118,6 +119,17 @@ def test_game_status_delayed_is_live():
     from kbo_predict.mykbo_parse import _game_status
     soup = BeautifulSoup('<p class="mt-sm">Delayed</p>', "html.parser")
     assert _game_status(soup) == "LIVE"
+
+
+def test_parse_game_skips_table_rows_without_cells(fixture_html):
+    # 2022~2024 일부 경기 페이지는 tbody에 <td> 없는 행이 섞여 있다 → 건너뛰고 나머지는 그대로 읽는다
+    from kbo_predict.mykbo_parse import parse_game
+    html = fixture_html("mykbo_game_1189_final.html")
+    base = parse_game(html)
+    broken = re.sub(r'(<tbody[^>]*name="(?:away|home)-(?:batting|pitching)">)', r"\1<tr></tr><tr><th>소계</th></tr>", html)
+    assert broken.count("<tr></tr>") == 4
+    assert parse_game(broken)["batting"] == base["batting"]
+    assert parse_game(broken)["pitching"] == base["pitching"]
 
 
 def test_parse_week_bottom_with_symbol_is_live(fixture_html):

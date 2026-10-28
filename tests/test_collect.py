@@ -47,6 +47,25 @@ def test_collect_continues_after_one_bad_game_page(monkeypatch, tmp_data_dir, fi
     assert "unrecognised" in out["errors"][0]["error"] and out["errors"][0]["path"].startswith("/games/1189-")
 
 
+def test_collect_records_index_error_per_game(monkeypatch, tmp_data_dir, fixture_html):
+    # 파서가 IndexError 같은 예기치 않은 예외를 내도 그 경기만 errors에 남기고 시즌은 계속 간다
+    def fake_fetch(path, **kw):
+        if path.startswith("/schedule/week_of/"):
+            return fixture_html("mykbo_week_2015-06-02.html")
+        game_id = path.split("/")[2].split("-")[0]
+        return fixture_html("mykbo_game_1189_final.html").replace("/games/1189-", f"/games/{game_id}-")
+    real = collect.parse_game
+    def bad_parse(html):
+        if "/games/1189-" in html:
+            raise IndexError("list index out of range")
+        return real(html)
+    monkeypatch.setattr(collect, "fetch_html", fake_fetch)
+    monkeypatch.setattr(collect, "parse_game", bad_parse)
+    out = collect.collect_range(date(2015, 6, 2), date(2015, 6, 8), sleep_s=0)
+    assert out["boxscores"] == 28 and [e["game_id"] for e in out["errors"]] == [1189]
+    assert out["errors"][0]["error"].startswith("IndexError")
+
+
 def test_stale_live_row_is_finalised_from_game_page(monkeypatch, tmp_data_dir, fixture_html):
     week = fixture_html("mykbo_week_2026-10-27.html")
     # 14052(FINAL) 행을 LIVE처럼 보이게: 'Final' -> 'LIVE'

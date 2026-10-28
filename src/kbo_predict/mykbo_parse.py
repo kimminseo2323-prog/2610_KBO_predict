@@ -140,8 +140,10 @@ def _table_rows(table, columns: list[tuple[str, str]], kind: str) -> list[dict]:
     headers = [_norm(th.get_text()) for th in table.find("thead").find_all("th")]
     idx = {h: i for i, h in enumerate(headers)}
     out, order = [], 0
-    for n, tr in enumerate(table.find("tbody").find_all("tr"), start=1):
+    for tr in table.find("tbody").find_all("tr"):
         tds = tr.find_all("td")
+        if not tds:  # 빈 행이나 <th>만 있는 행 (2022~2024 일부 페이지)
+            continue
         link = tds[0].find("a", href=re.compile(r"^/players/\d+"))
         if link is None:
             continue
@@ -153,7 +155,7 @@ def _table_rows(table, columns: list[tuple[str, str]], kind: str) -> list[dict]:
                 order = int(num)
             row = {"order": order, **row, "pos": _norm(tds[idx["Pos"]].get_text())}
         else:
-            row = {"order": n, **row}
+            row = {"order": len(out) + 1, **row}  # 등판 순서 = 실제로 읽은 투수 행 번호
         for key, header in columns:
             cell = tds[idx[header]].get_text()
             row[key] = parse_innings(cell) if header == "IP" else _int(cell)
