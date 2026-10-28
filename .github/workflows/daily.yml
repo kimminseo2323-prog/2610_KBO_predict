@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  issues: write
 concurrency: daily
 jobs:
   predict:
@@ -15,7 +16,9 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12", cache: pip }
       - run: pip install -r requirements.txt && pip install -e .
-      - run: python scripts/run_pipeline.py
+      - id: run
+        run: python scripts/run_pipeline.py
+        continue-on-error: false
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       - name: commit results
@@ -29,4 +32,25 @@ jobs:
             git commit -m "auto: predictions $(TZ=Asia/Seoul date +%F-%H%M)"
             git pull --rebase origin main
             git push
+          fi
+      - name: collect-failure issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          BODY=$(python scripts/collect_errors.py data/public/status.json)
+          if [ "${{ steps.run.outcome }}" = "failure" ]; then
+            BODY="파이프라인 실패 — 로그: $RUN_URL"
+          fi
+          if [ -z "$BODY" ]; then
+            echo "no collect failures"
+            exit 0
+          fi
+          gh label create collect-failure --color d73a4a --description "MyKBOStats 수집 실패" --force
+          OPEN=$(gh issue list --label collect-failure --state open --json number --jq '.[0].number')
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" --body "$BODY"
+          else
+            gh issue create --title "수집 실패 $(TZ=Asia/Seoul date +%F)" --label collect-failure --body "$BODY"
           fi
