@@ -96,7 +96,8 @@ def parse_week(html: str) -> list[dict]:
 
 _STATUS_WORDS = (("final", "FINAL"), ("scheduled", "SCHEDULED"), ("cancel", "CANCELED"),
                  ("postpone", "CANCELED"), ("live", "LIVE"), ("top ", "LIVE"), ("bot ", "LIVE"), ("bottom ", "LIVE"),
-                 ("mid ", "LIVE"), ("end ", "LIVE"))
+                 ("mid ", "LIVE"), ("end ", "LIVE"),
+                 ("delay", "LIVE"))  # 우천 지연: 끝난 경기 페이지에 'Delayed'가 남는 경우도 있음
 
 
 def _game_status(soup: BeautifulSoup) -> str:

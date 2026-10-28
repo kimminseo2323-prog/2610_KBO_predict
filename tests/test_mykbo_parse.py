@@ -112,6 +112,14 @@ def test_game_status_ignores_leading_symbols():
     assert _game_status(soup) == "LIVE"
 
 
+def test_game_status_delayed_is_live():
+    # 2017-06-25 HH@SS(5374)처럼 우천 지연 문구가 남은 페이지는 FINAL로 치지 않고 LIVE로 분류한다
+    from bs4 import BeautifulSoup
+    from kbo_predict.mykbo_parse import _game_status
+    soup = BeautifulSoup('<p class="mt-sm">Delayed</p>', "html.parser")
+    assert _game_status(soup) == "LIVE"
+
+
 def test_parse_week_bottom_with_symbol_is_live(fixture_html):
     html = fixture_html("mykbo_week_2026-10-27.html").replace("Final", "▼ Bottom 9th · 0 out", 1)
     g = next(r for r in parse_week(html) if r["game_id"] == 14052)
