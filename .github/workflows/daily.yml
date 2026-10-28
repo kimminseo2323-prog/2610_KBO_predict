@@ -48,7 +48,7 @@ jobs:
             exit 0
           fi
           gh label create collect-failure --color d73a4a --description "MyKBOStats 수집 실패" --force
-          OPEN=$(gh issue list --label collect-failure --state open --json number --jq '.[0].number')
+          OPEN=$(gh issue list --label collect-failure --state open --json number --jq '.[0].number // empty')
           if [ -n "$OPEN" ]; then
             gh issue comment "$OPEN" --body "$BODY"
           else
