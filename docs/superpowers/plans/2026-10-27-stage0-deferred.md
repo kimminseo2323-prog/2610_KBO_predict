@@ -15,8 +15,15 @@
 - `train_win` CLI·분할 경계 테스트, 빈 테스트 프레임에 친절한 에러.
 - `latest.json`의 CANCELED 항목은 `home/away`에 `code`만 있고 `round`가 없음 → 사이트 구현 시 선택 필드로 처리하거나 정상 항목과 모양 통일.
 - 재편성(같은 game_id로 날짜 변경) 시 history 행의 date 미갱신 — 현재 데이터상 재편성은 새 id를 받으므로 보류.
+- `seasons.REGULAR_SEASON`에 2027 시즌 범위 등록 (2027-03 개막 전; 미등록이면 폴백 + collect-failure 이슈로 알림)
+
+## 3단계(클러스터링) 전에
+- 2015~2018 일부 박스스코어에서 타자 득점 합/투수 실점 합이 팀 점수와 1 차이 (예: 2016 4292, 2017 5302, 2018 6069/6161/6605) — 사이트 원본 문제; 집계 전 검증 규칙 필요
 
 ## 4단계(parity) 전에
+- 수집 창(대상일 −7~+14일)을 벗어난 FINAL 경기의 박스스코어 누락은 재시도되지 않음 → run_pipeline에 '현재 시즌 FINAL인데 박스스코어 없음' 검사 추가
+- 노트북 패키지(matplotlib/nbconvert/ipykernel)를 `requirements-dev.txt`로 분리해 일일 Actions 설치 시간 단축
+- `tests/test_notebooks.py` 실행 테스트에 slow 마커, ci.yml에서 선택 실행
 - `run_pipeline.run()`의 `data_dir`가 raw_store에 전달되지 않음(공개 파일에만 적용) → raw_store에 data_dir 주입하거나 문서화. CLI 상대경로는 cwd 의존.
 - `upsert_games`, `_write_json`, `_write_history` 비원자적 쓰기 → 임시 파일 + replace.
 

@@ -5,8 +5,6 @@ import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-import requests
-
 from kbo_predict import KST, raw_store, seasons
 from kbo_predict.collect import collect_range
 from kbo_predict.features import LeagueState
@@ -27,11 +25,13 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
         try:
             out = collect_range(target - timedelta(days=7), target + timedelta(days=14))
             collect_errors = [f"{e['path']}: {e['error']}" for e in out["errors"]]
-        except requests.RequestException as e:
+        except Exception as e:  # 네트워크 오류뿐 아니라 파서/예기치 않은 예외도 status.json은 남긴다
             collect_errors = [repr(e)]
             print(f"[pipeline] collect failed, continuing with existing data: {e!r}", file=sys.stderr)
             if not raw_store.load_games(season):
                 raise
+    if season not in seasons.REGULAR_SEASON:
+        collect_errors.append(f"season {season} not registered in REGULAR_SEASON; using 03-01..10-31 fallback")
     games = raw_store.load_games(season)
 
     bundle = load_bundle(model_path)

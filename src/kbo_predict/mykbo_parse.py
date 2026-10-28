@@ -142,9 +142,13 @@ def _table_rows(table, columns: list[tuple[str, str]], kind: str) -> list[dict]:
     out, order = [], 0
     for tr in table.find("tbody").find_all("tr"):
         tds = tr.find_all("td")
-        if len(tds) < len(headers):  # 빈 행, <th>만 있는 행, LIVE 페이지의 보조 행(셀 1~2개)은 건너뜀
-            continue
-        link = tds[0].find("a", href=re.compile(r"^/players/\d+"))
+        if not tds and any(re.search(r"bench|bullpen", th.get_text().lower()) for th in tr.find_all("th")):
+            break  # Bench/Bullpen 구분 행: 이후는 출전하지 않은 선수라 읽지 않는다
+        link = tds[0].find("a", href=re.compile(r"^/players/\d+")) if tds else None
+        if len(tds) < len(headers):
+            if link is not None:  # 출전 선수 행인데 셀이 모자람 -> 조용히 오분류하지 않고 실패
+                raise ValueError(f"short {kind} row for player {_norm(link.get_text())}: {len(tds)}/{len(headers)} cells")
+            continue  # 빈 행, <th>만 있는 행, 링크 없는 보조 행(spacer)은 건너뜀
         if link is None:
             continue
         row = {"player_id": int(re.match(r"/players/(\d+)", link["href"]).group(1)), "name": _norm(link.get_text())}

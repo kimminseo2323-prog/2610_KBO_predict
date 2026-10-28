@@ -169,3 +169,62 @@ def test_stale_live_page_still_live_is_not_cached(monkeypatch, tmp_data_dir, fix
     n = len([p for p in gets if p == row_path])
     collect.collect_range(date(2026, 10, 27), date(2026, 11, 1), **kw)
     assert len([p for p in gets if p == row_path]) == n + 1
+
+
+def _live_page_env(monkeypatch, fixture_html, runs=None):
+    """주간 일정은 14052 FINAL(3-8). 경기 페이지는 아직 LIVE 상태(점수는 runs=(원정, 홈), 기본 5-1)."""
+    game = fixture_html("mykbo_game_14048_final.html")
+    live = re.sub(r"(text-ink-2\">\s*)Final", lambda m: m.group(1) + "▼ Bottom 9th · 0 out", game, count=1)
+    assert live != game
+    if runs:
+        live = live.replace('<div class="runs">5</div>', f'<div class="runs">{runs[0]}</div>', 1)
+        live = live.replace('<div class="runs">1</div>', f'<div class="runs">{runs[1]}</div>', 1)
+    week = fixture_html("mykbo_week_2026-10-27.html")
+
+    def handler(path):
+        if path.startswith("/schedule/week_of/"):
+            return week
+        game_id = path.split("/")[2].split("-")[0]
+        return live.replace("/games/14048-", f"/games/{game_id}-")
+
+    return _real_fetch_env(monkeypatch, handler)
+
+
+def test_final_week_row_with_live_page_and_matching_score_is_stored(monkeypatch, tmp_data_dir, fixture_html):
+    # 우천 단축 등: 주간 일정은 FINAL(3-8), 경기 페이지는 LIVE지만 점수가 같으면 저장한다
+    _live_page_env(monkeypatch, fixture_html, runs=(3, 8))
+    out = collect.collect_range(date(2026, 10, 27), date(2026, 11, 1), sleep_s=0, today=date(2026, 10, 28))
+    assert out["boxscores"] == 1 and out["errors"] == []
+    assert 14052 in raw_store.load_boxscores(2026)
+
+
+def test_final_week_row_with_live_page_and_different_score_is_not_stored(monkeypatch, tmp_data_dir, fixture_html):
+    gets = _live_page_env(monkeypatch, fixture_html)  # 페이지 5-1, 주간 3-8
+    kw = dict(sleep_s=0, today=date(2026, 10, 28))
+    out = collect.collect_range(date(2026, 10, 27), date(2026, 11, 1), **kw)
+    assert out["boxscores"] == 0 and 14052 not in raw_store.load_boxscores(2026)
+    assert len(out["errors"]) == 1 and out["errors"][0]["game_id"] == 14052
+    assert out["errors"][0]["error"].startswith("page not final")
+    assert not mykbo_client._cache_file(tmp_data_dir / "cache" / "html", out["errors"][0]["path"]).exists()
+    n = len([p for p in gets if p.startswith("/games/14052-")])
+    collect.collect_range(date(2026, 10, 27), date(2026, 11, 1), **kw)  # 다음 실행에서 다시 요청
+    assert len([p for p in gets if p.startswith("/games/14052-")]) == n + 1
+
+
+def test_stale_live_page_final_without_score_drops_cache(monkeypatch, tmp_data_dir, fixture_html):
+    week_live = fixture_html("mykbo_week_2026-10-27.html").replace("Final", "LIVE", 1)
+    game = fixture_html("mykbo_game_14048_final.html")
+    noscore = game.replace('<div class="runs">5</div>', "", 1).replace('<div class="runs">1</div>', "", 1)  # FINAL이지만 점수 없음
+    assert noscore != game
+    dropped = []
+    monkeypatch.setattr(collect, "drop_cache", lambda p: dropped.append(p))
+
+    def fake_fetch(path, **kw):
+        if path.startswith("/schedule/week_of/"):
+            return week_live
+        game_id = path.split("/")[2].split("-")[0]
+        return noscore.replace("/games/14048-", f"/games/{game_id}-")
+
+    monkeypatch.setattr(collect, "fetch_html", fake_fetch)
+    collect.collect_range(date(2026, 10, 27), date(2026, 11, 1), sleep_s=0, today=date(2026, 11, 5))
+    assert "/games/14052-Kia-vs-Samsung-20261027" in dropped

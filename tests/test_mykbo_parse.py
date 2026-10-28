@@ -147,3 +147,16 @@ def test_parse_week_bottom_with_symbol_is_live(fixture_html):
     html = fixture_html("mykbo_week_2026-10-27.html").replace("Final", "▼ Bottom 9th · 0 out", 1)
     g = next(r for r in parse_week(html) if r["game_id"] == 14052)
     assert g["status"] == "LIVE"
+
+
+def test_parse_game_short_player_row_raises(fixture_html):
+    # 선수 링크가 있는데 셀이 모자란 행(Bench/Bullpen 구분 행 앞)은 조용히 건너뛰지 않고 실패한다
+    from bs4 import BeautifulSoup
+    html = fixture_html("mykbo_game_1189_final.html")
+    soup = BeautifulSoup(html, "html.parser")
+    tr = soup.find("tbody", attrs={"name": "away-batting"}).find_all("tr")[1]
+    assert tr.find("a", href=re.compile(r"^/players/"))
+    for td in tr.find_all("td")[2:]:
+        td.decompose()
+    with pytest.raises(ValueError, match="short batting row"):
+        parse_game(str(soup))

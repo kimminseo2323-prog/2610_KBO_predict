@@ -132,3 +132,31 @@ def test_collect_errors_are_recorded_in_status(tmp_data_dir, bundle_path, fixtur
     run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
     status = json.loads((tmp_data_dir / "public/status.json").read_text(encoding="utf-8"))
     assert status["collect_errors"] == ["/games/1: boom"]
+
+
+def test_unregistered_season_fallback_is_recorded_in_status(tmp_data_dir, bundle_path, fixture_html, monkeypatch):
+    _seed(fixture_html)
+    monkeypatch.setattr(rp, "collect_range", lambda *a, **k: {"weeks": 1, "games": 0, "boxscores": 0, "errors": []})
+    run(date(2027, 4, 1), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
+    status = json.loads((tmp_data_dir / "public/status.json").read_text(encoding="utf-8"))
+    assert "season 2027 not registered in REGULAR_SEASON; using 03-01..10-31 fallback" in status["collect_errors"]
+
+
+def test_registered_season_adds_no_fallback_error(tmp_data_dir, bundle_path, fixture_html, monkeypatch):
+    _seed(fixture_html)
+    monkeypatch.setattr(rp, "collect_range", lambda *a, **k: {"weeks": 1, "games": 0, "boxscores": 0, "errors": []})
+    run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
+    status = json.loads((tmp_data_dir / "public/status.json").read_text(encoding="utf-8"))
+    assert status["collect_errors"] == []
+
+
+def test_non_request_exception_from_collect_still_writes_status(tmp_data_dir, bundle_path, fixture_html, monkeypatch):
+    _seed(fixture_html)
+
+    def boom(*a, **k):
+        raise ValueError("unrecognised week row")
+
+    monkeypatch.setattr(rp, "collect_range", boom)
+    run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
+    status = json.loads((tmp_data_dir / "public/status.json").read_text(encoding="utf-8"))
+    assert status["collect_errors"] == [repr(ValueError("unrecognised week row"))]

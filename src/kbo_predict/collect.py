@@ -1,4 +1,4 @@
-"""MyKBOStats 수집 CLI: 주간 일정 -> games.jsonl, FINAL 경기 박스스코어 -> boxscores.jsonl.gz."""
+"""MyKBOStats 수집 CLI: 주간 일정 -> games.jsonl, FINAL 경기 박스스코어 -> 월별 boxscores/{YYYY-MM}.jsonl.gz."""
 import argparse
 import sys
 from collections import defaultdict
@@ -39,6 +39,12 @@ def _fetch_box(row: dict, sleep_s: float, errors: list[dict]) -> dict | None:
         return None
 
 
+def _same_score(box: dict, row: dict) -> bool:
+    """경기 페이지가 FINAL이 아니어도(우천 단축 등) 주간 일정의 FINAL 점수와 양팀 점수가 같으면 받아들인다."""
+    a, h = box["away"]["score"], box["home"]["score"]
+    return None not in (a, h) and a == row["away_score"] and h == row["home_score"]
+
+
 def collect_range(from_date: date, to_date: date, *, season: int | None = None, sleep_s: float = SLEEP_S,
                   today: date | None = None) -> dict:
     today = today or datetime.now(KST).date()
@@ -74,6 +80,8 @@ def collect_range(from_date: date, to_date: date, *, season: int | None = None, 
                         if box and box["status"] == "FINAL" and None not in (box["away"]["score"], box["home"]["score"]):
                             r.update(status="FINAL", away_score=box["away"]["score"], home_score=box["home"]["score"])
                             boxes[r["game_id"]] = box
+                        elif box:
+                            drop_cache(r["path"])  # FINAL이어도 점수가 없어 확정하지 못함 -> 다음 실행에서 다시 요청
                 raw_store.upsert_games(s, s_rows)
                 games += len(s_rows)
                 if s not in done:
@@ -84,6 +92,14 @@ def collect_range(from_date: date, to_date: date, *, season: int | None = None, 
                         continue
                     box = boxes.get(r["game_id"]) or _fetch_box(r, sleep_s, errors)
                     if box is None:
+                        continue
+                    if box["status"] != "FINAL" and not _same_score(box, r):
+                        # 진행 중 박스스코어를 영구 저장하지 않는다. 캐시는 _fetch_box가 이미 지웠고, 다음 실행에서 다시 받는다.
+                        err = {"game_id": r["game_id"], "path": r["path"],
+                               "error": (f"page not final: {box['status']} {box['away']['score']}-{box['home']['score']}"
+                                         f" vs week {r['away_score']}-{r['home_score']}")}
+                        errors.append(err)
+                        print(f"[collect] {err['path']}: {err['error']}", file=sys.stderr, flush=True)
                         continue
                     pending[s][r["game_id"]] = box
                     have.add(r["game_id"])
