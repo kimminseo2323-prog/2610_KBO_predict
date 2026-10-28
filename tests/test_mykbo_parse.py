@@ -110,3 +110,9 @@ def test_game_status_ignores_leading_symbols():
     from kbo_predict.mykbo_parse import _game_status
     soup = BeautifulSoup('<p class="mt-sm">▼ Bottom 9th · 0 out</p>', "html.parser")
     assert _game_status(soup) == "LIVE"
+
+
+def test_parse_week_bottom_with_symbol_is_live(fixture_html):
+    html = fixture_html("mykbo_week_2026-10-27.html").replace("Final", "▼ Bottom 9th · 0 out", 1)
+    g = next(r for r in parse_week(html) if r["game_id"] == 14052)
+    assert g["status"] == "LIVE"

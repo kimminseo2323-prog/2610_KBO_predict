@@ -39,7 +39,7 @@ def _int(text: str) -> int | None:
     return int(text) if text.lstrip("-").isdigit() else None
 
 
-_LIVE_RE = re.compile(r"\bLIVE\b|\b(?:Top|Bot|Mid|End)\s+\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
+_LIVE_RE = re.compile(r"\bLIVE\b|\b(?:Top|Bot(?:tom)?|Mid|End)\s+\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
 
 
 def parse_week(html: str) -> list[dict]:
