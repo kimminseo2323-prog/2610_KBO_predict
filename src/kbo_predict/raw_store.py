@@ -1,4 +1,4 @@
-"""원본(파싱된) 데이터 저장: games.jsonl, boxscores.jsonl.gz."""
+"""원본(파싱된) 데이터 저장: games.jsonl, boxscores/YYYY-MM.jsonl.gz (월별 분할)."""
 import gzip
 import json
 import os
@@ -13,8 +13,21 @@ def games_path(season: int) -> Path:
     return data_dir() / "raw" / str(season) / "games.jsonl"
 
 
-def boxscores_path(season: int) -> Path:
-    return data_dir() / "raw" / str(season) / "boxscores.jsonl.gz"
+def boxscores_dir(season: int) -> Path:
+    return data_dir() / "raw" / str(season) / "boxscores"
+
+
+def boxscores_month_path(season: int, yyyymm: str) -> Path:
+    """yyyymm은 'YYYY-MM' 형식. 매일 커밋되는 파일이 커지지 않게 월별로 분할."""
+    return boxscores_dir(season) / f"{yyyymm}.jsonl.gz"
+
+
+def available_seasons() -> list[int]:
+    """games.jsonl이 있는 시즌을 오름차순으로 반환."""
+    raw = data_dir() / "raw"
+    if not raw.exists():
+        return []
+    return sorted(int(p.name) for p in raw.iterdir() if p.name.isdigit() and (p / "games.jsonl").exists())
 
 
 def _dumps(obj: dict) -> str:
@@ -54,22 +67,28 @@ def upsert_games(season: int, games: list[dict]) -> int:
 
 
 def load_boxscores(season: int) -> dict[int, dict]:
-    path = boxscores_path(season)
-    if not path.exists():
-        return {}
-    with gzip.open(path, "rt", encoding="utf-8") as f:
-        rows = [json.loads(line) for line in f if line.strip()]
-    return {r["game_id"]: r for r in rows}
+    """월별 파일을 파일명 순으로 모두 읽어 game_id -> 박스스코어로 합친다."""
+    out: dict[int, dict] = {}
+    for path in sorted(boxscores_dir(season).glob("*.jsonl.gz")):
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    r = json.loads(line)
+                    out[r["game_id"]] = r
+    return out
 
 
 def append_boxscores(season: int, boxscores: dict[int, dict]) -> int:
-    """이미 있는 game_id는 건너뛰고 새 박스스코어만 추가. 추가 수를 반환."""
+    """이미 있는 game_id는 건너뛰고 새 박스스코어만 월 파일에 추가. 추가 수를 반환."""
     existing = load_boxscores(season)
-    new = {gid: b for gid, b in boxscores.items() if gid not in existing}
-    if new:
-        path = boxscores_path(season)
+    by_month: dict[str, list[tuple[int, dict]]] = {}
+    for gid, b in boxscores.items():
+        if gid not in existing:
+            by_month.setdefault(b["date"][:7], []).append((gid, b))
+    for month, items in by_month.items():
+        path = boxscores_month_path(season, month)
         path.parent.mkdir(parents=True, exist_ok=True)
         with gzip.open(path, "at", encoding="utf-8", newline="\n") as f:
-            for gid, b in new.items():
+            for gid, b in items:
                 f.write(_dumps({**b, "game_id": gid}) + "\n")
-    return len(new)
+    return sum(len(v) for v in by_month.values())

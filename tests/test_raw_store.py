@@ -25,3 +25,31 @@ def test_upsert_keeps_stored_time_and_stadium_when_new_is_none(tmp_data_dir, fix
     assert upsert_games(2026, [live]) == 1
     g = next(g for g in load_games(2026) if g["game_id"] == 14050)
     assert g["status"] == "LIVE" and g["time_kst"] == "18:30" and g["stadium"] == "Gwangju"
+
+
+def test_append_boxscores_splits_files_by_month(tmp_data_dir, fixture_html):
+    from kbo_predict.raw_store import boxscores_dir
+    g = parse_game(fixture_html("mykbo_game_14048_final.html"))      # 2026-10-26
+    g_old = parse_game(fixture_html("mykbo_game_1189_final.html"))   # 2015-06-02
+    assert append_boxscores(2026, {14048: g}) == 1
+    assert append_boxscores(2015, {1189: g_old}) == 1
+    assert sorted(p.name for p in boxscores_dir(2026).iterdir()) == ["2026-10.jsonl.gz"]
+    assert sorted(p.name for p in boxscores_dir(2015).iterdir()) == ["2015-06.jsonl.gz"]
+    assert load_boxscores(2026)[14048]["home"]["code"] == "SS"
+    assert load_boxscores(2015)[1189]["away"]["code"] == "HT"
+
+
+def test_load_boxscores_merges_all_months(tmp_data_dir, fixture_html):
+    g = parse_game(fixture_html("mykbo_game_14048_final.html"))
+    g2 = dict(g, date="2026-09-01")
+    assert append_boxscores(2026, {14048: g, 99999: g2}) == 2
+    assert set(load_boxscores(2026)) == {14048, 99999}
+    assert append_boxscores(2026, {14048: g}) == 0
+
+
+def test_available_seasons_lists_dirs_with_games(tmp_data_dir, fixture_html):
+    from kbo_predict.raw_store import available_seasons
+    assert available_seasons() == []
+    upsert_games(2026, parse_week(fixture_html("mykbo_week_2026-10-27.html")))
+    upsert_games(2015, parse_week(fixture_html("mykbo_week_2015-06-02.html")))
+    assert available_seasons() == [2015, 2026]
