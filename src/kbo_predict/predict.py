@@ -43,7 +43,7 @@ def predict_game(bundle: dict, game: dict, state: LeagueState) -> dict:
         "date": game["date"],
         "time": game.get("time_kst"),
         "stadium": game.get("stadium"),
-        "round": "regular" if is_regular(season, _date.fromisoformat(game["date"])) else "postseason",
+        "round": "regular" if is_regular(season, _date.fromisoformat(game["date"]), game["game_id"]) else "postseason",
         "status": game["status"],
         "home": _side(game["home"], game["home_code"], f["home_line"]),
         "away": _side(game["away"], game["away_code"], f["away_line"]),

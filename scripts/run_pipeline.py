@@ -43,7 +43,7 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     # ③ 상태 누적 (target 이전 정규시즌 FINAL 경기만 — 학습 시 build_training_frame과 동일)
     state = LeagueState()
     for g in sorted((g for g in games if g["status"] == "FINAL" and g["date"] < iso
-                     and seasons.is_regular(int(g["season"]), date.fromisoformat(g["date"]))),
+                     and seasons.is_regular(int(g["season"]), date.fromisoformat(g["date"]), g["game_id"])),
                     key=lambda g: (g["date"], g["game_id"])):
         state.update(g)
 
