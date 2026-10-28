@@ -33,9 +33,10 @@ def _to_kst(datetime_utc: str) -> datetime:
     return datetime.fromisoformat(datetime_utc.replace("Z", "+00:00")).astimezone(KST)
 
 
-def _int(text: str) -> int:
+def _int(text: str) -> int | None:
+    """숫자 셀 -> int. 결측("-", 빈칸 등)은 0이 아니라 None."""
     text = text.strip()
-    return int(text) if text.lstrip("-").isdigit() else 0
+    return int(text) if text.lstrip("-").isdigit() else None
 
 
 _LIVE_RE = re.compile(r"\bLIVE\b|\b(?:Top|Bot|Mid|End)\s+\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
@@ -94,13 +95,14 @@ def parse_week(html: str) -> list[dict]:
 
 
 _STATUS_WORDS = (("final", "FINAL"), ("scheduled", "SCHEDULED"), ("cancel", "CANCELED"),
-                 ("postpone", "CANCELED"), ("live", "LIVE"), ("top ", "LIVE"), ("bot ", "LIVE"),
+                 ("postpone", "CANCELED"), ("live", "LIVE"), ("top ", "LIVE"), ("bot ", "LIVE"), ("bottom ", "LIVE"),
                  ("mid ", "LIVE"), ("end ", "LIVE"))
 
 
 def _game_status(soup: BeautifulSoup) -> str:
     for p in soup.find_all("p", class_="mt-sm"):
-        t = _norm(p.get_text()).lower()
+        # LIVE 페이지는 이닝 앞에 ▲▼ 같은 기호가 붙는다
+        t = _norm(p.get_text()).lower().lstrip("▲▼△▽ ").strip()
         for word, status in _STATUS_WORDS:
             if t.startswith(word):
                 return status

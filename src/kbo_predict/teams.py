@@ -11,6 +11,9 @@ TEAMS: dict[str, dict] = {
     "Kia Tigers": {"code": "HT", "ko": "KIA"},
     "LG Twins": {"code": "LG", "ko": "LG"},
     "NC Dinos": {"code": "NC", "ko": "NC"},
+    # 옛 구단명 (현재 코드로 연결)
+    "Nexen Heroes": {"code": "WO", "ko": "넥센"},  # 2015~2018, 이후 키움
+    "SK Wyverns": {"code": "SK", "ko": "SK"},  # 2015~2020, 이후 SSG
 }
 
 # 짧은 이름 = 풀네임의 첫 단어 (예: "Kia Tigers" -> "Kia")

@@ -80,3 +80,33 @@ def test_parse_game_unknown_status_raises(fixture_html):
     html = fixture_html("mykbo_game_14048_final.html").replace("Final", "Mystery")
     with pytest.raises(ValueError):
         parse_game(html)
+
+
+def test_week_2015_uses_historical_team_names(fixture_html):
+    rows = parse_week(fixture_html("mykbo_week_2015-06-02.html"))
+    assert len(rows) == 30
+    assert {r["status"] for r in rows} == {"FINAL", "CANCELED"}
+    assert sum(r["status"] == "FINAL" for r in rows) == 29
+    codes = {r["away_code"] for r in rows} | {r["home_code"] for r in rows}
+    assert {"WO", "SK"} <= codes and len(codes) == 10
+
+
+def test_game_2015_parses_boxscore(fixture_html):
+    g = parse_game(fixture_html("mykbo_game_1189_final.html"))
+    assert g["game_id"] == 1189 and g["date"] == "2015-06-02" and g["status"] == "FINAL"
+    assert (g["away"]["code"], g["away"]["score"]) == ("HT", 9) and (g["home"]["code"], g["home"]["score"]) == ("OB", 1)
+    assert len(g["batting"]["away"]) == 16 and len(g["pitching"]["away"]) == 3
+    assert g["pitching"]["away"][0]["ip_outs"] == 21
+
+
+def test_int_non_numeric_cell_is_none():
+    from kbo_predict.mykbo_parse import _int
+    assert _int(" 12 ") == 12 and _int("-3") == -3
+    assert _int("") is None and _int("-") is None and _int("n/a") is None
+
+
+def test_game_status_ignores_leading_symbols():
+    from bs4 import BeautifulSoup
+    from kbo_predict.mykbo_parse import _game_status
+    soup = BeautifulSoup('<p class="mt-sm">▼ Bottom 9th · 0 out</p>', "html.parser")
+    assert _game_status(soup) == "LIVE"
