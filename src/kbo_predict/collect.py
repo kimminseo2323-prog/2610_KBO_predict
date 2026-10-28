@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 import requests
 
 from kbo_predict import KST, raw_store
-from kbo_predict.mykbo_client import SLEEP_S, fetch_html, week_path
+from kbo_predict.mykbo_client import SLEEP_S, drop_cache, fetch_html, week_path
 from kbo_predict.mykbo_parse import parse_game, parse_week
 
 PROGRESS_EVERY = 20
@@ -19,13 +19,20 @@ def season_range(season: int) -> tuple[date, date]:
 
 
 def _fetch_box(row: dict, sleep_s: float, errors: list[dict]) -> dict | None:
-    """경기 페이지 가져오기 + 파싱 + game_id 검사. 실패하면 errors에 기록하고 None."""
+    """경기 페이지 가져오기 + 파싱 + game_id 검사. 실패하면 errors에 기록하고 None.
+
+    HTML 캐시에는 '파싱 성공 + FINAL' 페이지만 남긴다. 그 외(챌린지 페이지, 아직 LIVE 등)는
+    캐시를 지워 다음 실행에서 다시 요청하게 한다.
+    """
     try:
         box = parse_game(fetch_html(row["path"], sleep_s=sleep_s))
         if box["game_id"] != row["game_id"]:
             raise ValueError(f"game_id mismatch: week={row['game_id']} page={box['game_id']}")
+        if box["status"] != "FINAL":
+            drop_cache(row["path"])
         return box
-    except (ValueError, KeyError, requests.RequestException) as e:
+    except (ValueError, KeyError, AttributeError, TypeError, requests.RequestException) as e:
+        drop_cache(row["path"])
         err = {"game_id": row["game_id"], "path": row["path"], "error": f"{type(e).__name__}: {e}"}
         errors.append(err)
         print(f"[collect] {err['path']}: {err['error']}", file=sys.stderr, flush=True)

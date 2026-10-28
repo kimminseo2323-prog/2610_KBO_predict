@@ -22,6 +22,13 @@ def _cache_file(cache_dir: Path, path: str) -> Path:
     return cache_dir / (re.sub(r"[^A-Za-z0-9._-]+", "_", path.strip("/")) + ".html")
 
 
+def drop_cache(path: str, cache_dir: Path | None = None) -> None:
+    """해당 경로의 캐시 파일 삭제 (없으면 무시)."""
+    if cache_dir is None:
+        cache_dir = raw_store.data_dir() / "cache" / "html"
+    _cache_file(cache_dir, path).unlink(missing_ok=True)
+
+
 def fetch_html(path: str, *, session=None, sleep_s: float = SLEEP_S, cache_dir: Path | None = None,
                use_cache: bool = True) -> str:
     if cache_dir is None:

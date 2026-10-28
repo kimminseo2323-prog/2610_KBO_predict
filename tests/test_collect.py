@@ -1,6 +1,12 @@
 from datetime import date
 
-from kbo_predict import collect, raw_store
+import re
+import time
+
+import requests
+
+from kbo_predict import collect, mykbo_client, raw_store
+from kbo_predict.mykbo_parse import parse_week
 
 
 def test_collect_range_fetches_boxscores_only_for_new_finals(monkeypatch, tmp_data_dir, fixture_html):
@@ -75,3 +81,72 @@ def test_season_cli_covers_march_to_november(monkeypatch):
     monkeypatch.setattr(collect, "collect_range", lambda f, t, **kw: called.update(f=f, t=t, **kw) or {})
     collect.main(["--season", "2015", "--sleep", "0"])
     assert (called["f"], called["t"], called["season"]) == (date(2015, 3, 1), date(2015, 11, 30), 2015)
+
+
+class _Resp:
+    def __init__(self, text):
+        self.text = text
+
+    def raise_for_status(self):
+        pass
+
+
+def _real_fetch_env(monkeypatch, handler):
+    """진짜 fetch_html(캐시 포함)을 쓰고 HTTP 계층만 가짜로 바꾼다. handler(path) -> html."""
+    gets = []
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+
+    def fake_get(self, url, **kw):
+        path = url.removeprefix(mykbo_client.BASE_URL)
+        gets.append(path)
+        return _Resp(handler(path))
+
+    monkeypatch.setattr(requests.Session, "get", fake_get)
+    return gets
+
+
+def test_rerun_after_challenge_page_refetches_game(monkeypatch, tmp_data_dir, fixture_html):
+    week = fixture_html("mykbo_week_2026-10-27.html")
+    state = {"challenge": True}
+
+    def handler(path):
+        if path.startswith("/schedule/week_of/"):
+            return week
+        game_id = path.split("/")[2].split("-")[0]
+        if state["challenge"] and game_id == "14052":
+            return "<html><body>Checking your browser</body></html>"
+        return fixture_html("mykbo_game_14048_final.html").replace("/games/14048-", f"/games/{game_id}-")
+
+    gets = _real_fetch_env(monkeypatch, handler)
+    first = collect.collect_range(date(2026, 10, 27), date(2026, 11, 1), sleep_s=0, today=date(2026, 10, 28))
+    assert [e["game_id"] for e in first["errors"]] == [14052]
+    state["challenge"] = False
+    gets.clear()
+    second = collect.collect_range(date(2026, 10, 27), date(2026, 11, 1), sleep_s=0, today=date(2026, 10, 28))
+    assert second["errors"] == [] and second["boxscores"] == 1
+    assert [g for g in gets if g.startswith("/games/14052-")]
+
+
+def test_stale_live_page_still_live_is_not_cached(monkeypatch, tmp_data_dir, fixture_html):
+    week_live = fixture_html("mykbo_week_2026-10-27.html").replace("Final", "LIVE", 1)
+    game = fixture_html("mykbo_game_14048_final.html")
+    live_game = re.sub(r"(text-ink-2\">\s*)Final", lambda m: m.group(1) + "▼ Bottom 9th · 0 out", game, count=1)
+    assert live_game != game
+
+    def handler(path):
+        if path.startswith("/schedule/week_of/"):
+            return week_live
+        game_id = path.split("/")[2].split("-")[0]
+        return live_game.replace("/games/14048-", f"/games/{game_id}-")
+
+    gets = _real_fetch_env(monkeypatch, handler)
+    cache_dir = tmp_data_dir / "cache" / "html"
+    kw = dict(sleep_s=0, today=date(2026, 11, 5))
+    row_path = next(r for r in parse_week(week_live) if r["game_id"] == 14052)["path"]
+    out = collect.collect_range(date(2026, 10, 27), date(2026, 11, 1), **kw)
+    g = next(x for x in raw_store.load_games(2026) if x["game_id"] == 14052)
+    assert g["status"] == "LIVE" and out["errors"] == []
+    assert not mykbo_client._cache_file(cache_dir, row_path).exists()
+    n = len([p for p in gets if p == row_path])
+    collect.collect_range(date(2026, 10, 27), date(2026, 11, 1), **kw)
+    assert len([p for p in gets if p == row_path]) == n + 1
