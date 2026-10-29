@@ -6,7 +6,8 @@
     fit_group    맞춤 시즌(2015~2025) 행으로 표준화 -> K=4..7 K-means -> 점수(실루엣 + 유지율)로 K 선택
                  -> 유형 번호를 뜻이 있게 다시 매김 -> 소속 확률 방식 선택(아래) -> PCA 2D 좌표
     assign       자격 행 전부(2026 포함)에 유형·소속 확률·2D 좌표를 붙인다
-    similar_players  표준화 공간 코사인 유사도로 '비슷한 선수-시즌' 상위 5개 (같은 선수의 다른 시즌은 제외)
+    similar_players  표준화 공간 코사인 유사도로 '비슷한 선수' 상위 5명 (같은 선수의 다른 시즌은 제외,
+                     다른 선수는 가장 비슷한 시즌 하나만)
 
 용어:
     유지율(retention)  연속 두 시즌 모두 자격이 있는 선수 중 두 해의 유형이 같은 비율. 유형이 '그 선수다움'을
@@ -81,8 +82,8 @@ REPORT_PKL = Path("models/report-2026.pkl")             # publish: teams.json의
 FEATURES_PARQUET = Path("data/processed/features.parquet")
 PUBLIC_DIR = Path("data/public")
 
-__all__ = ["rates", "qualify", "fit_group", "assign", "similar_players", "retention", "gmm_agreement",
-           "quality", "load_labels", "build", "build_from", "types_map", "save_bundle", "load_bundle"]
+__all__ = ["rates", "qualify", "fit_group", "assign", "similar_players", "retention", "argmax_agreement",
+           "quality", "load_labels", "require_names", "build", "build_from", "types_map", "save_bundle", "load_bundle"]
 
 
 def _single_thread(fn):
@@ -264,16 +265,18 @@ def assign(bundle: dict, df_rates: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def gmm_agreement(assigned: pd.DataFrame) -> float:
-    """소속 확률(membership) 최댓값 성분이 유형과 같은 행의 비율 (배정된 행 기준). kmeans_softmax면 항상 1."""
+def argmax_agreement(assigned: pd.DataFrame) -> float:
+    """선택된 소속 확률 방식(membership)의 최댓값 성분이 유형과 같은 행의 비율 (배정된 행 기준).
+    GMM이든 kmeans_softmax든 assign이 붙인 membership을 본다 — kmeans_softmax면 구조적으로 항상 1."""
     mem = np.array(assigned["membership"].tolist())
     return float(np.mean(mem.argmax(axis=1) == assigned["type"].to_numpy()))
 
 
 @_single_thread
 def similar_players(bundle: dict, assigned: pd.DataFrame, n: int = 5) -> dict[tuple[int, int], list[dict]]:
-    """(season, player_id) -> 비슷한 선수-시즌 상위 n개 [{"season", "player_id", "similarity"}].
+    """(season, player_id) -> 비슷한 선수 상위 n명 [{"season", "player_id", "similarity"}].
     표준화 공간의 코사인 유사도(소수 6자리로 반올림해 순위를 매긴다), 같은 player_id의 행은 모두 제외,
+    다른 선수 한 명은 한 번만 — 그 선수의 시즌 중 유사도가 가장 높은 시즌 하나만 남긴다 (n칸 = 서로 다른 n명).
     동률이면 (season, player_id) 오름차순. 정규화한 행렬끼리 곱 한 번으로 모든 쌍을 계산한다."""
     a = assigned.sort_values(["season", "player_id"], kind="stable").reset_index(drop=True)
     Z = bundle["scaler"].transform(a[bundle["features"]])
@@ -283,29 +286,54 @@ def similar_players(bundle: dict, assigned: pd.DataFrame, n: int = 5) -> dict[tu
     pid = a["player_id"].to_numpy()
     S[pid[:, None] == pid[None, :]] = -np.inf             # 자기 자신과 같은 선수의 다른 시즌
     # 안정 정렬: 유사도가 같으면 원래 행 순서 = (season, player_id) 오름차순
-    order = np.argsort(-S, axis=1, kind="stable")[:, :n]
+    order = np.argsort(-S, axis=1, kind="stable")
     seasons = a["season"].to_numpy()
     out = {}
     for i in range(len(a)):
-        out[(int(seasons[i]), int(pid[i]))] = [
-            {"season": int(seasons[j]), "player_id": int(pid[j]), "similarity": float(S[i, j])}
-            for j in order[i] if np.isfinite(S[i, j])]
+        picked, seen = [], set()
+        for j in order[i]:                                # 유사도 높은 순으로 훑으며 처음 나온 선수만 담는다
+            if len(picked) == n or not np.isfinite(S[i, j]):
+                break
+            if pid[j] in seen:
+                continue
+            seen.add(pid[j])
+            picked.append({"season": int(seasons[j]), "player_id": int(pid[j]), "similarity": float(S[i, j])})
+        out[(int(seasons[i]), int(pid[i]))] = picked
     return out
 
 
 # ---------- 이름 · 품질 요약 ----------
 
-def load_labels(path=LABELS_YAML) -> dict[str, dict[int, dict]]:
-    """유형 이름표 {group: {type: {"name", "blurb"}}}. 파일이 없거나 비어 있는 유형은 "유형 {t}"/빈 설명."""
-    out = {g: {t: {"name": f"유형 {t}", "blurb": ""} for t in range(max(K_RANGE))} for g in GROUPS}
-    path = Path(path)
-    if path.exists():
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        for g in GROUPS:
-            for t, v in (data.get(g) or {}).items():
-                v = v or {}
-                out[g][int(t)] = {"name": str(v.get("name", f"유형 {t}")), "blurb": str(v.get("blurb", ""))}
+def load_labels(path=None) -> dict[str, dict[int, dict]]:
+    """유형 이름표 {group: {type: {"name", "blurb"}}}.
+    path를 안 주면(또는 LABELS_YAML을 주면) config/cluster_labels.yaml을 읽고, 그 파일이 없으면 FileNotFoundError —
+        이름표 없이 "유형 0" 같은 자리표시 이름이 사이트·보고서에 나가지 않게 한다.
+    다른 path를 주었는데 그 파일이 없으면 모든 유형(0..max(K_RANGE)-1)을 "유형 {t}"/빈 설명으로 채운다 (테스트용).
+    파일에 name이 없는 유형 번호는 비워 둔다. 유형 수 k를 아는 곳(quality · site_data.players_payload ·
+    run_pipeline.starter_types)이 require_names로 0..k-1 모두 이름이 있는지 검사해 ValueError를 낸다."""
+    default = path is None or Path(path).resolve() == Path(LABELS_YAML).resolve()
+    path = LABELS_YAML if path is None else Path(path)
+    if not path.exists():
+        if default:
+            raise FileNotFoundError(f"유형 이름표 {path} 가 없습니다 — config/cluster_labels.yaml을 복구하세요 "
+                                    "(git checkout -- config/cluster_labels.yaml)")
+        return {g: {t: {"name": f"유형 {t}", "blurb": ""} for t in range(max(K_RANGE))} for g in GROUPS}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    out: dict[str, dict[int, dict]] = {g: {} for g in GROUPS}
+    for g in GROUPS:
+        for t, v in (data.get(g) or {}).items():
+            v = v or {}
+            if v.get("name"):
+                out[g][int(t)] = {"name": str(v["name"]), "blurb": str(v.get("blurb") or "")}
     return out
+
+
+def require_names(labels: dict, group: str, k: int) -> None:
+    """유형 0..k-1 모두 이름표에 이름이 있어야 한다. 빠진 번호가 있으면 ValueError (어느 번호인지 적는다)."""
+    missing = [t for t in range(int(k)) if not (labels.get(group) or {}).get(t, {}).get("name")]
+    if missing:
+        raise ValueError(f"cluster_labels: {group} 유형 {missing}에 이름이 없습니다 (k={k}) — "
+                         "config/cluster_labels.yaml에 name을 채우세요")
 
 
 def _display_name(row: pd.Series) -> str:
@@ -347,17 +375,18 @@ def quality(bundles: dict, assigned: dict, names_cfg: dict) -> dict:
     for g in GROUPS:
         b, a = bundles[g], assigned[g]
         in_fit = a["season"].isin(b["fit_seasons"])
-        labels = names_cfg.get(g, {})
+        require_names(names_cfg, g, b["k"])
+        labels = names_cfg[g]
         types = []
         for t in range(b["k"]):
             ex = _examples(a, t, 3)
             types.append({
-                "id": t, "name": labels.get(t, {}).get("name", f"유형 {t}"),
+                "id": t, "name": labels[t]["name"],
                 "n": int((a["type"] == t).sum()), "n_fit": int(((a["type"] == t) & in_fit).sum()),
                 "center": {f: round(float(b["centers"].loc[t, f]), 3) for f in b["features"]},
                 "examples": [_display_name(r) for _, r in ex.iterrows()],
             })
-        agreement = gmm_agreement(a)
+        agreement = argmax_agreement(a)
         out[g] = {
             "k": b["k"], "k_table": [{"k": r["k"], "silhouette": _num(r["silhouette"]),
                                       "retention": _num(r["retention"]), "score": _num(r["score"])}
@@ -419,7 +448,7 @@ def profile_table(obj: dict) -> str:
         lines += [f"## {g} (K={b['k']}, n_fit={int(in_fit.sum())}, n_all={len(a)}, "
                   f"retention_all={retention(a):.3f})", "",
                   f"membership: {b['membership_method']} — agreement fit={b['membership_agreement']:.3f}, "
-                  f"all={gmm_agreement(a):.3f}; softmax_s2={b['softmax_s2']:.4f}; GMM candidates (fit) "
+                  f"all={argmax_agreement(a):.3f}; softmax_s2={b['softmax_s2']:.4f}; GMM candidates (fit) "
                   + ", ".join(f"{c}={v:.3f}" for c, v in b["gmm_candidates"].items()), "",
                   "| k | silhouette | retention | score |", "|---|---|---|---|"]
         lines += [f"| {r['k']} | {r['silhouette']:.4f} | {r['retention']:.4f} | {r['score']:.4f} |"

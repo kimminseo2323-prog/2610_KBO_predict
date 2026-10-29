@@ -13,7 +13,7 @@ teams.json    팀-시즌 한 칸씩. 정규시즌 FINAL 경기(features.regular_
     -0.0은 0.0으로 바꾼다 (JSON에 "-0.0"이 나오지 않게).
 정렬(같은 입력이면 같은 바이트가 나오도록 순서를 모두 정해 둔다):
     players  season 내림차순 → group(batter, pitcher) → player_id 오름차순
-    similar  cluster.similar_players가 정한 순서 그대로 (유사도 내림차순, 동률은 (season, player_id) 순)
+    similar  cluster.similar_players가 정한 순서 그대로 (서로 다른 선수 5명, 유사도 내림차순, 동률은 (season, player_id) 순)
     teams    season 내림차순 → 승률 내림차순(반올림 전 값) → 팀 코드 오름차순 (승률이 없는 팀은 그 시즌 맨 뒤)
     dict 키는 파일에 쓸 때 정렬한다 (publish._write_json(sort_keys=True)).
 파일 형식: players.json은 indent 없이 separators (",", ":"), teams.json은 indent=1 (둘 다 sort_keys).
@@ -33,7 +33,7 @@ import math
 import pandas as pd
 
 from . import raw_store
-from .cluster import CLUSTER_VERSION, GROUPS
+from .cluster import CLUSTER_VERSION, GROUPS, require_names
 from .features import PYTH_EXP, regular_finals
 from .teams import TEAMS
 from .train_win import REPORT_VERSION, predict_proba
@@ -100,6 +100,7 @@ def players_payload(obj: dict, labels: dict, meta: dict) -> dict:
     players = []
     for g in GROUPS:
         b, a = obj[g]["bundle"], obj[g]["assigned"]
+        require_names(labels, g, b["k"])                  # 유형 0..k-1 모두 이름이 있어야 한다 (없으면 ValueError)
         types[g] = [{"id": t, "name": labels[g][t]["name"], "blurb": labels[g][t]["blurb"]} for t in range(b["k"])]
         rows = {(int(r.season), int(r.player_id)): r for r in a.itertuples(index=False)}
         stats_fn = _batter_stats if g == "batter" else _pitcher_stats

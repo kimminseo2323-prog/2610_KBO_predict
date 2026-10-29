@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 
 from kbo_predict import cluster
-from kbo_predict.cluster import (assign, build_from, fit_group, gmm_agreement, load_labels, qualify, quality,
-                                 rates, retention, similar_players, types_map)
+from kbo_predict.cluster import (argmax_agreement, assign, build_from, fit_group, load_labels, qualify, quality,
+                                 rates, require_names, retention, similar_players, types_map)
 
 SEASONS = list(range(2015, 2027))
 
@@ -201,7 +201,7 @@ def test_membership_agrees_with_type_default(synthetic, synthetic_pit):
             assert b["gmm"] is None and b["gmm_agreement"] < cluster.AGREEMENT_FLOOR
         else:
             assert b["membership_method"] == "gmm_" + b["gmm"].covariance_type
-        assert gmm_agreement(assign(b, df)) >= cluster.AGREEMENT_FLOOR
+        assert argmax_agreement(assign(b, df)) >= cluster.AGREEMENT_FLOOR
 
 
 def test_gmm_selected_path(synthetic):
@@ -220,7 +220,7 @@ def test_softmax_fallback_argmax_is_type(synthetic):
     assert b["membership_method"] == "kmeans_softmax" and b["gmm"] is None and b["membership_agreement"] == 1.0
     a = assign(b, synthetic)
     m = np.array(a.membership.tolist())
-    assert (m.argmax(axis=1) == a.type.to_numpy()).all() and gmm_agreement(a) == 1.0
+    assert (m.argmax(axis=1) == a.type.to_numpy()).all() and argmax_agreement(a) == 1.0
     assert np.allclose(m.sum(axis=1), 1) and np.allclose(a.prob, m[np.arange(len(a)), a.type])
     Z = b["scaler"].transform(a[b["features"]])
     assert (a.type.to_numpy() == b["kmeans"].predict(Z)).all()        # 유형 = K-means 가장 가까운 중심
@@ -255,6 +255,7 @@ def test_similar_for_new_single_season_player(synthetic):
     new = pd.concat([a, src.assign(season=2026, player_id=999999)], ignore_index=True)   # 한 시즌뿐인 새 선수
     lst = similar_players(b, new)[(2026, 999999)]
     assert len(lst) == 5 and all(s["player_id"] != 999999 for s in lst)
+    assert len({s["player_id"] for s in lst}) == 5                    # 5칸 = 서로 다른 선수 5명
     assert (lst[0]["season"], lst[0]["player_id"]) == (int(src.season.iloc[0]), int(src.player_id.iloc[0]))
     assert lst[0]["similarity"] == pytest.approx(1.0)                 # 같은 스탯의 원본 행이 1위
 
@@ -266,6 +267,7 @@ def test_similar_excludes_same_player(synthetic):
     assert len(sim) == len(a)
     for (season, pid), lst in sim.items():
         assert len(lst) == 5 and all(s["player_id"] != pid for s in lst)
+        assert len({s["player_id"] for s in lst}) == 5
         assert [s["similarity"] for s in lst] == sorted((s["similarity"] for s in lst), reverse=True)
     # 동률: 같은 스탯 행을 다른 선수·시즌으로 복제하면 유사도 1.0끼리 (season, player_id) 오름차순
     base = a.iloc[[0]]
@@ -274,6 +276,24 @@ def test_similar_excludes_same_player(synthetic):
     lst = similar_players(b, dup.sort_values(["season", "player_id"]), n=3)[(2019, 1)]
     assert [(s["season"], s["player_id"]) for s in lst] == [(2018, 3), (2018, 7), (2020, 9)]
     assert lst[0]["similarity"] == pytest.approx(1.0)
+
+
+def test_similar_dedupes_other_players_keeping_best_season(synthetic):
+    """다른 선수의 여러 시즌이 상위권을 차지해도 그 선수는 유사도가 가장 높은 시즌 한 칸만 — 5칸은 서로 다른 5명."""
+    b = fit_group(synthetic, "batter")
+    a = assign(b, synthetic)
+    base = a.iloc[[0]]
+    # 선수 7: 같은 스탯 3시즌(유사도 1.0 동률 -> 가장 이른 시즌 2016만), 선수 3·9: 1시즌씩, 그 밖은 다른 원형 행
+    rows = [base.assign(season=s, player_id=7) for s in (2018, 2016, 2020)]
+    rows += [base.assign(season=2019, player_id=3), base.assign(season=2017, player_id=9),
+             base.assign(season=2021, player_id=1)]
+    others = a[a["player_id"] != int(base["player_id"].iloc[0])].drop_duplicates("player_id").head(6)
+    df = pd.concat(rows + [others], ignore_index=True).sort_values(["season", "player_id"])
+    lst = similar_players(b, df, n=5)[(2021, 1)]
+    ids = [s["player_id"] for s in lst]
+    assert len(ids) == 5 and len(set(ids)) == 5
+    assert [(s["season"], s["player_id"]) for s in lst[:3]] == [(2016, 7), (2017, 9), (2019, 3)]
+    assert all(s["similarity"] == pytest.approx(1.0) for s in lst[:3])
 
 
 def test_types_map_and_quality_shape(obj):
@@ -288,7 +308,7 @@ def test_types_map_and_quality_shape(obj):
     bq = q["batter"]
     assert bq["k"] == 4 and bq["n_fit"] < bq["n_all"] and len(bq["types"]) == 4
     assert bq["membership_method"] == obj["batter"]["bundle"]["membership_method"]
-    assert bq["argmax_consistent"] is (gmm_agreement(obj["batter"]["assigned"]) == 1.0)
+    assert bq["argmax_consistent"] is (argmax_agreement(obj["batter"]["assigned"]) == 1.0)
     if bq["membership_method"] == "kmeans_softmax":
         assert bq["argmax_consistent"] is True and "membership_agreement" not in bq  # 구조적으로 1.0 → 적지 않는다
     else:
@@ -325,13 +345,36 @@ def test_quality_argmax_consistency_by_membership_method(obj):
     assert q["pitcher"]["membership_agreement"] == round(1 - 1 / len(a), 4)
 
 
-def test_load_labels_default_when_missing(tmp_path):
-    d = load_labels(tmp_path / "none.yaml")
+def test_load_labels_placeholder_only_for_missing_explicit_path(tmp_path):
+    d = load_labels(tmp_path / "none.yaml")                       # 기본이 아닌 경로가 없으면 자리표시 이름
     assert set(d) == set(cluster.GROUPS) and d["batter"][0]["name"] == "유형 0" and d["pitcher"][3]["name"] == "유형 3"
     f = tmp_path / "labels.yaml"
-    f.write_text("batter:\n  0: {name: 거포형, blurb: 멀리 친다}\npitcher: {}\n", encoding="utf-8")
-    d = load_labels(f)
-    assert d["batter"][0] == {"name": "거포형", "blurb": "멀리 친다"} and d["batter"][1]["name"] == "유형 1"
+    f.write_text("batter:\n  0: {name: 거포형, blurb: 멀리 친다}\n  1: {blurb: 이름 없음}\npitcher: {}\n",
+                 encoding="utf-8")
+    d = load_labels(f)                                            # 있는 파일은 적힌 이름만 (빈 칸을 채우지 않는다)
+    assert d == {"batter": {0: {"name": "거포형", "blurb": "멀리 친다"}}, "pitcher": {}}
+
+
+def test_load_labels_default_missing_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(cluster, "LABELS_YAML", tmp_path / "gone.yaml")
+    with pytest.raises(FileNotFoundError, match="cluster_labels"):
+        load_labels()
+    with pytest.raises(FileNotFoundError):
+        load_labels(tmp_path / "gone.yaml")                       # 기본 경로를 직접 넘겨도 같다
+
+
+def test_require_names_and_quality_reject_missing_type_name(obj, tmp_path):
+    f = tmp_path / "labels.yaml"
+    f.write_text("batter:\n  0: {name: a}\n  1: {name: b}\n  2: {name: c}\n"
+                 "pitcher:\n  0: {name: d}\n  1: {name: e}\n  2: {name: f}\n  3: {name: g}\n", encoding="utf-8")
+    labels = load_labels(f)
+    require_names(labels, "pitcher", 4)
+    require_names(labels, "batter", 3)
+    with pytest.raises(ValueError, match=r"batter 유형 \[3\]"):
+        require_names(labels, "batter", 4)
+    with pytest.raises(ValueError, match="batter"):                # k=4인 타자 번들에 유형 3 이름이 없다
+        quality({g: obj[g]["bundle"] for g in cluster.GROUPS}, {g: obj[g]["assigned"] for g in cluster.GROUPS},
+                labels)
 
 
 def test_cli_writes_bundle_csv_and_manifest(tmp_path, monkeypatch, obj):

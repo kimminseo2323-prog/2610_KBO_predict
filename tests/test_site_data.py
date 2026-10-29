@@ -93,6 +93,14 @@ def test_players_payload_shape(synthetic_obj, labels):
     json.dumps(p)
 
 
+def test_players_payload_rejects_missing_type_name(synthetic_obj, labels):
+    """유형 0..k-1 중 이름이 빠진 번호가 있으면 자리표시 이름으로 발행하지 않고 ValueError."""
+    partial = {g: dict(v) for g, v in labels.items()}
+    del partial["pitcher"][3]
+    with pytest.raises(ValueError, match="pitcher"):
+        players_payload(synthetic_obj, partial, META)
+
+
 def test_players_sorted_and_rounded(synthetic_obj, labels):
     players = players_payload(synthetic_obj, labels, meta=META)["players"]
     keys = [(-x["season"], cluster.GROUPS.index(x["group"]), x["player_id"]) for x in players]
