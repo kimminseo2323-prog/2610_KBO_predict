@@ -350,3 +350,8 @@ def test_cli_writes_bundle_csv_and_manifest(tmp_path, monkeypatch, obj):
     cluster.main(args)
     assert json.loads(manifest.read_text(encoding="utf-8"))["models"]["clusters"]["types_sha256"] == first
     assert cluster.load_bundle(tmp_path / "c.pkl")["batter"]["bundle"]["k"] == 4
+
+
+def test_load_labels_default_is_cwd_independent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)  # 저장소 밖에서 불러도 진짜 이름표를 읽어야 한다
+    assert load_labels()["batter"][0]["name"] == "파워형"
