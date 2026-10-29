@@ -27,6 +27,7 @@ def _read(name: str):
 
 # 윈도우 환경에서 zmq가 커널 연결 시 내는 Proactor 경고만 좁게 무시한다 (노트북 내용과 무관)
 @pytest.mark.filterwarnings("ignore:Proactor event loop does not implement add_reader family of methods:RuntimeWarning")
+@pytest.mark.slow
 @pytest.mark.parametrize("name", NOTEBOOKS)
 def test_notebook_executes_without_errors(name):
     nb = _read(name)

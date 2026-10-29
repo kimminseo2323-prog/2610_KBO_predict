@@ -1,6 +1,7 @@
 # KBO Predict
 
 ![daily](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/workflows/daily.yml/badge.svg)
+![ci](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/workflows/ci.yml/badge.svg)
 
 KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 공개 파일로 기록하는 포트폴리오 프로젝트입니다. 선수 유형 클러스터링을 더해 한 저장소에서 예측과 분석을 함께 다룹니다.
 

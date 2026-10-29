@@ -4,14 +4,8 @@ pandas==2.2.3
 scipy==1.15.3
 scikit-learn==1.6.1
 joblib==1.4.2
-pytest==9.0.1
 tzdata==2025.2
 beautifulsoup4==4.12.3
-matplotlib==3.10.0
-nbformat==5.10.4
-nbclient==0.10.2
-nbconvert==7.16.6
-ipykernel==6.29.5
 pyarrow==19.0.1
 lightgbm==4.7.0
 pyyaml==6.0.2
