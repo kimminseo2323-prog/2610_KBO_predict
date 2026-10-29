@@ -126,6 +126,7 @@
   ],
   "cluster_quality": {
     "batter": {
+      "argmax_consistent": true,
       "gmm_agreement": 0.8431,
       "gmm_candidates": {
         "diag": 0.5267,
@@ -159,7 +160,6 @@
           "silhouette": 0.1666
         }
       ],
-      "membership_agreement": 1.0,
       "membership_method": "kmeans_softmax",
       "n_all": 1327,
       "n_fit": 1217,
@@ -256,7 +256,9 @@
       2024,
       2025
     ],
+    "membership_note": "kmeans_softmax 소속 확률은 표준화 공간에서 각 유형 중심까지의 거리로 만든 상대적 확신도이며, 실제 빈도에 맞춰 보정(calibration)된 확률이 아니다.",
     "pitcher": {
+      "argmax_consistent": true,
       "gmm_agreement": 0.7498,
       "gmm_candidates": {
         "diag": 0.5086,
@@ -290,7 +292,6 @@
           "silhouette": 0.1836
         }
       ],
-      "membership_agreement": 1.0,
       "membership_method": "kmeans_softmax",
       "n_all": 1591,
       "n_fit": 1451,
@@ -372,7 +373,7 @@
     },
     "version": "clusters-2026"
   },
-  "commit_sha": "7d79821c41a96c75d641a9c2d27b742b5fcb536f",
+  "commit_sha": "5de4b575a84fe0280243a2db16f34dd030030b25",
   "feature_importance": [
     {
       "importance": 0.10649089124682375,
@@ -506,7 +507,7 @@
     }
   ],
   "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
-  "generated_at": "2026-10-29T18:39:00+09:00",
+  "generated_at": "2026-10-29T18:51:35+09:00",
   "matchup_feature_ablation": {
     "adopt": false,
     "cluster_version": "clusters-2026",
@@ -535,7 +536,8 @@
       2025
     ],
     "mcnemar_p_test": 0.8450189828872681,
-    "note": "선택된 알고리즘·캘리브레이션·트리 수 고정, 피처만 추가. 라이브 반영은 4단계. 유형 군집 중심은 2015~2025 선수-시즌 성적으로만 맞췄다(비지도, 경기 승패는 쓰지 않음). 피처는 직전 시즌 유형이라 test 시즌(2026) 경기에는 2026 성적이 중심에 들어가지 않았다. 반면 학습·검증 시즌 경기의 직전 시즌 유형은 그 뒤 시즌 성적까지 본 중심으로 매겨졌다 (예: 2018 경기의 2017 유형도 2025까지의 성적으로 맞춘 중심 기준).",
+    "note": "선택된 알고리즘·캘리브레이션·트리 수 고정, 피처만 추가. 라이브 반영은 4단계. 유형 군집 중심은 2015~2025 선수-시즌 성적으로만 맞췄다(비지도, 경기 승패는 쓰지 않음). 피처는 직전 시즌 유형이라 그 경기 시즌의 성적으로 매긴 유형은 쓰지 않지만, 중심 자체는 맞춤 시즌 전체 성적을 봤으므로 학습 시즌 경기의 직전 시즌 유형도 그 뒤 시즌 성적까지 본 중심으로 매겨졌다. 검증(2025) 비교의 직전 시즌(2024) 유형은 2025 성적까지 본 2015~2025 맞춤 중심으로 매겨져 엄밀한 시간 외(out-of-time) 비교가 아닌 전이적(transductive) 비교이고, test(2026) 비교만 엄밀한 시간 외 비교다. starter_type 차이는 다른 선발 피처처럼 박스스코어의 실제 선발(투수 순서 1)로 만든다 (라이브는 예고 선발).",
+    "validation_scope": "검증(2025) 비교의 직전 시즌(2024) 유형은 2025 성적까지 본 2015~2025 맞춤 중심으로 매겨져 엄밀한 시간 외(out-of-time) 비교가 아닌 전이적(transductive) 비교이고, test(2026) 비교만 엄밀한 시간 외 비교다.",
     "with": {
       "test": {
         "accuracy": 0.5911680911680912,
