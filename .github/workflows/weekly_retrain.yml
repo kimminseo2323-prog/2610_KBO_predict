@@ -1,0 +1,78 @@
+name: weekly retrain
+on:
+  schedule:
+    - cron: "7 18 * * 0"    # 월요일 03:07 KST (일요일 18:07 UTC)
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: write
+concurrency: weekly
+env:
+  PYTHONUTF8: 1
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install
+        run: pip install -r requirements-dev.txt && pip install -e .
+      - name: Features
+        run: >-
+          python -m kbo_predict.features --out data/processed/features.parquet
+          --matchup-out data/processed/matchup.parquet --clusters models/clusters.pkl
+      - name: Live model (skip if unchanged)
+        run: python -m kbo_predict.train_win live --skip-if-same
+      - name: Clusters (refit, compare, publish)
+        id: clusters
+        run: |
+          # 후보 묶음을 따로 맞춘다 (manifest·유형 CSV는 artifacts/에만 — 정식 파일은 건드리지 않는다)
+          python -m kbo_predict.cluster fit --out models/clusters.new.pkl \
+            --types artifacts/parity/types.csv --manifest artifacts/parity/manifest.json
+          if python -m kbo_predict.cluster compare --against models/clusters.pkl --new models/clusters.new.pkl; then
+            # 유형 정의가 같을 때만: 정식 fit(clusters.pkl + manifest 갱신) → 사이트 JSON 재발행
+            mv models/clusters.new.pkl models/clusters.pkl
+            python -m kbo_predict.cluster fit
+            python -m kbo_predict.cluster publish
+          else
+            echo "::warning::cluster compare failed — keeping committed models/clusters.pkl"
+            echo "parity_failed=1" >> "$GITHUB_OUTPUT"
+          fi
+          rm -f models/clusters.new.pkl
+      - name: Parity (quick)
+        run: python scripts/check_parity.py --quick
+      - name: Commit results
+        run: |
+          rm -f models/clusters.new.pkl
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models data/public
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "auto: weekly retrain $(TZ=Asia/Seoul date +%F)"
+            git pull --rebase origin main
+            git push
+          fi
+      - name: parity-failure issue
+        if: failure() || steps.clusters.outputs.parity_failed == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          BODY="주간 재학습/parity 실패 — 로그: $RUN_URL"
+          if [ "${{ job.status }}" != "failure" ]; then
+            BODY="군집 재계산이 커밋본과 다름(cluster compare 실패) — 커밋된 models/clusters.pkl을 유지했습니다. 로그: $RUN_URL"
+          fi
+          gh label create parity-failure --color d73a4a --description "parity/주간 재학습 실패" --force
+          OPEN=$(gh issue list --label parity-failure --state open --json number --jq '.[0].number // empty')
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" --body "$BODY"
+          else
+            gh issue create --title "parity 실패 $(TZ=Asia/Seoul date +%F)" --label parity-failure --body "$BODY"
+          fi

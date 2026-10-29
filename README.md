@@ -1,7 +1,7 @@
 # KBO Predict
 
 ![daily](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/workflows/daily.yml/badge.svg)
-![ci](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/workflows/ci.yml/badge.svg)
+![ci · parity](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/workflows/ci.yml/badge.svg)
 
 KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 공개 파일로 기록하는 포트폴리오 프로젝트입니다. 선수 유형 클러스터링을 더해 한 저장소에서 예측과 분석을 함께 다룹니다.
 
@@ -216,6 +216,8 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 ## 자동 실행
 
 [`.github/workflows/daily.yml`](.github/workflows/daily.yml)이 매일 09:07, 17:07 KST(UTC `7 0`, `7 8`)와 수동 실행(`workflow_dispatch`)으로 [`scripts/run_pipeline.py`](scripts/run_pipeline.py)를 돌립니다. 결과는 `github-actions[bot]`이 `data/raw`, `data/public`을 `auto: predictions YYYY-MM-DD-HHMM` 메시지로 커밋합니다. 수집에 실패한 경기가 있으면(`collect_errors`가 비어 있지 않으면) `collect-failure` 라벨의 GitHub 이슈를 새로 열거나 기존 이슈에 코멘트합니다 ([`scripts/collect_errors.py`](scripts/collect_errors.py)). 첫 실제 실행: [Actions run](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40533547898).
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml)은 push·PR마다 빠른 테스트(`pytest -m "not slow"`)와 parity 검사 [`scripts/check_parity.py --quick`](scripts/check_parity.py)를 돌립니다(위 `ci · parity` 배지). parity 검사는 커밋된 산출물(피처 parquet·유형 CSV 해시, `model_report.json`, 모델 pkl의 예측, `players.json`·`teams.json`, 되감기 3일)을 원본 데이터만으로 다시 만들어 같은지 표로 보여 주고, 다르면 실패합니다(`--quick` 없이 돌리면 노트북 02~05 실행까지). [`.github/workflows/weekly_retrain.yml`](.github/workflows/weekly_retrain.yml)은 매주 월요일 03:07 KST에 라이브 모델 재학습(`train_win live --skip-if-same`: 예측이 그대로면 쓰지 않음)·군집 재계산(`cluster compare`로 커밋본과 같은 유형 정의일 때만 반영)·사이트 JSON 재발행·parity를 돌려 `auto: weekly retrain YYYY-MM-DD`로 커밋하고, 실패하면 `parity-failure` 이슈를 엽니다.
 
 ## 데이터
 
