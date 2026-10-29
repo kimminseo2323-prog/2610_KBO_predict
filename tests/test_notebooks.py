@@ -16,6 +16,7 @@ NOTEBOOKS = {
     "01_데이터_수집과_살펴보기.ipynb": "collect.py",
     "02_피처_만들기.ipynb": "features.py",
     "03_승패_예측_모델.ipynb": "train_win.py",
+    "04_선수_유형_클러스터링.ipynb": "cluster.py",
 }
 DEFINES = re.compile(r"^\s*(def|class)\s", re.MULTILINE)  # 노트북에서 함수·클래스를 새로 만들지 않는다 (로직은 src/에)
 
