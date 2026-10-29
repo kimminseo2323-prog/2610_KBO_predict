@@ -4,56 +4,88 @@
 
 KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 공개 파일로 기록하는 포트폴리오 프로젝트입니다. 이후 단계에서 선수 유형 클러스터링을 더해 한 저장소에서 예측과 분석을 함께 다룰 예정입니다.
 
-**현재 버전: v0.1 (0단계 수직 슬라이스)**. 수집, 피처, 모델, 자동 실행, 공개 파일까지 끝에서 끝까지 한 번 이어 놓은 상태이고, 모델 성능은 아직 기준선 수준입니다.
+**현재 버전: v0.2 (2단계: 피처 + 승패 모델)**. 2015~2026 12개 시즌으로 경기 전 피처 26개(팀 19 + 선발 7)를 만들고, 로지스틱 회귀와 LightGBM을 2015~2024로 학습해 2025로 고른 뒤, 한 번도 보지 않은 2026 시즌으로 평가했습니다. 매일 예측에는 그날 발표된 예고 선발투수를 넣습니다. 0단계의 v0.1(팀 피처 3개, 2026 시즌만 학습)은 v0.2로 교체되었습니다.
 
 ## 아키텍처
 
 ```
-수집 (MyKBOStats)
-  → 피처 (경기 날짜 이전 기록만 사용)
-    → 모델 (로지스틱 회귀)
-      → GitHub Actions (매일 09:07, 17:07 KST)
-        → data/public/*.json, *.csv
-          → 사이트 (예정)
+수집 (MyKBOStats: 주간 일정 · 박스스코어 · 예정 경기의 예고 선발)
+  → data/raw/{season}/  games.jsonl, boxscores/{YYYY-MM}.jsonl.gz, starters.jsonl
+    → 피처 26개 (경기 날짜 이전 기록만 사용)
+        data/processed/features.parquet  (gitignore, SHA256은 models/manifest.json)
+      → 모델 두 벌
+          평가용 report-2026  models/report-2026.pkl  → data/public/model_report.json (한 번 생성해 고정)
+          라이브 v0.2         models/win_model.pkl    (2015~2026 전체 학습)
+        → GitHub Actions (매일 09:07, 17:07 KST, 수집 + 추론만)
+          → data/public/*.json, *.csv
+            → 사이트 (예정)
 
-노트북 (notebooks/)  ← 같은 data/raw를 읽어 수집·피처·모델을 설명 (01 완료, 02~05 예정)
+노트북 (notebooks/)  ← 같은 data/raw를 읽어 수집·피처·모델을 설명 (01~03 완료, 04~05 예정)
 ```
 
 - 수집 결과는 `data/raw/{season}/`에 파싱된 형태로 커밋합니다 (2015~2026). 자세한 구조와 시즌별 경기 수는 아래 "데이터" 절에 있습니다.
-- 현재 모델(v0.1)은 2026 시즌만 사용합니다. 시즌 데이터는 2026-03-28부터 2026-10-12까지의 정규시즌 종료 경기 718건을 사용합니다. 무승부 16건은 학습에서 제외해 학습 행은 702건입니다. 사이트에서 종료로 바뀌지 않고 진행 중으로 남은 2경기도 제외했습니다.
+- 예고 선발은 매 실행마다 예정 경기 페이지의 "Starting pitchers" 섹션에서 읽어 `data/raw/{season}/starters.jsonl`에 경기당 한 줄(가장 최근 발표)로 저장합니다.
 - 포스트시즌(10-14 이후) 경기도 파이프라인이 실시간으로 예측합니다.
 
-## v0.1 모델
+## 모델
 
-`StandardScaler` + `LogisticRegression`. 입력 피처는 세 가지입니다.
+### 피처 26개
 
-| 피처 | 의미 |
-| --- | --- |
-| `win_pct_diff` | 두 팀의 승률 차이 |
-| `last10_diff` | 최근 10경기 흐름 차이 |
-| `run_diff_diff` | 경기당 득실차 차이 |
+모든 피처는 해당 경기 날짜 **전날까지** 끝난 경기로만 계산합니다(누수 방지 테스트 포함). `_diff`는 홈 − 원정입니다. 정의는 [`src/kbo_predict/features.py`](src/kbo_predict/features.py)와 노트북 02에 있습니다.
 
-절편이 홈 어드밴티지를 나타냅니다. 모든 피처는 해당 경기 날짜 이전 경기만으로 계산하며, 누수 방지 테스트가 있습니다.
+| 묶음 | 피처 | 의미 |
+| --- | --- | --- |
+| 팀 · 성적 (5) | `win_pct_diff`, `last10_diff`, `run_diff_diff`, `pyth_diff`, `prev_season_diff` | 시즌 승률, 최근 10경기, 경기당 득실차, 피타고리안 기대 승률, 지난 시즌 승률 |
+| 팀 · 타선 (4) | `obp_diff`, `hr_rate_diff`, `k_rate_diff`, `bb_rate_diff` | 근사 출루율, 타석당 홈런·삼진·볼넷 비율 (박스스코어에 2루타·3루타가 없어 OPS 대신 사용) |
+| 팀 · 투수진 (4) | `era_diff`, `fip_diff`, `k9_diff`, `bb9_diff` | 팀 평균자책점, FIP 근사, 9이닝당 삼진·볼넷 |
+| 팀 · 컨디션 (2) | `rest_diff`, `bullpen3_diff` | 휴식일, 최근 3일 불펜 투구수 |
+| 팀 · 상황 (4) | `home_venue_pct`, `away_venue_pct`, `h2h_home_pct`, `season_progress` | 홈팀의 홈 승률, 원정팀의 원정 승률, 올 시즌 맞대결 승률, 시즌 진행도 |
+| 선발 (7) | `starter_known`, `starter_era_diff`, `starter_fip_diff`, `starter_k9_diff`, `starter_bb9_diff`, `starter_ip_diff`, `starter_last3_runs_diff` | 양쪽 선발 기록 유무, 선발의 평균자책점·FIP·9이닝당 삼진·볼넷·누적 이닝·최근 3선발 실점 (당해 + 직전 시즌 합산) |
 
-**선발투수 피처는 아직 없습니다.** MyKBOStats에는 경기 전에 공개되는 예상 선발 정보가 없기 때문입니다. 로드맵에서 가장 먼저 해결할 항목입니다.
+### 알고리즘과 검증 절차
 
-### 지표
+- **알고리즘 두 가지**: 로지스틱 회귀(결측 중앙값 대치 + `StandardScaler`, 해석용 기준 모델)와 LightGBM(`deterministic=True`, 스레드 1개). 같은 인터페이스로 감싸 학습·예측·요인 분해를 똑같이 부릅니다.
+- **시즌 단위 분할**: 2015~2024 학습(7,065경기) → 2025 검증(698경기) → 2026 시험(702경기). 데이터셋은 정규시즌 종료 경기 8,465건이고, 무승부와 LIVE로 멈춘 경기는 뺍니다.
+- **2025 검증에서 정하는 것**: LightGBM 트리 수(early stopping, `best_iteration` 52), 캘리브레이션 방법(없음 / Platt / isotonic), 알고리즘(검증 log loss가 낮은 쪽), 유의성 검정의 비교 대상 기준선(검증에서 가장 강했던 규칙). 2026은 마지막 평가에 **한 번만** 씁니다.
+- **캘리브레이션**: 보정기는 학습 시즌들의 leave-one-season-out 예측(각 시즌을 빼고 학습한 모델로 그 시즌을 예측)으로 맞추고, 2025는 세 방법의 log loss 점수만 매깁니다. 두 알고리즘 모두 Platt이 뽑혔습니다(로지스틱 회귀 검증 log loss: 없음 0.6772, Platt 0.6771, isotonic 0.6782).
+- **모델 두 벌**: 평가용 `report-2026`(2015~2024 학습)이 [`model_report.json`](data/public/model_report.json)을 한 번 만들고 고정합니다. 매일 쓰는 라이브 v0.2는 같은 알고리즘·보정 방법을 2015~2026 전체로 다시 학습하고, 보정기는 전체 시즌의 leave-one-season-out 예측으로 맞춥니다.
 
-시간순 분할로 평가했습니다. 학습은 2026-03-28~07-31(478경기), 테스트는 2026-08-01~10-12(224경기)입니다. 값은 `models/metrics_v0.1.json`에서 옮겼습니다.
+### 2026 시즌 성적 (702경기, 학습에 쓰지 않은 홀드아웃)
 
-| 지표 | 값 |
-| --- | --- |
-| 정확도 (accuracy) | 0.603 |
-| 로그 손실 (log loss) | 0.682 |
-| Brier score | 0.244 |
-| 기준선: 홈팀이 항상 승리 | 0.536 |
-| 기준선: 승률 높은 팀이 승리 | 0.594 |
+값은 [`data/public/model_report.json`](data/public/model_report.json)에서 옮겼습니다.
+
+| 모델 / 규칙 | 정확도 | log loss | Brier |
+| --- | --- | --- | --- |
+| **로지스틱 회귀 + Platt (선택)** | **0.594** | **0.671** | **0.239** |
+| LightGBM + Platt | 0.591 | 0.673 | 0.240 |
+| 선발 피처 제외 (팀 19개, 로지스틱 회귀 + Platt) | 0.547 | 0.687 | 0.247 |
+| 기준선: 홈팀이 항상 승리 | 0.514 | | |
+| 기준선: 시즌 승률 높은 팀이 승리 | 0.554 | | |
+| 기준선: 선발 ERA 낮은 팀이 승리 | 0.567 | | |
+
+선택 모델이 기준선보다 나은 것이 우연인지 McNemar 검정으로 확인했습니다 (모델 417경기 적중).
+
+| 비교 대상 | 기준선 적중 | McNemar p |
+| --- | --- | --- |
+| 선발 ERA 낮은 팀 (2025 검증에서 미리 정한 비교 대상) | 398 | 0.215 |
+| 시즌 승률 높은 팀 | 389 | 0.079 |
+| 홈팀이 항상 승리 | 361 | < 0.001 |
 
 해석할 때 주의할 점입니다.
 
-- 승률 기준선 대비 정확도 차이는 약 0.9%p, 224경기 중 약 2경기 분량입니다. 통계적으로 의미 있는 우위라고 말하기 어렵습니다.
-- 로그 손실 0.682는 동전 던지기 수준(0.693)에 가깝습니다. v0.1은 결과가 아니라 기준선입니다.
-- JSON의 계수는 분할 학습 모델의 값입니다. 실제로 사용하는 `models/win_model.pkl`은 702경기 전체로 다시 학습한 모델입니다.
+- **목표에는 아직 못 미칩니다.** 설계 목표는 "가장 강한 기준선 +3%p 이상, 통계적으로 유의"입니다. 선발 ERA 기준선 대비 +2.7%p(19경기)이고 p = 0.215라서, 702경기 한 시즌으로는 우연과 구분되지 않습니다. 홈팀 기준선만 확실히 넘습니다.
+- **선발 가정**: 백테스트(학습·검증·시험)의 선발 피처는 박스스코어의 **실제 선발**(투수 순서 1번)로 만듭니다. 즉 위 숫자는 "경기 전에 선발을 정확히 안다"는 가정 위의 값입니다. 라이브 예측은 MyKBOStats 예정 경기 페이지의 **예고 선발**을 쓰므로, 예고와 실제가 다른 경기에서는 백테스트보다 성적이 낮을 수 있습니다.
+- 하한선으로 선발 피처를 뺀 모델(팀 피처 19개, 같은 절차)도 함께 적었습니다. 정확도 0.547로 단순 규칙들보다도 약해서, 예측 신호의 대부분이 선발에서 온다는 뜻입니다.
+- log loss 0.671은 동전 던지기(0.693)보다 낫지만 큰 차이는 아닙니다. 야구 승패 예측의 현실적 상한은 60% 초반입니다.
+- LightGBM은 로지스틱 회귀와 거의 같은 성적이라, 해석이 쉬운 로지스틱 회귀가 검증 log loss(0.6771 대 0.6796)로 뽑혔습니다.
+
+### 요인 분해
+
+사이트의 "승률을 가른 요인" 카드용으로, 경기마다 확률을 피처별 기여로 나눕니다.
+
+- 로지스틱 회귀는 (표준화 값 × 계수), LightGBM은 내장 TreeSHAP(`pred_contrib=True`, `shap` 패키지 없이)로 보정 전 로그 오즈를 피처별 기여 + 기본값으로 **정확히** 나눕니다. 기본값은 "기본 홈 어드밴티지"로 표시합니다.
+- 퍼센트포인트로 바꿀 때는 `기여(로그 오즈) × Platt 기울기 × p(1−p) × 100`을 씁니다. 1차 근사라서 요인 합이 확률 차이와 정확히 같지는 않습니다.
+- 기본값을 포함해 절댓값이 큰 5개를 `latest.json`의 `factors`에 넣습니다. 예: 2026-10-29 포스트시즌 KIA(홈) 대 삼성, 홈 승률 44.6% — 선발 누적 이닝 차이 −2.9pp, 기본 홈 어드밴티지 +2.4pp, 타선 삼진 비율 차이 −1.5pp, 선발 9이닝당 볼넷 차이 −1.2pp, 지난 시즌 승률 차이 −1.1pp.
 
 ## 공개 파일
 
@@ -63,7 +95,8 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 
 | 파일 | 내용 |
 | --- | --- |
-| [`latest.json`](data/public/latest.json) | 오늘 경기 예측: 팀, 구장, 시간, 홈 승률, 기여도(`contribution_pp`) 상위 4개 요인, 메타(`generated_at`, `commit_sha`, `run_url`, `model_version`, `mode`) |
+| [`latest.json`](data/public/latest.json) | 오늘 경기 예측: 팀, 구장, 시간, 팀별 예고 선발(`starter`: 이름·ERA·K/9·BB/9·이닝·선발 등판 수), 홈 승률, 기여도(`contribution_pp`) 상위 5개 요인, 메타(`generated_at`, `commit_sha`, `run_url`, `model_version`, `mode`) |
+| [`model_report.json`](data/public/model_report.json) | 모델 성적표(`report-2026`): 두 알고리즘의 검증·시험 지표, 기준선 3종, McNemar 검정, 캘리브레이션 구간표, 피처 중요도, 선발 피처 제외 비교, 선발 소스 표기. 한 번 생성해 고정 |
 | [`history.csv`](data/public/history.csv) | 과거 예측과 결과 기록: date, game_id, home, away, home_win_prob, model_version, predicted_at, status, winner, correct |
 | [`status.json`](data/public/status.json) | 파이프라인 상태: generated_at, run_url, commit_sha, mode, next_game_date, games_today, model_version (경기가 없는 날도 갱신) |
 
@@ -78,6 +111,8 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 ```
 data/raw/{season}/games.jsonl                    주간 일정 행 (경기당 한 줄)
 data/raw/{season}/boxscores/{YYYY-MM}.jsonl.gz   월별 박스스코어 (종료된 경기)
+data/raw/{season}/starters.jsonl                 예고 선발 (경기당 한 줄, 가장 최근 발표; 2026 포스트시즌부터)
+data/processed/features.parquet                  피처 데이터셋 (gitignore, 아래 "로컬 실행"으로 다시 만듦)
 ```
 
 박스스코어를 월별로 나눈 이유는 매일 실행에서 이번 달 파일만 바뀌게 해 저장소가 커지는 속도를 줄이기 위해서입니다.
@@ -110,40 +145,46 @@ data/raw/{season}/boxscores/{YYYY-MM}.jsonl.gz   월별 박스스코어 (종료�
 
 ## 노트북
 
-`notebooks/`에 단계별 설명 노트북을 둡니다. 01은 실행 결과를 포함하고 네트워크 없이 실행되며, `tests/test_notebooks.py`가 실행을 검증합니다.
+`notebooks/`에 단계별 설명 노트북을 둡니다. 01~03은 실행 결과를 포함하고 네트워크 없이 실행되며, `tests/test_notebooks.py`가 실행을 검증합니다. 노트북은 로직을 복사하지 않고 `src/kbo_predict/`의 같은 함수를 부르며, 02는 만든 parquet가 모델 학습에 쓴 파일과 SHA256까지 같은지, 03은 결과가 `data/public/model_report.json`과 같은지 마지막에 확인합니다. 03은 02가 저장한 `data/processed/features.parquet`를 읽으므로 02를 먼저 실행합니다.
 
-| 번호 | 노트북 | 상태 |
-| --- | --- | --- |
-| 01 | [데이터 수집과 살펴보기](notebooks/01_데이터_수집과_살펴보기.ipynb) | 완료 |
-| 02 | 피처 만들기 | 예정 |
-| 03 | 승패 모델 | 예정 |
-| 04 | 선수 유형 | 예정 |
-| 05 | 자동화와 parity 검증 | 예정 |
+| 번호 | 노트북 | 짝 `.py` | 상태 |
+| --- | --- | --- | --- |
+| 01 | [데이터 수집과 살펴보기](notebooks/01_데이터_수집과_살펴보기.ipynb) | `collect.py` | 완료 |
+| 02 | [피처 만들기](notebooks/02_피처_만들기.ipynb) | `features.py` | 완료 |
+| 03 | [승패 예측 모델](notebooks/03_승패_예측_모델.ipynb) | `train_win.py` | 완료 |
+| 04 | 선수 유형 | | 예정 |
+| 05 | 자동화와 parity 검증 | | 예정 |
 
-02~05의 이름은 바뀔 수 있습니다.
+04~05의 이름은 바뀔 수 있습니다.
 
 ## 로컬 실행
 
 ```bash
 pip install -r requirements.txt && pip install -e .
 python -m kbo_predict.collect --from 2026-03-20 --to 2026-11-05   # 약 65분 (요청 간 5초)
-python -m kbo_predict.train_win --season 2026 --split-date 2026-08-01
+python -m kbo_predict.features --out data/processed/features.parquet   # 2015~2026 피처 데이터셋
+python -m kbo_predict.train_win report   # report-2026 학습·평가 → model_report.json, models/report-2026.pkl
+python -m kbo_predict.train_win live     # 라이브 v0.2 → models/win_model.pkl (report를 먼저 실행)
 python scripts/run_pipeline.py [--date YYYY-MM-DD] [--no-fetch]
 ```
 
-테스트는 `pytest -q`입니다 (83개).
+- Windows에서는 한글 출력 때문에 `python -X utf8 …`로 실행합니다.
+- `train_win`의 두 명령은 `models/manifest.json`에 피처 parquet와 모델 파일의 SHA256을 기록합니다. parquet는 커밋하지 않으므로 이 해시로 같은 데이터인지 확인합니다.
+- 모델 의존성은 `lightgbm==4.7.0`, `pyarrow==19.0.1`(numpy 1.x와 호환되는 버전)입니다. 요인 분해는 LightGBM 내장 TreeSHAP을 쓰므로 `shap` 패키지는 필요 없습니다.
+
+테스트는 `python -X utf8 -m pytest -q`입니다 (168개, 노트북 실행 포함 약 1분).
 
 ## 데이터 출처
 
-- 데이터 출처: [MyKBOStats](https://mykbostats.com) (비공식 팬 사이트). robots.txt의 `Crawl-delay: 5`를 지켜 요청 간 5초를 두고, 주간 일정 페이지와 경기 박스스코어 페이지를 파싱합니다. 개인 학습용입니다.
+- 데이터 출처: [MyKBOStats](https://mykbostats.com) (비공식 팬 사이트). robots.txt의 `Crawl-delay: 5`를 지켜 요청 간 5초를 두고, 주간 일정 페이지, 경기 박스스코어 페이지, 예정 경기 페이지의 예고 선발("Starting pitchers" 섹션)을 파싱합니다. 선수 이름은 사이트 표기대로 로마자입니다. 개인 학습용입니다.
 - KBO 공식 사이트는 약관상 크롤링이 금지되어 사용하지 않습니다.
 - 네이버 스포츠의 내부 API는 Python 클라이언트를 차단해(TLS/UA 수준) 수집 대상에서 뺐습니다. 우회는 시도하지 않았습니다.
 
 ## 로드맵
 
 1. ~~2015~2025 데이터 백필, 노트북 01~~ (완료)
-2. 선발투수 정보 소스 확보, LightGBM, 확률 보정, SHAP, report/live 두 모델 분리
-3. 선수 유형 클러스터링
+2. ~~선발투수 정보 소스 확보, 피처 26개, LightGBM, 확률 보정, 요인 분해(SHAP), report/live 두 모델 분리, 노트북 02·03~~ (완료)
+3. 선수 유형 클러스터링, 유형 상성 피처 전후 비교
 4. py와 ipynb 결과 동일성 검증(parity), 주간 재학습, 되감기 모드
 5. Genspark + GitHub Pages 사이트
 6. README 정리와 한 달 무인 운영
@@ -151,7 +192,8 @@ python scripts/run_pipeline.py [--date YYYY-MM-DD] [--no-fetch]
 ## 문서
 
 - 설계 문서: [docs/superpowers/specs/2026-10-27-kbo-predict-design.md](docs/superpowers/specs/2026-10-27-kbo-predict-design.md)
-- 구현 계획: [docs/superpowers/plans/2026-10-27-stage0-vertical-slice.md](docs/superpowers/plans/2026-10-27-stage0-vertical-slice.md)
+- 구현 계획: [0단계 수직 슬라이스](docs/superpowers/plans/2026-10-27-stage0-vertical-slice.md), [1단계 백필·노트북 01](docs/superpowers/plans/2026-10-28-stage1-backfill-notebook01.md), [2단계 피처 + 승패 모델](docs/superpowers/plans/2026-10-29-stage2-win-model.md)
+- 이월 항목: [docs/superpowers/plans/2026-10-27-stage0-deferred.md](docs/superpowers/plans/2026-10-27-stage0-deferred.md)
 - 데이터 조사: [docs/research/kbo-data-sources.md](docs/research/kbo-data-sources.md)
 - 디자인 시스템: [DESIGN_clay.md](DESIGN_clay.md)
 
