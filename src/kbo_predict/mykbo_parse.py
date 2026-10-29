@@ -211,3 +211,21 @@ def parse_game(html: str) -> dict:
         "pitching": pitching,
         "linescore": linescore,
     }
+
+
+def parse_starters(html: str) -> dict | None:
+    """경기 페이지의 예고 선발투수. 섹션이 없으면 None.
+
+    첫 번째 선수 블록이 원정, 두 번째가 홈. 선수 링크가 없는 쪽은 None(미발표).
+    같은 선수에 사진 링크와 이름 링크가 있으므로 텍스트가 있는 링크에서 이름을 읽는다.
+    """
+    section = BeautifulSoup(html, "html.parser").select_one('section[aria-label="Starting pitchers"]')
+    if section is None:
+        return None
+    group = section.select_one('[aria-label="Starting pitcher comparison"]')
+    blocks = [b for b in (group.find_all("div", recursive=False) if group else []) if b.find("a", attrs={"data-id": True})]
+    sides = []
+    for block in blocks[:2]:
+        link = next((a for a in block.find_all("a", attrs={"data-id": True}) if _norm(a.get_text())), None)
+        sides.append({"player_id": int(link["data-id"]), "name": _norm(link.get_text())} if link else None)
+    return {"away": sides[0] if sides else None, "home": sides[1] if len(sides) > 1 else None}

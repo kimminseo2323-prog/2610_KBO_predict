@@ -53,3 +53,21 @@ def test_available_seasons_lists_dirs_with_games(tmp_data_dir, fixture_html):
     upsert_games(2026, parse_week(fixture_html("mykbo_week_2026-10-27.html")))
     upsert_games(2015, parse_week(fixture_html("mykbo_week_2015-06-02.html")))
     assert available_seasons() == [2015, 2026]
+
+
+def test_upsert_starters_dedupes_and_sorts(tmp_data_dir):
+    from kbo_predict.raw_store import load_starters, starters_path, upsert_starters
+
+    p = {"player_id": 1, "name": "A"}
+    r1 = {"game_id": 20, "date": "2026-10-29", "fetched_at": "t1", "home": p, "away": None}
+    r2 = {"game_id": 10, "date": "2026-10-30", "fetched_at": "t1", "home": None, "away": p}
+    r0 = {"game_id": 30, "date": "2026-10-28", "fetched_at": "t1", "home": None, "away": None}
+    assert upsert_starters(2026, [r1, r2]) == 2
+    assert upsert_starters(2026, [r1]) == 0
+    assert upsert_starters(2026, [dict(r1, home={"player_id": 2, "name": "B"}), r0]) == 2
+    loaded = load_starters(2026)
+    assert set(loaded) == {10, 20, 30} and loaded[20]["home"]["player_id"] == 2
+    import json
+    lines = [json.loads(x) for x in starters_path(2026).read_text(encoding="utf-8").splitlines()]
+    assert [(x["date"], x["game_id"]) for x in lines] == [("2026-10-28", 30), ("2026-10-29", 20), ("2026-10-30", 10)]
+    assert load_starters(2025) == {}

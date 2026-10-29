@@ -8,7 +8,7 @@ import requests
 
 from kbo_predict import KST, raw_store
 from kbo_predict.mykbo_client import SLEEP_S, drop_cache, fetch_html, week_path
-from kbo_predict.mykbo_parse import parse_game, parse_week
+from kbo_predict.mykbo_parse import parse_game, parse_starters, parse_week
 
 PROGRESS_EVERY = 20
 STALE_LIVE_DAYS = 2  # 이만큼 지난 LIVE 행은 경기 페이지로 확인한다 (경기 페이지가 하루쯤 늦을 수 있다)
@@ -111,6 +111,25 @@ def collect_range(from_date: date, to_date: date, *, season: int | None = None, 
     finally:
         flush()
     return {"weeks": weeks, "games": games, "boxscores": boxscores, "errors": errors}
+
+
+def fetch_starters(games: list[dict], *, fetched_at: str, session=None) -> dict:
+    """SCHEDULED 경기 페이지에서 예고 선발을 읽는다 (캐시 없이). 섹션이 없으면 양쪽 None(미정)으로 기록."""
+    starters: dict[int, dict] = {}
+    errors: list[dict] = []
+    for g in games:
+        if g["status"] != "SCHEDULED":
+            continue
+        try:
+            s = parse_starters(fetch_html(g["path"], session=session, use_cache=False)) or {"away": None, "home": None}
+        except (ValueError, KeyError, AttributeError, TypeError, IndexError, requests.RequestException) as e:
+            err = {"game_id": g["game_id"], "path": g["path"], "error": f"{type(e).__name__}: {e}"}
+            errors.append(err)
+            print(f"[collect] {err['path']}: {err['error']}", file=sys.stderr, flush=True)
+            continue
+        starters[g["game_id"]] = {"game_id": g["game_id"], "date": g["date"], "fetched_at": fetched_at,
+                                  "away": s["away"], "home": s["home"]}
+    return {"starters": starters, "errors": errors}
 
 
 def main(argv=None) -> None:

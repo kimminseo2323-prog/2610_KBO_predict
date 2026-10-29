@@ -1,7 +1,7 @@
 import re
 import pytest
 
-from kbo_predict.mykbo_parse import parse_game, parse_innings, parse_week
+from kbo_predict.mykbo_parse import parse_game, parse_innings, parse_starters, parse_week
 
 
 @pytest.mark.parametrize("inn,outs", [("5", 15), ("4 ⅓", 13), ("0 ⅔", 2), ("", 0), ("6 ⅔", 20)])
@@ -160,3 +160,21 @@ def test_parse_game_short_player_row_raises(fixture_html):
         td.decompose()
     with pytest.raises(ValueError, match="short batting row"):
         parse_game(str(soup))
+
+
+def test_parse_starters_scheduled_page(fixture_html):
+    s = parse_starters(fixture_html("mykbo_game_14050_scheduled.html"))
+    assert s == {"away": {"player_id": 1096, "name": "Choi Won-tae"},
+                 "home": {"player_id": 2730, "name": "Shirakawa Keisho"}}
+
+
+def test_parse_starters_missing_section_returns_none(fixture_html):
+    assert parse_starters(fixture_html("mykbo_game_9809_live.html")) is None
+
+
+def test_parse_starters_one_side_missing(fixture_html):
+    html = fixture_html("mykbo_game_14050_scheduled.html")
+    # 홈 선수 링크(사진 링크 + 이름 링크)를 <span>으로 바꿔 링크가 없는 상태를 만든다
+    html = re.sub(r'<a ([^>]*data-id="2730"[^>]*)>(.*?)</a>', r"<span \1>\2</span>", html, flags=re.S)
+    s = parse_starters(html)
+    assert s["away"]["player_id"] == 1096 and s["home"] is None

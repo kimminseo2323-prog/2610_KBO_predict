@@ -228,3 +228,34 @@ def test_stale_live_page_final_without_score_drops_cache(monkeypatch, tmp_data_d
     monkeypatch.setattr(collect, "fetch_html", fake_fetch)
     collect.collect_range(date(2026, 10, 27), date(2026, 11, 1), sleep_s=0, today=date(2026, 11, 5))
     assert "/games/14052-Kia-vs-Samsung-20261027" in dropped
+
+
+def test_fetch_starters_scheduled_only_and_continues_on_error(monkeypatch, fixture_html):
+    sched = fixture_html("mykbo_game_14050_scheduled.html")
+    no_section = fixture_html("mykbo_game_9809_live.html")
+    calls = []
+
+    def fake_fetch(path, **kw):
+        calls.append((path, kw.get("use_cache")))
+        if path == "/games/1-A":
+            return sched
+        if path == "/games/2-B":
+            return no_section
+        raise requests.ConnectionError("boom")
+
+    monkeypatch.setattr(collect, "fetch_html", fake_fetch)
+    games = [
+        {"game_id": 1, "date": "2026-10-29", "path": "/games/1-A", "status": "SCHEDULED"},
+        {"game_id": 2, "date": "2026-10-29", "path": "/games/2-B", "status": "SCHEDULED"},
+        {"game_id": 3, "date": "2026-10-28", "path": "/games/3-C", "status": "FINAL"},
+        {"game_id": 4, "date": "2026-10-30", "path": "/games/4-D", "status": "SCHEDULED"},
+    ]
+    out = collect.fetch_starters(games, fetched_at="2026-10-29T10:00:00+09:00")
+    assert [c[0] for c in calls] == ["/games/1-A", "/games/2-B", "/games/4-D"]
+    assert all(c[1] is False for c in calls)
+    assert set(out["starters"]) == {1, 2}
+    assert out["starters"][1] == {"game_id": 1, "date": "2026-10-29", "fetched_at": "2026-10-29T10:00:00+09:00",
+                                  "away": {"player_id": 1096, "name": "Choi Won-tae"},
+                                  "home": {"player_id": 2730, "name": "Shirakawa Keisho"}}
+    assert out["starters"][2]["away"] is None and out["starters"][2]["home"] is None
+    assert len(out["errors"]) == 1 and out["errors"][0]["path"] == "/games/4-D"

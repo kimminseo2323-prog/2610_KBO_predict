@@ -22,6 +22,10 @@ def boxscores_month_path(season: int, yyyymm: str) -> Path:
     return boxscores_dir(season) / f"{yyyymm}.jsonl.gz"
 
 
+def starters_path(season: int) -> Path:
+    return data_dir() / "raw" / str(season) / "starters.jsonl"
+
+
 def available_seasons() -> list[int]:
     """games.jsonl이 있는 시즌을 오름차순으로 반환."""
     raw = data_dir() / "raw"
@@ -92,3 +96,29 @@ def append_boxscores(season: int, boxscores: dict[int, dict]) -> int:
             for gid, b in items:
                 f.write(_dumps({**b, "game_id": gid}) + "\n")
     return sum(len(v) for v in by_month.values())
+
+
+def load_starters(season: int) -> dict[int, dict]:
+    """예고 선발 행을 game_id -> 행으로 읽는다."""
+    path = starters_path(season)
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as f:
+        return {r["game_id"]: r for r in (json.loads(line) for line in f if line.strip())}
+
+
+def upsert_starters(season: int, rows: list[dict]) -> int:
+    """game_id 기준 덮어쓰기. 신규 + 내용이 바뀐 행 수를 반환."""
+    by_id = load_starters(season)
+    changed = 0
+    for r in rows:
+        if by_id.get(r["game_id"]) != r:
+            by_id[r["game_id"]] = r
+            changed += 1
+    if changed:
+        path = starters_path(season)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="\n") as f:
+            for r in sorted(by_id.values(), key=lambda r: (r["date"], r["game_id"])):
+                f.write(_dumps(r) + "\n")
+    return changed
