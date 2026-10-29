@@ -238,6 +238,7 @@ def test_parse_game_records_2026(fixture_html):
     assert bat[532]["doubles"] == 1 and bat[2281]["doubles"] == 1
     assert bat[2281]["sb"] == 1 and bat[1879]["sb"] == 1 and sum(r["sb"] for r in bat.values()) == 2
     assert g["names_ko"]["2949"] == "카스트로" and g["names_ko"]["3097"] == "페덱" and g["names_ko"]["1964"] == "박민"
+    assert g["records_unmatched"] == []
 
 
 def _with_2b_row(fixture_html, en, title):
@@ -261,6 +262,8 @@ def test_records_ambiguous_name_goes_to_unmatched(fixture_html):
     names = [r["name"] for s in ("away", "home") for r in g["batting"][s]]
     assert names.count("Kim") == 2
     assert g["records_unmatched"] == ["2B: Kim (3rd inning)"]
+    bat = {r["player_id"]: r for s in ("away", "home") for r in g["batting"][s]}
+    assert sum(r["doubles"] for r in bat.values()) == 0
 
 
 def test_records_table_absent_gives_none(fixture_html):

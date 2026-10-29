@@ -196,8 +196,8 @@ def _split_entries(text: str) -> list[str]:
     return [p if p.endswith(")") else p + ")" for p in parts if p]
 
 
-def _records(soup, batting: dict, pitching: dict):
-    """기록표 -> (선수별 2루타/3루타/도루, 한글 이름, 못 붙인 항목). 기록표가 없으면 ({}, {}, [])와 None 구분을 위해 호출 쪽에서 판단."""
+def _records(soup, batting: dict, pitching: dict) -> tuple[dict[int, dict[str, int]] | None, dict[str, str], list[str]]:
+    """기록표 -> (선수별 2루타/3루타/도루, 한글 이름, 못 붙인 항목). 기록표가 없으면 (None, {}, [])."""
     table = soup.find("table", attrs={"data-game-section": "records"})
     stats: dict[int, dict[str, int]] = {}
     names_ko: dict[str, str] = {}
@@ -231,7 +231,7 @@ def _records(soup, batting: dict, pitching: dict):
             if pid is None:
                 unmatched.append(f"{label}: {entry}")
                 continue
-            if label in _COUNT_LABELS and pid in stats:
+            if label in _COUNT_LABELS:  # 이 라벨의 pool은 타자 행뿐이라 pid는 항상 stats에 있다
                 inner = entry.split(" (", 1)[1].rstrip(")") if " (" in entry else ""
                 stats[pid][_COUNT_LABELS[label]] += len([t for t in inner.split(",") if t.strip()])
             if pair_ko:
@@ -242,7 +242,9 @@ def _records(soup, batting: dict, pitching: dict):
             if en and len(en) == len(kp):
                 for n, k in zip(en, kp):
                     pid = _match_player(n, pit_rows)
-                    if pid is not None:
+                    if pid is None:
+                        unmatched.append(f"HR off: {n}")
+                    else:
                         put_ko(pid, k)
     return stats, names_ko, unmatched
 
