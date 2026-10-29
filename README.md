@@ -107,7 +107,7 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 
 - 로컬 HTML 캐시로 **9,362경기**를 다시 파싱했습니다(네트워크 요청 없음). 기존 칸은 바뀌지 않았고, 그 증거로 `features.parquet`의 SHA256이 2단계 값과 같습니다. 캐시가 없는 18경기는 새 칸이 비어 있습니다(None).
 - 기록표의 이름(로마자)은 그 경기 박스스코어의 선수와 이렇게 맞춥니다: 정확히 같은 이름 → 단어 접미어("Andy Van Hekken" ↔ 행 "Van Hekken") → 다른 경기에서 투표로 얻은 한글 이름 힌트. 후보가 0명이거나 2명 이상이면 아무에게도 세지 않고 `records_unmatched`에 남깁니다. 지표에 쓰는 라벨(2B/3B/SB/HR)의 미매칭은 127건(2B 65, 3B 5, SB 26, HR 31), 실책·피홈런 투수까지 합치면 457건입니다.
-- **한글 이름**: 같은 기록표의 `title` 속성(`2루타: 신종길(1회) 필(1회)`)을 영문 항목과 순서로 맞춰 모으고, 경기별 투표에서 최빈 이름이 60% 이상일 때 채택합니다(1,597명). 개명한 선수 31명은 재파싱 스크립트가 보수적인 규칙으로 별칭을 찾아 [`data/raw/name_aliases.json`](data/raw/name_aliases.json)에 기록합니다(예: 한동민 → 한유섬). `players.json`의 2,918개 선수-시즌 중 2,887개에 한글 이름이 있습니다.
+- **한글 이름**: 같은 기록표의 `title` 속성(`2루타: 신종길(1회) 필(1회)`)을 영문 항목과 순서로 맞춰 모으고, 시즌별로 투표해 3표 이상인 가장 최근 시즌에서 최빈 이름이 60% 이상이면 채택합니다(그런 시즌이 없으면 모든 시즌 표를 합쳐 같은 규칙). 그래서 개명한 선수는 최근 이름으로 잡힙니다(예: 한동민 → 한유섬; 1,604명). 개명한 선수 31명은 재파싱 스크립트가 보수적인 규칙으로 별칭을 찾아 [`data/raw/name_aliases.json`](data/raw/name_aliases.json)에 기록합니다(예: 한동민 → 한유섬). `players.json`의 2,918개 선수-시즌 중 2,906개에 한글 이름이 있습니다.
 
 ### 지표와 자격
 
@@ -122,6 +122,8 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 | 투수 (5) | `k_pct`, `bb_pct`, `hr_pct` | 상대 타자당 삼진, 볼넷+사구, 피홈런 |
 | | `babip` | (피안타 − 피홈런) / (상대 타자 − 삼진 − 볼넷 − 사구 − 피홈런) |
 | | `start_share` | 선발 비중 = 선발 등판 / 전체 등판 |
+
+- 투수의 "상대 타자"는 근사값 `bf = 아웃 + 피안타 + 볼넷 + 사구`(`ip_outs + h + bb + hbp`)입니다 — 실책·야수선택으로 나간 타자는 세지 않고, 병살·도루 실패·견제사로 잡은 아웃은 셉니다.
 
 - **자격**: 타자 200타석 이상, 투수 50이닝 이상 또는 구원 등판 30경기 이상(설계 문서의 값 그대로). 정규시즌 FINAL 경기만 셉니다(포스트시즌 제외).
 - 2015~2026 자격 선수-시즌은 타자 1,327개(맞춤에 쓴 2015~2025는 1,217개), 투수 1,591개(1,451개)입니다.
@@ -158,7 +160,7 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 선발형 | 512 | 후라도, 알칸타라, 임찬규 | .185 | .086 | .020 | .299 | .958 | 등판 대부분이 선발, 볼넷이 가장 적은 긴 이닝형 |
 | 스윙맨형 | 301 | 이승현, 김연주, 박주성 | .154 | .097 | .036 | .307 | .285 | 선발과 롱릴리프를 오가며, 삼진이 가장 적고 피홈런이 가장 많음 |
-| 파워 불펜형 | 368 | 함덕주, 송재영, 최지민 | .186 | .129 | .019 | .265 | .085 | 볼넷은 많지만 피BABIP가 가장 낮아 정타를 덜 맞는 불펜 |
+| 제구 불안 불펜형 | 368 | 함덕주, 송재영, 최지민 | .186 | .129 | .019 | .265 | .085 | 거의 구원 등판, 볼넷이 가장 많지만 피BABIP가 가장 낮아 정타는 가장 덜 맞는 불펜 |
 | 삼진 불펜형 | 410 | 정해영, 최지강, 윤성빈 | .200 | .101 | .017 | .326 | .043 | 구원 전담, 삼진이 가장 높은 짧은 이닝형 |
 
 ### 소속 확률
@@ -205,7 +207,7 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 | --- | --- |
 | [`latest.json`](data/public/latest.json) | 오늘 경기 예측: 팀, 구장, 시간, 팀별 예고 선발(`starter`: 이름·ERA·K/9·BB/9·이닝·선발 등판 수, `type`: 직전 시즌 투수 유형 `{id, name}` 또는 직전 시즌 자격이 없으면 null), 홈 승률, 기여도(`contribution_pp`) 상위 5개 요인, 메타(`generated_at`, `commit_sha`, `run_url`, `model_version`, `mode`) |
 | [`model_report.json`](data/public/model_report.json) | 모델 성적표(`report-2026`): 두 알고리즘의 검증·시험 지표, 기준선 3종, McNemar 검정, 캘리브레이션 구간표, 피처 중요도, 선발 피처 제외 비교, 선발 소스 표기, 유형 상성 피처 전후 비교(`matchup_feature_ablation`), 군집 품질(`cluster_quality`: K별 실루엣·유지율, 유형별 인원·대표 선수·중심 지표, 소속 확률 방식). 한 번 생성해 고정 (3단계에서 두 블록을 채우려고 다시 만들었고 기존 키의 값은 그대로) |
-| [`players.json`](data/public/players.json) | 선수-시즌 2,918개(타자 1,327 + 투수 1,591, 2015~2026). 메타(`generated_at`, `commit_sha`, `model_version: "clusters-2026"`, `fit_seasons`, `note`)와 `types`(그룹별 유형 `id`·`name`·`blurb`), `players[]`: `group`, `season`, `player_id`, `name`(로마자), `name_ko`, `team`, `pos`, `type {id, name}`, `prob`, `membership`(유형별 소속 확률), `x`·`y`(PCA 2D 좌표), `stats`(타자: 타석·타율·출루율·홈런·도루·K%·BB%·ISO·BABIP / 투수: 등판·선발·이닝·ERA·K%·BB%·HR%·BABIP), `similar`(유사 선수 5명, `player_id`·`season`·`similarity`만 — 이름은 같은 파일에서 찾음). 압축 JSON 1.77 MB (gzip 274 KB) |
+| [`players.json`](data/public/players.json) | 선수-시즌 2,918개(타자 1,327 + 투수 1,591, 2015~2026). 메타(`generated_at`, `commit_sha`, `model_version: "clusters-2026"`, `fit_seasons`, `note`)와 `types`(그룹별 유형 `id`·`name`·`blurb`), `players[]`: `group`, `season`, `player_id`, `name`(로마자), `name_ko`, `team`, `pos`, `type {id, name}`, `prob`, `membership`(유형별 소속 확률), `x`·`y`(PCA 2D 좌표), `stats`(타자: 타석·타율·출루율·홈런·도루·K%·BB%·ISO·BABIP / 투수: 등판·선발·이닝·ERA·K%·BB%·HR%·BABIP), `similar`(유사 선수 5명 — 서로 다른 선수, 선수마다 가장 비슷한 시즌 하나; `player_id`·`season`·`similarity`만 — 이름은 같은 파일에서 찾음). 압축 JSON 1.77 MB (gzip -9 기준 약 270 KB) |
 | [`teams.json`](data/public/teams.json) | 팀-시즌 120개(10구단 × 2015~2026). `season`, `code`, `name`, `games`, `wins`·`losses`·`ties`, `win_pct`(무승부 제외), `home_pct`, `away_pct`, `pyth_pct`(피타고리안), `model_expected`(report-2026 모델의 홀드아웃 예측 평균, 2026만 — 2015~2025는 학습·검증 시즌이라 null), `roster_types`(타자는 타석, 투수는 아웃 수로 가중한 유형 비중), `vs`(상대 팀별 승률) |
 | [`history.csv`](data/public/history.csv) | 과거 예측과 결과 기록: date, game_id, home, away, home_win_prob, model_version, predicted_at, status, winner, correct |
 | [`status.json`](data/public/status.json) | 파이프라인 상태: generated_at, run_url, commit_sha, mode, next_game_date, games_today, model_version (경기가 없는 날도 갱신) |

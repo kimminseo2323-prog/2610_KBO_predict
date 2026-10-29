@@ -19,7 +19,7 @@
 
 ## 3단계(클러스터링) 전에
 - (유지) 2015~2018 일부 박스스코어에서 타자 득점 합/투수 실점 합이 팀 점수와 1 차이 (예: 2016 4292, 2017 5302, 2018 6069/6161/6605) — 사이트 원본 문제; 집계 전 검증 규칙 필요. → 3단계 유형 군집은 비율 지표(K%·BB%·HR%·ISO·BABIP·도루율 / 선발 비중)만 쓰고 득점·실점을 쓰지 않아 영향이 없다. 득점·실점을 쓰는 지표가 생기면 다시 본다.
-- ✅ (0ea85de, 955b0d0, 202ced3, 3e8d3ee) 선수 한글 이름 소스: MyKBOStats는 이름을 로마자로만 준다(예: "Choi Won-tae"). `players.json`·사이트 표시에 한글 이름을 쓰려면 별도 매핑 소스가 필요하다. → 경기 페이지 기록표의 한글 `title` 속성을 영문 항목과 순서로 맞춰 모으고 경기별 투표로 정한다(1,597명). 개명 선수 31명은 별칭(`data/raw/name_aliases.json`). `players.json` 2,918개 선수-시즌 중 2,887개에 `name_ko`가 있다.
+- ✅ (0ea85de, 955b0d0, 202ced3, 3e8d3ee) 선수 한글 이름 소스: MyKBOStats는 이름을 로마자로만 준다(예: "Choi Won-tae"). `players.json`·사이트 표시에 한글 이름을 쓰려면 별도 매핑 소스가 필요하다. → 경기 페이지 기록표의 한글 `title` 속성을 영문 항목과 순서로 맞춰 모으고 시즌별 투표로 정한다(3표 이상인 가장 최근 시즌의 60% 다수 이름, 개명 선수는 최근 이름; 1,604명). 개명 선수 31명은 별칭(`data/raw/name_aliases.json`). `players.json` 2,918개 선수-시즌 중 2,906개에 `name_ko`가 있다.
 - ✅ (7d79821, e8143d3, 5de4b57, f17d754) 유형 상성 피처 전후 비교: `model_report.json`의 `matchup_feature_ablation`이 아직 `null`. 3단계에서 같은 프로토콜(2015~2024 / 2025 / 2026)로 넣기 전·후를 채운다. → 채웠다. 검증 log loss .67711 → .67783, 시험 정확도 .594 → .591, McNemar p = .845로 `adopt: false`. 라이브 v0.2는 그대로다.
 - (유지) 정규시즌 예정 경기 페이지에도 "Starting pitchers" 섹션이 있는지 2027 개막 전 확인. 파서 픽스처는 포스트시즌 페이지(14050) 하나뿐이다.
 - (유지) 예고 선발 변경 이력 활용: `starters.jsonl`은 경기당 가장 최근 발표만 남긴다(덮어쓰기). 예고 변경·예고와 실제 불일치를 분석하려면 이력을 따로 쌓아야 한다.
@@ -42,11 +42,11 @@
 3단계(클러스터링) 리뷰에서 나온 항목:
 - 상성 피처는 라이브에 반영하지 않았다(`adopt: false`). 나중에 채택한다면 `bat_type{t}_diff` 열은 합이 0이라 공선성이 있으므로 하나를 빼고, 2015 행은 직전 시즌(2014) 유형이 없어 상성 정보가 전혀 없으므로 결측 플래그를 두거나 2016부터 쓴다.
 - 주간 재학습 워크플로에 `python -m kbo_predict.cluster fit`과 `cluster publish`를 포함한다. 지금은 일일 Actions가 `players.json`·`teams.json`을 다시 만들지 않는다(수동 실행).
-- 2027 유형 재적합 범위: 2027 시즌에는 중심을 2015~2026으로 맞추고 2027은 배정만 한다(5.1의 report 모델을 한 칸 옮길 때와 같은 시점). 버전 이름(`clusters-2026`)과 `cluster_labels.yaml`의 이름도 다시 본다.
+- 2027 유형 재적합 범위: 2027 시즌에는 중심을 2015~2026으로 맞추고 2027은 배정만 한다(스펙 §5.1 "2027 시즌이 끝나면 `report` 모델을 … 한 번 옮긴다"는 시점과 같다). 버전 이름(`clusters-2026`)과 `cluster_labels.yaml`의 이름도 다시 본다.
 - Linux BLAS parity: 군집은 단일 스레드로 같은 기계에서는 비트 단위로 재현되지만 Actions(Linux OpenBLAS)에서는 마지막 자리가 다를 수 있다. `models/manifest.json`의 `clusters.types_sha256`으로 비교하고, 다르면 커밋된 `models/clusters.pkl`을 기준으로 둔다.
 - `run_pipeline`이 매 실행 `models/clusters.pkl` 전체(약 1.4 MB)를 unpickle해 선발 유형만 꺼낸다 → `(season, player_id) → 투수 유형`만 담은 작은 types JSON 캐시를 검토.
-- `players.json`(1.77 MB, gzip 274 KB)이 시즌이 쌓여 더 커지면 시즌별 분할을 검토.
-- 주의: `train_win report`를 `--matchup`·`--clusters` 없이 돌리면 `model_report.json`의 `matchup_feature_ablation`·`cluster_quality` 두 블록이 null로 초기화된다. 보고서를 다시 만들 때는 두 옵션을 함께 준다(README "로컬 실행").
+- `players.json`(1.77 MB, gzip -9 기준 약 270 KB)이 시즌이 쌓여 더 커지면 시즌별 분할을 검토.
+- 주의: `train_win report`를 `--matchup`·`--clusters` 없이 돌리면 `model_report.json`의 `matchup_feature_ablation`·`cluster_quality` 두 블록이 null로 초기화된다. 보고서를 다시 만들 때는 두 옵션을 함께 준다(README "로컬 실행"). → 이제 기존 보고서에 두 블록이 있으면 `report --force`가 옵션 없이는 정식 명령을 알려 주며 거부한다(일부러 지우려면 `--reset-blocks`).
 - 일일 수집(`collect.py`)은 `parse_game`을 한글 이름 힌트(`ko_names`)·별칭 없이 부른다 → 새 경기의 기록표 미매칭이 재파싱보다 조금 많을 수 있다. 주간 작업에서 재파싱 스크립트를 돌리거나 힌트를 넘기는 것을 검토.
 - 테스트 소소:
   - `test_pipeline`의 선발 유형 라벨 이름 assert가 tmp 폴더 chdir 때문에 기본 이름("유형 n")으로 떨어질 수 있다 → 기대 이름을 리터럴로 단언.
