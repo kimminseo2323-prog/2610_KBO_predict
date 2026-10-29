@@ -27,8 +27,12 @@ explain은 캘리브레이션 전 로짓(log-odds)을 피처별 기여 + 기본�
         "경기 전에 선발을 안다"는 가정 위의 값이다 (라이브는 예고 선발). 그래서 선발 피처를 뺀
         팀 피처 19개 모델(ablation.no_starter)도 같은 절차로 학습해 함께 적는다.
     python -m kbo_predict.train_win report --force --matchup data/processed/matchup.parquet --clusters models/clusters.pkl
-        위와 같고, 상성 피처(직전 시즌 선수 유형) 전후 비교(matchup_feature_ablation)와 군집 품질(cluster_quality)을
-        보고서에 더한다. 본 모델·선택·지표는 상성 피처 없이 만든 것 그대로다 (상성은 비교로만 기록, 라이브 반영은 4단계).
+        ← 커밋된 model_report.json을 만드는 정식(전체) 명령. 위와 같고, 상성 피처(직전 시즌 선수 유형) 전후
+        비교(matchup_feature_ablation)와 군집 품질(cluster_quality)을 보고서에 더한다. 본 모델·선택·지표는
+        상성 피처 없이 만든 것 그대로다 (상성은 비교로만 기록, 라이브 반영은 4단계).
+        주의: 두 옵션 없이 `report --force`만 돌리면 그 두 블록이 null로 되돌아간다 (나머지 키는 같다).
+        상성 parquet는 먼저 `python -m kbo_predict.features --matchup-out data/processed/matchup.parquet
+        --clusters models/clusters.pkl`로 만든다.
     python -m kbo_predict.train_win live    → models/win_model.pkl (v0.2, 2015~2026 전체 학습)
         보고서에서 selected·캘리브레이션 방법·LightGBM 트리 수만 읽는다 → report를 먼저 돌린다.
         parquet가 보고서 때와 달라도(새 경기가 쌓여도) 다시 학습할 수 있다 (해시 일치를 요구하지 않음).
@@ -359,13 +363,31 @@ def _fit_fixed(kind: str, calibration: str, n_estimators: int | None, train: pd.
     return b
 
 
-def _matchup_note(fit_seasons: list[int] | None) -> str:
-    """전후 비교의 단서: 군집 중심이 어떤 시즌 성적으로 맞춰졌는지 (승패 결과는 쓰지 않은 비지도 군집)."""
+def _validation_scope(fit_seasons: list[int] | None, val_season: int, test_season: int) -> str:
+    """검증·test 비교가 시간상 얼마나 엄밀한지 한 문장으로. 비교에 쓰는 유형은 직전 시즌(season-1) 유형이지만,
+    그 유형을 매기는 중심은 fit_seasons 성적으로 맞췄으므로 중심이 그 평가 시즌의 성적을 봤는지가 기준이다."""
+    if not fit_seasons:
+        return "군집 맞춤 시즌 정보가 없어 검증·test 비교가 시간 외(out-of-time) 비교인지 판정하지 않았다."
+    span, last = f"{min(fit_seasons)}~{max(fit_seasons)}", max(fit_seasons)
+    if last >= test_season:
+        return (f"검증({val_season})·test({test_season}) 비교 모두 {span} 성적으로 맞춘 중심(평가 시즌 성적도 본 중심)으로 "
+                "유형을 매겼으므로 엄밀한 시간 외(out-of-time) 비교가 아닌 전이적(transductive) 비교다.")
+    if last >= val_season:
+        return (f"검증({val_season}) 비교의 직전 시즌({val_season - 1}) 유형은 {val_season} 성적까지 본 {span} 맞춤 "
+                f"중심으로 매겨져 엄밀한 시간 외(out-of-time) 비교가 아닌 전이적(transductive) 비교이고, "
+                f"test({test_season}) 비교만 엄밀한 시간 외 비교다.")
+    return f"군집 중심({span})이 검증({val_season})·test({test_season}) 성적을 보지 않았으므로 두 비교 모두 시간 외 비교다."
+
+
+def _matchup_note(fit_seasons: list[int] | None, val_season: int, test_season: int) -> str:
+    """전후 비교의 단서: 군집 중심이 어떤 시즌 성적으로 맞춰졌는지 (승패 결과는 쓰지 않은 비지도 군집),
+    검증·test 비교의 시간 범위(_validation_scope), 선발 유형을 어느 선발로 만드는지."""
     span = f"{min(fit_seasons)}~{max(fit_seasons)}" if fit_seasons else "맞춤 시즌"
     return (f"{MATCHUP_NOTE} 유형 군집 중심은 {span} 선수-시즌 성적으로만 맞췄다(비지도, 경기 승패는 쓰지 않음). "
-            "피처는 직전 시즌 유형이라 test 시즌(2026) 경기에는 2026 성적이 중심에 들어가지 않았다. "
-            "반면 학습·검증 시즌 경기의 직전 시즌 유형은 그 뒤 시즌 성적까지 본 중심으로 매겨졌다 "
-            "(예: 2018 경기의 2017 유형도 2025까지의 성적으로 맞춘 중심 기준).")
+            "피처는 직전 시즌 유형이라 그 경기 시즌의 성적으로 매긴 유형은 쓰지 않지만, 중심 자체는 맞춤 시즌 전체 "
+            "성적을 봤으므로 학습 시즌 경기의 직전 시즌 유형도 그 뒤 시즌 성적까지 본 중심으로 매겨졌다. "
+            f"{_validation_scope(fit_seasons, val_season, test_season)} "
+            "starter_type 차이는 다른 선발 피처처럼 박스스코어의 실제 선발(투수 순서 1)로 만든다 (라이브는 예고 선발).")
 
 
 def _matchup_ablation(selected: str, calibration: str, best_iteration: int, train: pd.DataFrame,
@@ -375,7 +397,9 @@ def _matchup_ablation(selected: str, calibration: str, best_iteration: int, trai
     피처만 FEATURE_NAMES → FEATURE_NAMES + names로 늘려 같은 절차(캘리브레이터는 train LOSO OOF)로 학습한다.
     without은 본 모델과 같은 절차이므로 본 모델의 val·test 지표와 똑같다.
     mcnemar_p_test: test 경기에서 with와 without의 적중 차이 검정. adopt: with의 val 로그 손실이
-    without보다 MATCHUP_ADOPT_MARGIN보다 더 낮을 때만 True (test는 채택 판단에 쓰지 않는다)."""
+    without보다 MATCHUP_ADOPT_MARGIN보다 더 낮을 때만 True (test는 채택 판단에 쓰지 않는다).
+    validation_scope: 검증·test 비교가 시간 외(out-of-time) 비교인지 한 문장 (_validation_scope)."""
+    val_season, test_season = int(val["season"].iloc[0]), int(test["season"].iloc[0])
     n_est = best_iteration if selected == "lgbm" else None
     out, correct = {}, {}
     for key, feats in (("without", list(FEATURE_NAMES)), ("with", list(FEATURE_NAMES) + list(names))):
@@ -387,7 +411,8 @@ def _matchup_ablation(selected: str, calibration: str, best_iteration: int, trai
         "without": out["without"], "with": out["with"],
         "mcnemar_p_test": mcnemar_p(correct["with"], correct["without"]),
         "adopt": bool(out["with"]["val"]["log_loss"] < out["without"]["val"]["log_loss"] - MATCHUP_ADOPT_MARGIN),
-        "note": _matchup_note(fit_seasons),
+        "note": _matchup_note(fit_seasons, val_season, test_season),
+        "validation_scope": _validation_scope(fit_seasons, val_season, test_season),
         "fit_seasons": [int(s) for s in fit_seasons] if fit_seasons else None,
         "cluster_version": cluster_version,
     }

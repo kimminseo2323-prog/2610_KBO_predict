@@ -288,7 +288,12 @@ def test_types_map_and_quality_shape(obj):
     bq = q["batter"]
     assert bq["k"] == 4 and bq["n_fit"] < bq["n_all"] and len(bq["types"]) == 4
     assert bq["membership_method"] == obj["batter"]["bundle"]["membership_method"]
-    assert bq["membership_agreement"] >= cluster.AGREEMENT_FLOOR
+    assert bq["argmax_consistent"] is (gmm_agreement(obj["batter"]["assigned"]) == 1.0)
+    if bq["membership_method"] == "kmeans_softmax":
+        assert bq["argmax_consistent"] is True and "membership_agreement" not in bq  # 구조적으로 1.0 → 적지 않는다
+    else:
+        assert bq["membership_agreement"] >= cluster.AGREEMENT_FLOOR
+    assert "보정" in q["membership_note"] and "거리" in q["membership_note"]
     assert bq["gmm_agreement"] == pytest.approx(obj["batter"]["bundle"]["gmm_agreement"], abs=1e-4)
     assert set(bq["gmm_candidates"]) == set(cluster.GMM_COVARIANCES)
     t0 = bq["types"][0]
@@ -298,6 +303,26 @@ def test_types_map_and_quality_shape(obj):
     assert all(e.startswith("Bat ") for t in bq["types"][1:] for e in t["examples"])   # 모르면 로마자
     json.dumps(q)                                                    # JSON으로 쓸 수 있어야 한다
     assert q["pitcher"]["k"] == 4 and q["pitcher"]["types"][0]["center"]["start_share"] > 0.9
+
+
+def test_quality_argmax_consistency_by_membership_method(obj):
+    """kmeans_softmax면 argmax_consistent는 구조적으로 true이고 일치도 숫자는 적지 않는다.
+    GMM 경로에서는 실측 일치도를 membership_agreement로 적고, 한 행이라도 어긋나면 argmax_consistent가 false."""
+    bundles = {g: dict(obj[g]["bundle"]) for g in cluster.GROUPS}
+    assigned = {g: obj[g]["assigned"].copy() for g in cluster.GROUPS}
+    bundles["batter"]["membership_method"] = "kmeans_softmax"
+    bundles["pitcher"]["membership_method"] = "gmm_tied"
+    kb = bundles["batter"]["k"]                                  # softmax 경로: 최댓값 성분 == 유형 (구조적으로 성립)
+    assigned["batter"]["membership"] = [[float(t == ty) for t in range(kb)] for ty in assigned["batter"]["type"]]
+    a = assigned["pitcher"]
+    k = bundles["pitcher"]["k"]
+    wrong = (int(a["type"].iloc[0]) + 1) % k                      # 첫 행만 최댓값 성분이 유형과 다르게
+    a["membership"] = [[1.0 if t == (wrong if i == 0 else ty) else 0.0 for t in range(k)]
+                       for i, ty in enumerate(a["type"])]
+    q = quality(bundles, assigned, load_labels("does/not/exist.yaml"))
+    assert q["batter"]["argmax_consistent"] is True and "membership_agreement" not in q["batter"]
+    assert q["pitcher"]["argmax_consistent"] is False
+    assert q["pitcher"]["membership_agreement"] == round(1 - 1 / len(a), 4)
 
 
 def test_load_labels_default_when_missing(tmp_path):

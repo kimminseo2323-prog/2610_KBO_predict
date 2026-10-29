@@ -522,7 +522,8 @@ def test_matchup_feature_names_order():
 
 
 def test_matchup_uses_previous_season_types_only(two_season_games):
-    """2026 경기에서 타자 1의 타석은 2025 유형(1)으로 센다 — 2026 유형(0)을 쓰면 홈·원정 모두 유형 0이라 차이가 0."""
+    """2026 경기에서 타자 1의 타석은 2025 유형(1)으로 센다. 2026 유형을 잘못 쓰면 홈 타자 1은 유형 0이 되고,
+    원정 타자 2는 2026 유형이 없어 원정 비중이 None → bat_type 차이가 NaN이 되므로 아래 검사가 실패한다."""
     df = build_dataset_from(two_season_games, types=MATCHUP_TYPES, kb=2, kp=3)
     row = df[df.season == 2026].iloc[-1]
     assert row["bat_type1_diff"] > 0 and row["starter_type2_diff"] != 0
@@ -621,3 +622,17 @@ def test_cli_matchup_out_keeps_features_parquet_identical(stored_two_seasons, tm
     pd.testing.assert_frame_equal(m, want[["game_id", *matchup_feature_names(2, 3)]])
     with pytest.raises(SystemExit):
         main([])  # --out도 --matchup-out도 없으면 거부
+
+
+def test_matchup_rejects_type_ids_outside_k():
+    """유형표의 유형 번호가 kb·kp 범위를 벗어나면 (K가 어긋난 유형표) 바로 ValueError."""
+    s = LeagueState(types={(2025, 1): {"batter": 2}}, kb=2, kp=1)
+    s.start_season(2026)
+    g = mk("2026-04-01", 1, hs=3, as_=2)
+    s.update(g, mkbox(g, home_bat=[{"player_id": 1, "ab": 3}]))
+    with pytest.raises(ValueError, match="batter type 2 .* kb=2"):
+        s.lineup_shares("LG")
+    s = LeagueState(types={(2025, 10): {"pitcher": 3}}, kb=0, kp=3)
+    s.start_season(2026)
+    with pytest.raises(ValueError, match="pitcher type 3 .* kp=3"):
+        game_features(mk("2026-04-02", 2), s, {"home": {"player_id": 10}, "away": None})

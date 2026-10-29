@@ -554,8 +554,8 @@ def test_cli_report_refuses_to_overwrite_frozen_report(tmp_path, monkeypatch):
 # ---------- 상성 피처 전후 비교 · 군집 품질 ----------
 
 MATCHUP_NAMES = ["bat_type0_diff", "bat_type1_diff", "starter_type0_diff", "starter_type1_diff", "types_known"]
-ABLATION_KEYS = {"features_added", "without", "with", "mcnemar_p_test", "adopt", "note", "fit_seasons",
-                 "cluster_version"}
+ABLATION_KEYS = {"features_added", "without", "with", "mcnemar_p_test", "adopt", "note", "validation_scope",
+                 "fit_seasons", "cluster_version"}
 
 
 @pytest.fixture(scope="module")
@@ -597,7 +597,8 @@ def test_report_matchup_ablation_keys(matchup_report):
     assert 0 <= ab["mcnemar_p_test"] <= 1
     assert ab["adopt"] is (ab["with"]["val"]["log_loss"] < ab["without"]["val"]["log_loss"] - 0.001)
     assert ab["note"].startswith("선택된 알고리즘·캘리브레이션·트리 수 고정, 피처만 추가. 라이브 반영은 4단계.")
-    assert "2015~2016" in ab["note"]
+    assert "2015~2016" in ab["note"] and ab["validation_scope"] in ab["note"] and "실제 선발" in ab["note"]
+    assert "두 비교 모두 시간 외 비교" in ab["validation_scope"]  # 맞춤 2015~2016은 검증(2025)·test(2026) 이전
     json.dumps(report, ensure_ascii=False, sort_keys=True)
 
 
@@ -667,3 +668,12 @@ def test_cli_report_with_matchup_and_clusters(tmp_path, monkeypatch):
     assert ab["features_added"] == ["bat_type0_diff", "types_known"] and ab["cluster_version"] == "clusters-test"
     entry = json.loads((tmp_path / "models/manifest.json").read_text(encoding="utf-8"))["models"]["report"]
     assert entry["matchup_sha256"] == hashlib.sha256(mu.read_bytes()).hexdigest()
+
+
+def test_validation_scope_wording():
+    """실데이터 설정(맞춤 2015~2025, 검증 2025, test 2026): 검증은 전이적, test만 엄밀한 시간 외 비교."""
+    real = train_win._validation_scope(list(range(2015, 2026)), 2025, 2026)
+    assert "전이적(transductive)" in real and "test(2026) 비교만 엄밀한 시간 외 비교" in real
+    assert "2024" in real and real.count(".") == 1  # 한 문장
+    assert "모두" in train_win._validation_scope(list(range(2015, 2027)), 2025, 2026)
+    assert "판정하지 않았다" in train_win._validation_scope(None, 2025, 2026)

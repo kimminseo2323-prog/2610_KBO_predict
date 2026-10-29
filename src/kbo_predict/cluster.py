@@ -323,13 +323,21 @@ def _num(v, nd: int = 4):
     return None if v is None or (isinstance(v, float) and np.isnan(v)) else round(float(v), nd)
 
 
+MEMBERSHIP_NOTE = ("kmeans_softmax 소속 확률은 표준화 공간에서 각 유형 중심까지의 거리로 만든 상대적 확신도이며, "
+                   "실제 빈도에 맞춰 보정(calibration)된 확률이 아니다.")
+
+
 def quality(bundles: dict, assigned: dict, names_cfg: dict) -> dict:
     """model_report.json의 cluster_quality 값. bundles·assigned는 {group: 번들 / assign 결과}.
-    retention·membership_agreement(소속 확률 최댓값 == 유형)는 배정된 전체 행(2026 포함) 기준이고,
-    k_table의 유지율과 gmm_agreement(최고 GMM 후보)·gmm_candidates(GMM vs K-means 비교)는 맞춤 시즌 행 기준이다.
+    argmax_consistent: 소속 확률 최댓값 성분 == 유형이 배정된 전체 행(2026 포함)에서 모두 성립하는가 (true/false).
+        kmeans_softmax는 같은 거리 계산의 argmax로 유형을 정하므로 구조적으로 항상 true다 — 그래서 그 경우의 일치도
+        숫자(항상 1.0)는 정보가 없어 적지 않는다. GMM이 선택된 경우에만 실측 일치도를 membership_agreement로 함께 적는다.
+    retention도 배정된 전체 행 기준이고, k_table의 유지율과 gmm_agreement(최고 GMM 후보)·gmm_candidates(GMM vs
+    K-means 비교)는 맞춤 시즌 행 기준이다. membership_note: 소속 확률을 어떻게 읽어야 하는지 (MEMBERSHIP_NOTE).
     유형의 n은 배정된 전체 행 수, n_fit은 그중 맞춤 시즌 행 수. examples는 한글 이름(name_ko 열이 있으면) 3명."""
     first = bundles[GROUPS[0]]
-    out = {"version": first.get("version", CLUSTER_VERSION), "fit_seasons": list(first["fit_seasons"])}
+    out = {"version": first.get("version", CLUSTER_VERSION), "fit_seasons": list(first["fit_seasons"]),
+           "membership_note": MEMBERSHIP_NOTE}
     for g in GROUPS:
         b, a = bundles[g], assigned[g]
         in_fit = a["season"].isin(b["fit_seasons"])
@@ -343,15 +351,18 @@ def quality(bundles: dict, assigned: dict, names_cfg: dict) -> dict:
                 "center": {f: round(float(b["centers"].loc[t, f]), 3) for f in b["features"]},
                 "examples": [_display_name(r) for _, r in ex.iterrows()],
             })
+        agreement = gmm_agreement(a)
         out[g] = {
             "k": b["k"], "k_table": [{"k": r["k"], "silhouette": _num(r["silhouette"]),
                                       "retention": _num(r["retention"]), "score": _num(r["score"])}
                                      for r in b["k_table"]],
             "n_fit": int(in_fit.sum()), "n_all": len(a), "membership_method": b["membership_method"],
-            "membership_agreement": _num(gmm_agreement(a)), "gmm_agreement": _num(b["gmm_agreement"]),
+            "argmax_consistent": bool(agreement == 1.0), "gmm_agreement": _num(b["gmm_agreement"]),
             "gmm_candidates": {c: _num(v) for c, v in b["gmm_candidates"].items()},
             "retention": _num(retention(a)), "types": types,
         }
+        if b["membership_method"] != "kmeans_softmax":
+            out[g]["membership_agreement"] = _num(agreement)
     return out
 
 

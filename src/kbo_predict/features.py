@@ -283,6 +283,9 @@ class LeagueState:
             total += pa
             ty = self._prev_type(pid, "batter")
             if ty is not None and pa:
+                if not 0 <= ty < self.kb:  # 유형표와 K(kb)가 어긋나면 조용히 틀리지 말고 바로 알린다
+                    raise ValueError(f"batter type {ty} of player {pid} (season {self.season - 1}) is outside "
+                                     f"0..{self.kb - 1} — kb={self.kb} does not match the types table")
                 counts[ty] += pa
                 known += pa
         if known == 0:
@@ -342,6 +345,9 @@ def _matchup_features(state: LeagueState, home: str, away: str, starters: dict |
     for side in ("home", "away"):
         s = (starters or {}).get(side)
         st[side] = starter_type(state, s.get("player_id")) if s else None
+        if st[side] is not None and not 0 <= st[side] < state.kp:  # 원-핫 밖 유형은 0 벡터로 숨지 않게
+            raise ValueError(f"pitcher type {st[side]} of starter {s.get('player_id')} is outside "
+                             f"0..{state.kp - 1} — kp={state.kp} does not match the types table")
     for t in range(state.kp):
         f[f"starter_type{t}_diff"] = int(st["home"] == t) - int(st["away"] == t)
     f["types_known"] = int(h_known >= TYPES_KNOWN_MIN_SHARE and a_known >= TYPES_KNOWN_MIN_SHARE

@@ -155,6 +155,9 @@ def main(argv=None) -> int:
             if not rec.get("records_unmatched"):
                 continue
             files = sorted(cache.glob(f"games_{gid}-*.html"))
+            if not files:
+                # 캐시가 없는 경기(첫 패스에서 이미 no_cache·cache-missing으로 셌다): 다시 파싱할 HTML이 없으니 그대로 둔다
+                continue
             ids = {r["player_id"] for side in ("batting", "pitching") for t in ("away", "home") for r in rec[side][t]}
             ko = {p: ko_map[p] for p in ids if p in ko_map}
             for name, _kind in set(_unmatched_hangul(rec)):
