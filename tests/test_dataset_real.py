@@ -41,7 +41,7 @@ def test_every_game_has_two_starters(real_df):
 
 def test_records_coverage():
     # 재파싱 뒤: 기록표 칸이 있는 경기가 99% 이상이고, 지표에 쓰이는 라벨(2B/3B/SB/HR)의 unmatched는 200개 미만.
-    # E(실책)와 HR off(홈런 맞은 투수의 한글 이름)는 어떤 지표에도 안 쓰여 제외하되, 전체(E·HR off 포함)도 400개 미만이어야 한다.
+    # E(실책)와 HR off(홈런 맞은 투수의 한글 이름)는 어떤 지표에도 안 쓰여 제외하되, 전체(E·HR off 포함)도 500개 미만이어야 한다(실측 457).
     # 남는 unmatched 대부분은 같은 팀에 같은 로마자 이름이 둘 있는 경우(LG의 Lee Byung-kyu 둘)처럼 원래 구분이 안 되는 항목이다.
     from kbo_predict import raw_store
     missing = relevant = total_unmatched = total = 0

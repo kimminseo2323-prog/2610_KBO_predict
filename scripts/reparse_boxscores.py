@@ -3,7 +3,11 @@
 기존 칸이 하나라도 달라지면 그 game_id를 출력하고 비정상 종료한다(아무 파일도 쓰지 않음).
 네트워크 요청은 하지 않는다.
 
-    python -X utf8 scripts/reparse_boxscores.py --cache data/cache/html --seasons 2015-2026 [--dry-run]
+    python -X utf8 scripts/reparse_boxscores.py --cache data/cache/html --seasons 2015-2026 [--dry-run] [--infer-aliases]
+
+재현성: 한글 이름 다수결(names_ko 투표)은 --seasons와 상관없이 data/raw의 모든 시즌을 대상으로 한다
+(--seasons에 없는 시즌은 디스크의 현재 값을 쓴다). 별칭은 data/raw/name_aliases.json이 있으면 항상 그것을 읽고,
+--infer-aliases를 줄 때만 (모든 시즌에서) 다시 추론해 덮어쓴다. 별칭 파일은 맨 마지막 쓰기 직전에야 저장한다.
 """
 import argparse
 import json
@@ -65,7 +69,7 @@ def _unmatched_hangul(rec: dict):
             yield name, ("pit" if label == "HR off" else "bat")
 
 
-ALIASES_PATH = "name_aliases.json"  # data/raw/ 아래. 있으면 그대로 읽고, 없으면 추론해서 쓴다
+ALIASES_PATH = "name_aliases.json"  # data/raw/ 아래. 있으면 그대로 읽고, --infer-aliases(또는 파일 없음)일 때만 추론한다
 
 
 def infer_aliases(recs, ko_map: dict[int, str], min_games: int = 5) -> dict[str, dict]:
@@ -106,52 +110,47 @@ def main(argv=None) -> int:
     ap.add_argument("--cache", default="data/cache/html")
     ap.add_argument("--seasons", default="2015-2026")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--infer-aliases", action="store_true", help="별칭 파일이 있어도 다시 추론해 덮어쓴다")
     args = ap.parse_args(argv)
     cache = Path(args.cache)
+    targets = parse_seasons(args.seasons)
 
+    old_by_season = {s: raw_store.load_boxscores(s) for s in targets}  # 시즌당 한 번만 읽는다
     new_by_season: dict[int, dict[int, dict]] = {}
-    rows = []
+    no_cache_by_season: dict[int, int] = {}
     mismatches: list[int] = []
     missing_ids: list[int] = []
-    for season in parse_seasons(args.seasons):
-        old = raw_store.load_boxscores(season)
+    for season in targets:
         new: dict[int, dict] = {}
-        reparsed = no_cache = no_table = unmatched = hr_off = 0
-        for gid, rec in old.items():
+        no_cache = 0
+        for gid, rec in old_by_season[season].items():
             files = sorted(cache.glob(f"games_{gid}-*.html"))
             if not files:
                 no_cache += 1
                 missing_ids.append(gid)
                 new[gid] = fill_none(rec)  # 기록표 칸은 None으로 남긴다
-                no_table += 1
                 continue
             fresh = parse_game(files[0].read_text(encoding="utf-8"))
-            reparsed += 1
             if strip_new(fresh) != strip_new(rec):
                 mismatches.append(gid)
                 continue
             new[gid] = fresh
-            bat = fresh["batting"]["away"] + fresh["batting"]["home"]
-            no_table += (not bat) or bat[0]["doubles"] is None
-            unmatched += len(fresh["records_unmatched"])
-            hr_off += sum(u.startswith("HR off:") for u in fresh["records_unmatched"])
         new_by_season[season] = new
-        rows.append((season, len(old), reparsed, no_cache, no_table, unmatched, hr_off))
+        no_cache_by_season[season] = no_cache
         print(f"season {season} done", flush=True)
 
     # 두 번째 패스: 다른 경기에서 알아낸 한글 이름으로, 아직 못 붙인 항목이 있는 경기만 다시 파싱한다
-    before = label_counts(r for season in parse_seasons(args.seasons) for r in raw_store.load_boxscores(season).values())
-    ko_map = vote_ko_names(r for new in new_by_season.values() for r in new.values())
+    before = label_counts(r for old in old_by_season.values() for r in old.values())
+    # 투표·별칭 추론은 항상 모든 시즌에서 (대상 시즌은 방금 파싱한 값, 나머지는 디스크 값)
+    all_recs = []
+    for season in raw_store.available_seasons():
+        all_recs.extend((new_by_season[season] if season in new_by_season else raw_store.load_boxscores(season)).values())
+    ko_map = vote_ko_names(all_recs)
     alias_file = raw_store.data_dir() / "raw" / ALIASES_PATH
-    if alias_file.exists():
-        aliases = json.loads(alias_file.read_text(encoding="utf-8"))
-    else:
-        aliases = infer_aliases([r for new in new_by_season.values() for r in new.values()], ko_map)
-        if not args.dry_run and not mismatches:
-            alias_file.write_text(json.dumps(aliases, ensure_ascii=False, sort_keys=True, indent=1) + chr(10), encoding="utf-8")
+    inferred = args.infer_aliases or not alias_file.exists()
+    aliases = infer_aliases(all_recs, ko_map) if inferred else json.loads(alias_file.read_text(encoding="utf-8"))
     print(f"ko name votes: {len(ko_map)} players, aliases: {len(aliases)}", flush=True)
     for season, new in new_by_season.items():
-        old = raw_store.load_boxscores(season)
         for gid, rec in list(new.items()):
             if not rec.get("records_unmatched"):
                 continue
@@ -162,7 +161,7 @@ def main(argv=None) -> int:
                 if name in aliases and aliases[name]["player_id"] in ids:
                     ko[aliases[name]["player_id"]] = name
             fresh = parse_game(files[0].read_text(encoding="utf-8"), ko)
-            if strip_new(fresh) != strip_new(old[gid]):
+            if strip_new(fresh) != strip_new(old_by_season[season][gid]):
                 mismatches.append(gid)
             else:
                 new[gid] = fresh
@@ -171,11 +170,17 @@ def main(argv=None) -> int:
     for k in sorted(set(before) | set(after)):
         print(f"  {k:7s} {before[k]:5d} -> {after[k]:5d}")
     print(f"  total   {sum(before.values()):5d} -> {sum(after.values()):5d}")
-    rows = [(r[0], r[1], r[2], r[3], r[4],
-             sum(len(x["records_unmatched"]) for x in new_by_season[r[0]].values()),
-             sum(u.startswith("HR off:") for x in new_by_season[r[0]].values() for u in x["records_unmatched"]))
-            for r in rows]
 
+    rows = []
+    for season in targets:
+        new = new_by_season[season]
+        recs = list(new.values())
+        no_table = sum(1 for r in recs if not (r["batting"]["away"] + r["batting"]["home"])
+                       or (r["batting"]["away"] + r["batting"]["home"])[0]["doubles"] is None)
+        unmatched = sum(len(r["records_unmatched"]) for r in recs)
+        hr_off = sum(u.startswith("HR off:") for r in recs for u in r["records_unmatched"])
+        rows.append((season, len(old_by_season[season]), len(old_by_season[season]) - no_cache_by_season[season],
+                     no_cache_by_season[season], no_table, unmatched, hr_off))
     print("\nseason  games  reparsed  no_cache  no_table  unmatched  (of which HR off)")
     for r in rows:
         print("%-7d %5d  %8d  %8d  %8d  %9d  %d" % r)
@@ -188,6 +193,8 @@ def main(argv=None) -> int:
     if args.dry_run:
         print("dry run: nothing written")
         return 0
+    if inferred:  # 모든 검사를 통과한 뒤, 데이터를 쓰기 직전에 저장
+        alias_file.write_text(json.dumps(aliases, ensure_ascii=False, sort_keys=True, indent=1) + chr(10), encoding="utf-8")
     for season, new in new_by_season.items():
         print(f"wrote {raw_store.rewrite_boxscores(season, new)} rows for {season}")
     return 0

@@ -98,3 +98,17 @@ def test_rewrite_boxscores_replaces_month_files(tmp_data_dir):
     assert rewrite_boxscores(2030, {2: {"game_id": 2, "date": "2030-05-01", "x": 1}}) == 1
     assert load_boxscores(2030) == {2: {"game_id": 2, "date": "2030-05-01", "x": 1}}
     assert not (boxscores_dir(2030) / "2030-04.jsonl.gz").exists()
+
+
+def test_rewrite_boxscores_empty_raises_and_keeps_files(tmp_data_dir):
+    import pytest
+    append_boxscores(2030, {1: {"game_id": 1, "date": "2030-04-01"}})
+    with pytest.raises(ValueError):
+        rewrite_boxscores(2030, {})
+    assert load_boxscores(2030) == {1: {"game_id": 1, "date": "2030-04-01"}}
+
+
+def test_rewrite_boxscores_leaves_no_tmp_files(tmp_data_dir):
+    append_boxscores(2030, {1: {"game_id": 1, "date": "2030-04-01"}})
+    rewrite_boxscores(2030, {1: {"game_id": 1, "date": "2030-04-01", "x": 2}})
+    assert sorted(p.name for p in boxscores_dir(2030).iterdir()) == ["2030-04.jsonl.gz"]

@@ -297,3 +297,17 @@ def test_match_player_suffix_and_korean_names():
     assert _match_player("한동민", rows) is None
     assert _match_player("한동민", rows, {2: "한동민"}) == 2
     assert _match_player("한동민", rows, {1: "한동민", 2: "한동민"}) is None
+
+
+def test_hr_off_known_korean_name_pairs_before_position():
+    from bs4 import BeautifulSoup
+    from kbo_predict.mykbo_parse import _records
+    html = ('<table data-game-section="records"><tr>'
+            '<td title="홈런: 갑1호(1회1점 을) 병2호(2회1점 정)">HR</td>'
+            '<td>Kap (#1, 1st inning off Pit A, 1 run), Byung (#2, 2nd inning off Pit B, 1 run)</td></tr></table>')
+    row = lambda pid, name: {"player_id": pid, "name": name}
+    bat = {"away": [row(1, "Kap"), row(2, "Byung")], "home": []}
+    pit = {"away": [], "home": [row(10, "Pit A"), row(11, "Pit B")]}
+    # 칸 순서가 영어와 반대로 알려져 있어도(ko_names) 이미 아는 이름은 위치와 상관없이 맞는 투수에 붙는다
+    _, names_ko, unmatched = _records(BeautifulSoup(html, "html.parser"), bat, pit, {11: "을", 10: "정"})
+    assert unmatched == [] and names_ko["11"] == "을" and names_ko["10"] == "정"

@@ -253,6 +253,19 @@ def _records(soup, batting: dict, pitching: dict, ko_names: dict[int, str] | Non
             en = list(dict.fromkeys(m.strip() for m in re.findall(r"\boff ([^,;()]+)", _norm(text))
                                     if m.strip() not in batters))
             kp = list(dict.fromkeys(t for _, inner in ko for t in inner.split() if not t.endswith(("회", "점"))))
+            # 한계: 남은 짝짓기는 순서(위치)에만 의존해 영어·한글 칸 순서가 다르면 서로 바뀔 수 있다.
+            # 그래서 먼저, 이미 아는 한글 이름(ko_names)과 같은 한글 토큰은 그 투수에게 바로 붙이고 나머지만 위치로 짝짓는다.
+            if ko_names:
+                for k in list(kp):
+                    known = {r["player_id"] for r in pit_rows if ko_names.get(r["player_id"]) == k}
+                    if len(known) == 1:
+                        pid = known.pop()
+                        put_ko(pid, k)
+                        kp.remove(k)
+                        for n in en:
+                            if _match_player(n, pit_rows, ko_names) == pid:
+                                en.remove(n)
+                                break
             if en and len(en) == len(kp):
                 for n, k in zip(en, kp):
                     pid = _match_player(n, pit_rows, ko_names)

@@ -99,18 +99,26 @@ def append_boxscores(season: int, boxscores: dict[int, dict]) -> int:
 
 
 def rewrite_boxscores(season: int, boxscores: dict[int, dict]) -> int:
-    """시즌의 월 파일을 모두 지우고 (date, game_id) 순으로 다시 쓴다. 쓴 행 수를 반환."""
-    for path in boxscores_dir(season).glob("*.jsonl.gz"):
-        path.unlink()
+    """시즌의 월 파일을 (date, game_id) 순으로 다시 쓴다. 쓴 행 수를 반환.
+    월마다 .tmp에 쓰고 os.replace로 바꿔치기한 뒤에야 더는 행이 없는 옛 월 파일을 지운다 (도중에 실패해도 시즌이 날아가지 않음).
+    빈 dict는 ValueError."""
+    if not boxscores:
+        raise ValueError("rewrite_boxscores: empty boxscores would delete the season")
     by_month: dict[str, list[tuple[int, dict]]] = {}
     for gid, b in sorted(boxscores.items(), key=lambda kv: (kv[1]["date"], kv[0])):
         by_month.setdefault(b["date"][:7], []).append((gid, b))
+    boxscores_dir(season).mkdir(parents=True, exist_ok=True)
     for month, items in by_month.items():
         path = boxscores_month_path(season, month)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with gzip.open(path, "wt", encoding="utf-8", newline="\n") as f:
+        tmp = path.with_name(path.name + ".tmp")
+        with gzip.open(tmp, "wt", encoding="utf-8", newline="\n") as f:
             for gid, b in items:
                 f.write(_dumps({**b, "game_id": gid}) + "\n")
+        os.replace(tmp, path)
+    keep = {boxscores_month_path(season, m) for m in by_month}
+    for path in boxscores_dir(season).glob("*.jsonl.gz"):
+        if path not in keep:
+            path.unlink()
     return sum(len(v) for v in by_month.values())
 
 
