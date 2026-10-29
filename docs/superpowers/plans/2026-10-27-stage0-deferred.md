@@ -15,7 +15,7 @@
 - ✅ (5435ed1, 24aff45) `train_win` CLI·분할 경계 테스트, 빈 테스트 프레임에 친절한 에러. → CLI는 `python -m kbo_predict.train_win report|live`로 바뀌었고 `test_cli_report_then_live`가 돌린다. 빈 학습·보정 프레임과 빠진 시즌은 `ValueError`로 거절한다.
 - (유지 → 5단계 사이트) `latest.json`의 CANCELED 항목은 `home/away`에 `code`만 있고 `round`가 없음 → 사이트 구현 시 선택 필드로 처리하거나 정상 항목과 모양 통일.
 - (유지) 재편성(같은 game_id로 날짜 변경) 시 history 행의 date 미갱신 — 현재 데이터상 재편성은 새 id를 받으므로 보류.
-- (유지) `seasons.REGULAR_SEASON`에 2027 시즌 범위 등록 (2027-03 개막 전; 미등록이면 폴백 + collect-failure 이슈로 알림)
+- (유지 → 5단계 절의 **필수 관문**) `seasons.REGULAR_SEASON`에 2027 시즌 범위 등록 (2027-03 개막 전; 미등록이면 폴백 + collect-failure 이슈로 알림)
 
 ## 3단계(클러스터링) 전에
 - (유지) 2015~2018 일부 박스스코어에서 타자 득점 합/투수 실점 합이 팀 점수와 1 차이 (예: 2016 4292, 2017 5302, 2018 6069/6161/6605) — 사이트 원본 문제; 집계 전 검증 규칙 필요. → 3단계 유형 군집은 비율 지표(K%·BB%·HR%·ISO·BABIP·도루율 / 선발 비중)만 쓰고 득점·실점을 쓰지 않아 영향이 없다. 득점·실점을 쓰는 지표가 생기면 다시 본다.
@@ -30,7 +30,7 @@
 
 - ✅ (f9e6be8, 4d1c4f6) 수집 창(대상일 −7~+14일)을 벗어난 FINAL 경기의 박스스코어 누락은 재시도되지 않음 → run_pipeline에 '현재 시즌 FINAL인데 박스스코어 없음' 검사 추가 → `collect.collect_missing_boxscores(season, before=대상일−7일)`: 수집 창 이전의 정규시즌 FINAL 중 박스스코어 없는 경기를 최신순 최대 20개 다시 요청한다. 예고 선발 수집 뒤 별도 try에서 돌고 오류는 `collect_errors`에 남긴다(같은 실행에서 창 안의 경기를 두 번 요청하지 않음).
 - ✅ (98bb49e) 노트북 패키지(matplotlib/nbconvert/ipykernel)를 `requirements-dev.txt`로 분리해 일일 Actions 설치 시간 단축 → `requirements-dev.txt` = `-r requirements.txt` + pytest·matplotlib·nbformat·nbclient·nbconvert·ipykernel. 일일은 `requirements.txt`, ci·주간은 dev.
-- ✅ (98bb49e) `tests/test_notebooks.py` 실행 테스트에 slow 마커, ci.yml에서 선택 실행 → ci는 `pytest -m "not slow"`(325개) + `check_parity --quick`. slow 6개(노트북 01~05 실행 + 실데이터 parity)는 로컬에서.
+- ✅ (98bb49e) `tests/test_notebooks.py` 실행 테스트에 slow 마커, ci.yml에서 선택 실행 → ci는 `pytest -m "not slow"`(최종 수정 뒤 337개) + `check_parity --quick`. slow 6개(노트북 01~05 실행 + 실데이터 parity)는 로컬에서. 노트북 02~05는 주간 재학습의 전체 `check_parity`가 Linux에서도 실행한다(최종 수정 라운드).
 - (유지) `run_pipeline.run()`의 `data_dir`가 raw_store에 전달되지 않음(공개 파일에만 적용) → raw_store에 data_dir 주입하거나 문서화. CLI 상대경로는 cwd 의존. → 원본 위치는 지금 `KBO_DATA_DIR` 환경 변수로만 바뀐다(노트북 05의 parity 셀이 이 방법을 쓴다).
 - ✅ (f9e6be8, 4d1c4f6) `upsert_games`, `_write_json`, `_write_history` 비원자적 쓰기 → 임시 파일 + replace. → `publish._atomic_write`(`*.tmp` → `os.replace`)를 공개 JSON·`history.csv`가, `raw_store._write_jsonl_atomic`을 `upsert_games`·`upsert_starters`가 쓴다. `*.tmp`는 gitignore.
 - ✅ (2단계) `models/manifest.json`은 `report`/`live` 어느 쪽을 돌려도 두 pkl 모두에 새 `features_sha256` 하나를 붙인다 → 다시 학습하지 않은 pkl에도 새 해시가 붙으므로 모델별로 학습 당시 해시를 기록. → 모델별 항목(`report`·`live`·`team`·`clusters`)이고 각 명령은 자기 항목만 갱신한다. 4단계에서 플랫폼 독립 값 지문(`features_fingerprint`, `matchup_fingerprint`)과 `seasons`를 더했다(1146848, ace0de5).
@@ -44,7 +44,7 @@
 
 3단계(클러스터링) 리뷰에서 나온 항목:
 - (유지) 상성 피처는 라이브에 반영하지 않았다(`adopt: false`). 나중에 채택한다면 `bat_type{t}_diff` 열은 합이 0이라 공선성이 있으므로 하나를 빼고, 2015 행은 직전 시즌(2014) 유형이 없어 상성 정보가 전혀 없으므로 결측 플래그를 두거나 2016부터 쓴다.
-- ✅ (f62a40a, 388d371) 주간 재학습 워크플로에 `python -m kbo_predict.cluster fit`과 `cluster publish`를 포함한다. 지금은 일일 Actions가 `players.json`·`teams.json`을 다시 만들지 않는다(수동 실행). → `weekly_retrain.yml`이 군집 후보를 맞춰 `cluster compare --types`로 커밋본과 비교하고, 유형 정의가 같으면서 유형표 해시가 바뀌었을 때(`types_changed=1`)만 정식 `cluster fit` + `publish`를 돌린다(메타만 바뀌는 주간 커밋 방지). compare가 실패하면 커밋본을 유지하고 `parity-failure` 이슈.
+- ✅ (f62a40a, 388d371; 최종 수정에서 바꿈) 주간 재학습 워크플로에 `python -m kbo_predict.cluster fit`과 `cluster publish`를 포함한다. 지금은 일일 Actions가 `players.json`·`teams.json`을 다시 만들지 않는다(수동 실행). → `weekly_retrain.yml`이 군집 후보를 맞춰 `cluster compare --types`로 커밋본과 비교한다. 처음에는 유형표 해시가 바뀌면(`types_changed=1`) 정식 `cluster fit` + `publish`까지 자동으로 했지만, clusters-2026은 report-2026·되감기·`players.json`이 함께 기대는 **얼린** 산출물이라 최종 수정 라운드에서 "`types_changed=1` = 명시적 실패(frozen cluster inputs changed — refreeze by hand)"로 바꾸고 자동 fit·publish 단계를 뺐다. compare가 실패하면 커밋본을 유지하고 `parity-failure` 이슈.
 - (유지 → 2027 시즌 전) 2027 유형 재적합 범위: 2027 시즌에는 중심을 2015~2026으로 맞추고 2027은 배정만 한다(스펙 §5.1 "2027 시즌이 끝나면 `report` 모델을 … 한 번 옮긴다"는 시점과 같다). 버전 이름(`clusters-2026`)과 `cluster_labels.yaml`의 이름도 다시 본다.
 - ✅ (39cb7bb, 1146848) Linux BLAS parity: 군집은 단일 스레드로 같은 기계에서는 비트 단위로 재현되지만 Actions(Linux OpenBLAS)에서는 마지막 자리가 다를 수 있다. `models/manifest.json`의 `clusters.types_sha256`으로 비교하고, 다르면 커밋된 `models/clusters.pkl`을 기준으로 둔다. → `cluster compare`(중심 atol 1e-9, 맞춤 시즌 라벨 동일) + 유형표 해시 비교. Linux ci(실행 40882643905)에서 유형표 해시·군집이 같았고, 다른 것은 `features.parquet` 파일 바이트뿐이라 parquet 판정을 값 지문으로 바꿨다.
 - (유지) `run_pipeline`이 매 실행 `models/clusters.pkl` 전체(약 1.4 MB)를 unpickle해 선발 유형만 꺼낸다 → `(season, player_id) → 투수 유형`만 담은 작은 types JSON 캐시를 검토.
@@ -66,16 +66,21 @@
 
 4단계 실행·리뷰에서 나온 항목. 사이트가 읽는 데이터 계약(스펙 §8)과 무인 운영에 걸리는 것부터.
 
-- 오늘 경기의 선발 포함 확률을 시리즈 시뮬레이션에 반영: 스펙 §8은 "오늘 경기는 선발 포함 확률, 이후 경기는 팀 모델"인데, 지금 `simulate.outlook_for`는 오늘 경기도 선발 없는 팀 모델로 값을 매긴다. 예: 2026-10-29 3차전을 시뮬레이션은 SS 승 49.7%로, 예측 카드(선발 포함, v0.2)는 55.4%로 본다. `outlook_for`에 오늘 경기의 선발 포함 `p_home`을 넘기는 방향(최종 수정 라운드에서 반영 예정).
-- 노트북 05 다듬기: 시점에 따라 틀려지는 문구(셀 40 "작성 시점에는", `history.csv` 해석 — 지금은 1행뿐; 셀 6의 "우천"·"대구"처럼 데이터로 확인할 수 없는 표현; 셀 33 "59~61%")를 중립적으로. 셀 20이 `simulate`의 비공개 함수(`_active_series`, `_series_record`, `_homes`)를 부르므로 공개 이름으로. `check_parity.REQUIRED_NOTEBOOKS`에 05 추가(지금은 있으면 실행, 없어도 통과 — `tests/test_check_parity.py`의 05 선택 테스트도 함께).
-- 주간 재학습 첫 실행 확인(2026-11-02 월 03:07 KST): `types_changed=1` 경로(정식 `cluster fit` + `publish`)는 Actions에서 아직 돈 적이 없다(지금 데이터로는 유형표가 그대로라 건너뜀). `workflow_dispatch`로 한 번 돌려 보고, Actions에서 만든 manifest·pkl의 `commit_sha`가 채워지는지도 본다.
+- **필수 관문 — 2027-03 전에 `seasons.REGULAR_SEASON[2027]` 등록(미등록이면 10월 포스트시즌이 정규시즌으로 집계됨).** 미등록 시즌은 03-01~10-31 폴백이라 개막 전 시범경기와 10월 포스트시즌 경기가 정규시즌으로 들어가 상태·학습·`playoff_race`·한글 이름 투표가 오염된다. 개막일·종료일이 정해지면 바로 넣고, `round`(시범경기 `preseason`)도 함께 확인한다.
+- ✅ (최종 수정 라운드) 오늘 경기의 선발 포함 확률을 시리즈 시뮬레이션에 반영 → `predict.raw_prob`(예측 항목·되감기 판정과 같은 함수)를 `run_pipeline`이 `outlook_for(today_probs=…)`로 넘기고, 첫 남은 경기(홈 일치 확인)만 그 확률로 굴린다. 카드에 `today_game_prob_source`. 10-29: 시리즈 SS .5279 → .5579(오늘 3차전 SS .5536).
+- ✅ (최종 수정 라운드) 와일드카드 1승 어드밴티지 → `postseason.yaml`의 `head_start: [h0, h1]`(전적에 더하고 `homes`는 실제 경기만). 2026 와일드카드 = `best_of: 3, head_start: [1, 0], homes: [LG, LG]`. 처음 설정(`best_of: 1`)은 5위가 1차전을 이기면 바로 끝나 틀렸다.
+- ✅ (최종 수정 라운드) 노트북 05 다듬기: 셀 40 "작성 시점에는", 셀 6 "우천"·"대구" → "취소 사유는 데이터에 없음"·"삼성 홈", 셀 33 "59~61%", 셀 20은 공개 함수(`simulate.active_series`·`series_record`·`left_homes`·`series_probs`)만 쓴다. `check_parity.REQUIRED_NOTEBOOKS = ("02", "03", "04", "05")`.
+- ✅ (최종 수정 라운드) 노트북 03·04의 동일성 assert가 비트 비교(Windows에서만 통과)였고 ci `--quick`은 노트북을 돌리지 않았다 → 03·04는 `kbo_predict.parity`(값 지문, 실수 상대 1e-9, 예측 `atol 1e-9`)로 판정하고, `weekly_retrain.yml`이 전체 parity(노트북 포함, `--require-live`)를 돌린다.
+- ✅ (최종 수정 라운드) `live --skip-if-same`은 예측이 같아도 manifest의 `live.features_fingerprint`가 다르면 다시 쓴다. `train_win._write_json`은 원자적(`publish._write_json`, 바이트 동일). `check_parity --repo`·`build_rewind` 기본 경로는 저장소 루트 기준. `test_rewind_matches_report_model`은 `build_dataset([2025, 2026])`으로 ci에서도 돈다.
+- 주간 재학습 첫 실행 확인(2026-11-02 월 03:07 KST): 전체 parity(노트북 02~05, Linux)가 처음으로 Actions에서 돈다 — 노트북 실행 시간·한글 폰트 경고와 통과 여부를 본다. `types_changed=1`(이제 명시적 실패) 경로는 Actions에서 아직 돈 적이 없다(지금 데이터로는 유형표가 그대로). `workflow_dispatch`로 한 번 돌려 보고, Actions에서 만든 manifest·pkl의 `commit_sha`가 채워지는지도 본다.
+- `history.csv`는 지금 1행(2026-10-29 14050, v0.2, 정산 전)뿐이다 → 라이브 적중률은 포스트시즌·2027 기록이 쌓인 뒤에 사이트에 보인다.
 - 커밋된 `latest.json`(10-29 14:40 Actions 실행)에는 아직 `outlook`이 없다 → 다음 일일 실행(10-30 09:07)에서 `outlook` 블록이 들어가는지 확인.
 - Genspark 내보내기·외부 `fetch()` 가능 여부 확인(사용자, 스펙 §9). 안 되면 `site/`를 직접 만들어 GitHub Pages로.
 - 2027 라이브 팀 모델: 라이브 `outlook`도 `team-2026`(2015~2024 학습)을 쓴다. 2027 시즌 전에 2015~2026으로 학습한 라이브 팀 모델을 주간 재학습에 넣는다(되감기는 `team-2026` 그대로).
 - 시뮬레이션 상태 갱신 없음: 남은 경기를 모두 기준 날짜 상태로 계산한다(한 경기 결과가 다음 경기의 승률·최근 10경기·불펜 피로 피처를 바꾸는 효과 무시). 시즌 초 가을야구 확률이 너무 확신에 차 보이는지 사이트에서 보고 필요하면 주 단위 상태 갱신을 검토.
 - 예고 선발 이력: `starters.jsonl`은 경기당 가장 최근 발표만 남긴다(3단계 항목과 같음). 되감기는 그래서 실제 선발을 쓴다. 2027부터 예고 발표 이력을 따로 쌓으면 "예고 vs 실제" 차이와 라이브 성적 차이를 설명할 수 있다.
 - 6자리 지문 경계 위험: `features_fingerprint`는 실수를 소수 6자리로 반올림하므로, 어떤 값이 반올림 경계에 정확히 걸리면 플랫폼에 따라 지문이 달라져 ci가 실패할 수 있다(지금은 Linux·Windows 같음). 그런 실패가 나면 `assert_frame_equal(rtol=1e-9)` 값 비교로 판정을 옮기는 것을 검토.
-- 박스스코어 재수집 반복 요청: 같은 실행 안의 2중 요청은 수집 창 이전(`before`)으로 잘라 없앴지만(4d1c4f6), 끝내 받을 수 없는 옛 FINAL 경기는 하루 두 번 실행마다 다시 요청된다(최대 20개 × 5초). 실패 횟수 기록·포기 규칙 검토(지금 2026에는 박스스코어 없는 정규시즌 FINAL 0경기).
+- 박스스코어 재수집 반복 요청: 같은 실행 안의 2중 요청은 수집 창 이전(`before`)으로 잘라 없앴지만(4d1c4f6), 끝내 받을 수 없는 옛 FINAL 경기는 하루 두 번 실행마다 다시 요청된다(최대 20개 × 5초). 실패 횟수 기록·포기 규칙 검토(지금 2026에는 박스스코어 없는 정규시즌 FINAL 0경기). 최종 수정 라운드부터 얼린 시즌(2015~2026)은 재수집하지 않고(얼린 산출물 parity 보호), 수집이 예외로 멈춘 실행도 재수집을 건너뛴다 — 그래서 이 문제는 2027부터 다시 생긴다. 한글 이름 투표는 정규시즌 FINAL 기록표만 센다(`korean_names`).
 - 등록된 포스트시즌 시리즈가 데이터에서 끝나지 않은 채 남으면(예: 마지막 경기가 LIVE로 멈춤) 다음 시리즈가 시작될 때까지 "진행 중" 카드로 보인다.
 - `config/postseason.yaml`은 사람이 갱신한다: 2026 한국시리즈 상대(`teams: [KT, null]`, `start: null`)를 플레이오프가 끝나면 채운다. 2027부터 대진을 데이터에서 도출할 수 있는지 검토.
 - 테스트 소소: 같은 날 2경기(더블헤더) 합성 되감기 테스트, `rewind._raw_prob`와 `predict`의 확률 계산 중복, 쓰기 도중 실패하는 원자적 쓰기 테스트, 등록되지 않은 시즌의 `round` 폴백 테스트.

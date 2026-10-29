@@ -25,10 +25,11 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
           라이브 v0.2         models/win_model.pkl    (2015~2026 전체 학습, 주간 재학습)
           팀 모델 team-2026   models/team-2026.pkl    (선발 피처 없는 19개, 2015~2024 학습)
                               → 가을야구·시리즈 몬테카를로 1만 회 → outlook 블록 (latest.json, 되감기)
+                                (시리즈의 오늘 경기만 라이브 v0.2의 선발 포함 확률)
         → GitHub Actions
             daily.yml           매일 09:07, 17:07 KST  수집 + 추론 + outlook
-            weekly_retrain.yml  월요일 03:07 KST       라이브 재학습 + 군집 재계산 + parity
-            ci.yml              push · PR             테스트 + parity
+            weekly_retrain.yml  월요일 03:07 KST       라이브 재학습 + 군집 확인(바뀌면 실패) + 전체 parity(노트북 포함)
+            ci.yml              push · PR             테스트 + parity (--quick)
           → data/public/*.json, *.csv
             → 사이트 (5단계)
 
@@ -216,13 +217,14 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 
 | 워크플로 | 언제 (KST) | 하는 일 | 결과 |
 | --- | --- | --- | --- |
-| [`daily.yml`](.github/workflows/daily.yml) | 매일 09:07, 17:07 (UTC `7 0`, `7 8`) + 수동 | [`run_pipeline.py`](scripts/run_pipeline.py): 대상일 −7~+14일 일정·박스스코어 수집 → 오늘 경기가 있으면 예고 선발 → 수집 창 이전인데 박스스코어가 없는 정규시즌 FINAL 재수집(최신순 20개) → `history.csv` 적중 기록 갱신 → 라이브 v0.2 추론 + `outlook` → `latest.json`(경기 있는 날만)·`status.json` | `github-actions[bot]`이 `data/raw`·`data/public`을 `auto: predictions YYYY-MM-DD-HHMM`으로 커밋, 수집 실패 시 `collect-failure` 이슈 |
-| [`weekly_retrain.yml`](.github/workflows/weekly_retrain.yml) | 매주 월요일 03:07 (UTC 일요일 `7 18`) + 수동 | 피처 재생성 → `train_win live --skip-if-same`(예측이 그대로면 쓰지 않음) → 군집 후보 fit → `cluster compare --types`(유형 정의가 같은지, 유형표 해시가 바뀌었는지) → 유형표가 바뀌었을 때만 정식 `cluster fit` + `publish` → `check_parity --quick --require-live` | main에서만 `auto: weekly retrain YYYY-MM-DD`로 커밋(바뀐 것이 없으면 커밋 없음), 실패 시 `parity-failure` 이슈 |
+| [`daily.yml`](.github/workflows/daily.yml) | 매일 09:07, 17:07 (UTC `7 0`, `7 8`) + 수동 | [`run_pipeline.py`](scripts/run_pipeline.py): 대상일 −7~+14일 일정·박스스코어 수집 → 오늘 경기가 있으면 예고 선발 → 수집 창 이전인데 박스스코어가 없는 정규시즌 FINAL 재수집(최신순 20개 — 얼린 시즌 2015~2026은 하지 않음, 위 수집이 예외로 멈춘 실행도 건너뜀) → `history.csv` 적중 기록 갱신 → 라이브 v0.2 추론 + `outlook` → `latest.json`(경기 있는 날만)·`status.json` (30분 제한) | `github-actions[bot]`이 `data/raw`·`data/public`을 `auto: predictions YYYY-MM-DD-HHMM`으로 커밋, 수집 실패 시 `collect-failure` 이슈 |
+| [`weekly_retrain.yml`](.github/workflows/weekly_retrain.yml) | 매주 월요일 03:07 (UTC 일요일 `7 18`) + 수동 | 피처 재생성 → `train_win live --skip-if-same`(예측과 manifest의 `live.features_fingerprint`가 모두 그대로면 쓰지 않음) → 군집 후보 fit → `cluster compare --types`(유형 정의가 같은지, 유형표 해시가 바뀌었는지) → 유형표가 바뀌었으면(`types_changed=1`) **실패**("frozen cluster inputs changed — refreeze by hand", 자동 fit·publish 없음) → 전체 `check_parity --require-live`(노트북 02~05 포함) | main에서만 `auto: weekly retrain YYYY-MM-DD`로 커밋(바뀐 것이 없으면 커밋 없음), 실패 시 `parity-failure` 이슈 |
 | [`ci.yml`](.github/workflows/ci.yml) | main push, PR | `pytest -m "not slow"` + `check_parity --quick` (ubuntu, 30분 제한, 같은 브랜치의 이전 실행 취소) | 위 `ci · parity` 배지 |
 
 - 권한은 `daily`·`weekly`가 `contents: write` + `issues: write`, `ci`가 `contents: read`입니다. 시크릿은 쓰지 않습니다.
 - 의존성은 런타임 [`requirements.txt`](requirements.txt)(일일·주간)와 개발용 [`requirements-dev.txt`](requirements-dev.txt)(`-r requirements.txt` + pytest·matplotlib·nbformat·nbclient·nbconvert·ipykernel, ci·주간)로 나눴습니다. 모두 `==` 고정이고 numpy는 1.26.4를 유지합니다.
-- `model_report.json`, `models/report-2026.pkl`, `models/team-2026.pkl`, 되감기 JSON은 주간 재학습이 덮어쓰지 않습니다(고정). 주간 재학습이 바꾸는 것은 `models/win_model.pkl`과, 유형표가 바뀌었을 때의 `models/clusters.pkl`·`players.json`·`teams.json`입니다.
+- `model_report.json`, `models/report-2026.pkl`, `models/team-2026.pkl`, `models/clusters.pkl`, `players.json`·`teams.json`, 되감기 JSON은 주간 재학습이 덮어쓰지 않습니다(고정). 주간 재학습이 바꾸는 것은 `models/win_model.pkl`과 manifest의 `live` 항목뿐입니다. 군집 유형표가 커밋본과 달라지면(얼린 2015~2026 박스스코어가 바뀐 것) 주간 재학습은 실패하고 `parity-failure` 이슈를 엽니다 — 원인을 확인한 뒤 `cluster fit`·`publish`·`train_win report --force`로 사람이 다시 얼립니다.
+- 얼린 시즌(2015~2026)의 박스스코어는 일일 작업이 다시 받지 않습니다(빠진 박스스코어 재수집은 얼리지 않은 시즌만). 그래서 얼린 산출물의 parity가 매일 수집 때문에 깨지지 않습니다.
 - 첫 일일 실행: [Actions run](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40533547898). Linux(ubuntu)에서 테스트와 parity가 모두 통과한 첫 ci 실행: [Actions run](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40882643905). 주간 재학습의 첫 정기 실행은 2026-11-02(월)입니다.
 
 ### 전망 카드 (`outlook`)
@@ -231,16 +233,17 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 
 | `type` | 언제 | 내용 |
 | --- | --- | --- |
-| `series` | 등록된 포스트시즌 시리즈가 진행 중일 때 (경기가 없는 날 포함) | `name`, `best_of`, `teams`, `wins`(경기 전 기준 전적), `win_prob`(양 팀 시리즈 승리 확률), `most_common_result`(가장 흔한 최종 전적), `goes_distance_prob`(최종전까지 갈 확률), `games_remaining_max`, `next_game_date` |
+| `series` | 등록된 포스트시즌 시리즈가 진행 중일 때 (경기가 없는 날 포함) | `name`, `best_of`, `teams`, `head_start`(시작할 때 안고 들어간 승수, 보통 `[0, 0]`), `wins`(경기 전 기준 전적 — `head_start` 포함), `win_prob`(양 팀 시리즈 승리 확률), `most_common_result`(가장 흔한 최종 전적), `goes_distance_prob`(최종전까지 갈 확률), `games_remaining_max`, `today_game_prob_source`(오늘 경기 확률의 출처: `"win_model (starter-inclusive)"` 또는 `"team_model"`), `next_game_date` |
 | `playoff_race` | 정규시즌 날짜 (되감기의 모든 날짜) | `teams`: 팀 코드별 `wins`, `losses`, `rank_now`(현재 순위), `exp_wins`(시즌 종료 기대 승수), `playoff_prob`(가을야구 = 정규시즌 5위 이내 확률) |
 | `next_game` | 그 밖 (시범경기, 등록되지 않은 시리즈, 비시즌) | `next_game_date` (취소 제외 다음 경기 날짜 또는 null) |
 
-- **확률 모델**: 미래 경기 확률은 선발 없는 팀 모델 `team-2026`([`models/team-2026.pkl`](models/team-2026.pkl), 팀 피처 19개, report-2026과 같은 2015~2024 학습·2025 선택 절차 — `model_report.json`의 `ablation.no_starter`와 같은 모델, 2026 정확도 0.547)로 냅니다. 미래 경기의 선발은 아직 모르기 때문입니다.
+- **확률 모델**: 미래 경기 확률은 선발 없는 팀 모델 `team-2026`([`models/team-2026.pkl`](models/team-2026.pkl), 팀 피처 19개, report-2026과 같은 2015~2024 학습·2025 선택 절차 — `model_report.json`의 `ablation.no_starter`와 같은 모델, 2026 정확도 0.547)로 냅니다. 미래 경기의 선발은 아직 모르기 때문입니다. 단, 시리즈 카드에서 **오늘 경기**는 예고 선발을 아는 라이브 승패 모델의 확률(같은 날 `latest.json` 경기 항목의 `home_win_prob`, 반올림 전 값)을 씁니다 — 오늘 경기의 실제 홈이 대진표의 다음 순번 홈과 같을 때만이고, 그러면 `today_game_prob_source`가 `"win_model (starter-inclusive)"`입니다(시리즈 도중 경기 없는 날 등은 `"team_model"`).
 - **몬테카를로**: 남은 경기의 결과를 그 확률로 무작위로 1만 번 뽑아 결과를 셉니다(`numpy.random.default_rng(42)`, 같은 입력이면 같은 JSON). 각 경기 확률은 기준 날짜의 팀 상태로 한 번 계산하고, 시뮬레이션 안에서는 상태를 갱신하지 않습니다.
 - **가을야구 동률**: 승률(무승부 제외)이 같은 팀들이 걸친 순위 [lo, hi]에 대해 각 팀에 `clip((5−lo+1)/(hi−lo+1), 0, 1)`만큼 진출 몫을 나눠 줍니다. 그래서 시뮬레이션마다 정확히 5자리가 배분됩니다. `rank_now`는 동률이면 높은 순위(정수)입니다.
-- **시리즈 입력**: 대진(팀, `best_of`, 1차전 날짜, 경기별 홈팀)은 사람이 유지하는 [`config/postseason.yaml`](config/postseason.yaml)에서 읽고, 지금까지의 전적은 `games.jsonl`에서 기준 날짜 **전**에 끝난 경기(`date < on`)로 셉니다. 우천 취소 경기는 다음 경기가 같은 순번(같은 홈)으로 치러지고, 포스트시즌 무승부는 경기 순번(홈 슬롯)을 하나 씁니다.
+- **시리즈 입력**: 대진(팀, `best_of`, 1차전 날짜, 경기별 홈팀, 선택 `head_start`)은 사람이 유지하는 [`config/postseason.yaml`](config/postseason.yaml)에서 읽고, 지금까지의 전적은 `head_start` + `games.jsonl`에서 기준 날짜 **전**에 끝난 경기(`date < on`)로 셉니다. 취소 경기는 다음 경기가 같은 순번(같은 홈)으로 치러지고, 포스트시즌 무승부는 경기 순번(홈 슬롯)을 하나 씁니다.
+- **와일드카드 1승 어드밴티지**: 4위 팀이 1승을 안고 시작하는 2선승제는 `best_of: 3`, `head_start: [1, 0]`(팀0 = 4위)으로 적습니다. `homes`는 실제 경기 수(`best_of − sum(head_start)` = 2)만큼이고, 4위는 1승, 5위는 2승이 더 필요합니다. 2026: LG(4위, 두 경기 모두 홈) 대 두산 — 1차전 전 카드는 전적 1-0, LG 0.8194(경기당 LG 승 확률이 p면 1 − (1 − p)²). 실제로는 LG가 1차전을 이겨 2-0으로 끝났습니다. 5위가 1차전을 이기면 1-1로 2차전이 남습니다.
 - 출력 확률(`playoff_prob`, `exp_wins`, `win_prob` 등)은 소수 4자리입니다.
-- **예 (2026-10-29)**: 플레이오프 삼성(SS) 대 KIA(HT) 1승 1패 → 시리즈 승리 확률 SS 0.5279 / HT 0.4721, 가장 흔한 결말 3-2, 5차전까지 갈 확률 0.5081. 커밋된 `latest.json`(10-29 14:40 실행)은 이 기능 전에 만들어져 `outlook`이 아직 없고, 다음 일일 실행부터 들어갑니다.
+- **예 (2026-10-29)**: 플레이오프 삼성(SS) 대 KIA(HT) 1승 1패, 오늘 3차전(KIA 홈)은 예고 선발 포함 확률 SS 0.5536, 4차전은 팀 모델 SS 0.4974, 5차전(삼성 홈) SS 0.5629 → 시리즈 승리 확률 SS 0.5579 / HT 0.4421, 가장 흔한 결말 3-2, 5차전까지 갈 확률 0.5083(`today_game_prob_source: "win_model (starter-inclusive)"`). 오늘 경기도 팀 모델로 굴리면 SS 0.5279였습니다. 커밋된 `latest.json`(10-29 14:40 실행)은 이 기능 전에 만들어져 `outlook`이 아직 없고, 다음 일일 실행부터 들어갑니다.
 
 ### 되감기 (`rewind/2026/`)
 
@@ -279,40 +282,42 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 | 다시 학습한 report-2026·team-2026·라이브 번들의 예측 | 커밋된 pkl의 예측 (8,465행) | 차이 1e-9 이내 (pkl 바이트는 `trained_at` 때문에 비교하지 않음) |
 | `players.json`·`teams.json` 재생성 | 커밋본 | 정확히 같음 (메타 제외) |
 | 되감기 시즌 전체 재생성 | `rewind/2026/`의 166개 파일 (파일 목록 포함) | 정확히 같음 (`generated_at`·`commit_sha` 제외) |
-| 노트북 02~05 실행 | — | 오류 출력 0 (`--quick`이면 건너뜀) |
+| 노트북 02~05 실행 (넷 다 필수 — 없으면 실패) | 노트북 안의 assert (값 지문, 보고서 실수 상대 1e-9, 예측 차이 1e-9 — `kbo_predict.parity`, 위와 같은 규칙) | 오류 출력 0 (`--quick`이면 건너뜀) |
 
 - **바이트가 아니라 값으로**: 같은 코드로도 Linux(OpenBLAS)와 Windows(MKL)는 `features.parquet`의 마지막 비트가 달라 파일 SHA256이 다릅니다. 실제로 처음 Linux ci([40879259726](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40879259726))는 이 한 줄만 달라 실패했고(예측 차이 7e-14 이하, 나머지는 모두 같음), 그 뒤 parquet 판정을 값 지문으로 바꿔 통과했습니다([40882643905](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40882643905)). 값 지문 = 실수 열을 소수 6자리로 반올림한 CSV의 SHA256(`features.features_fingerprint`)이고, 현재 값은 `752b4319…`(피처), `3419c8c1…`(상성)입니다.
 - **얼린 시즌**: report-2026·team-2026·clusters-2026과 그 하류(사이트 JSON, 되감기)는 2015~2026(`FROZEN_SEASONS`)만으로 다시 만들어 비교하므로, 2027 경기가 쌓여도 이 비교는 깨지지 않습니다. 라이브 모델은 manifest의 `live.features_fingerprint`가 지금 parquet와 같을 때만 비교하고(다르면 건너뜀), 주간 재학습은 `--require-live`로 건너뜀도 실패로 봅니다.
 - **실행 순서**: 군집 단계는 맨 마지막에 돕니다. 군집 계산의 단일 스레드 제한이 끝난 뒤에도 MKL이 1스레드로 남는 일이 있어, 같은 프로세스에서 이어 학습하면 로지스틱 회귀의 마지막 자리가 달라지기 때문입니다.
-- **명령과 시간** (Windows 기준): `python -X utf8 scripts/check_parity.py --quick` 약 39초(ci·주간 재학습), 노트북까지 포함한 전체 실행 약 90초. 결과는 항목별 표로 찍고, 하나라도 다르면 어떤 파일·키가 다른지 출력하며 exit 1입니다.
+- **노트북도 플랫폼 간으로**: 노트북 03·04의 동일성 셀은 `check_parity`와 같은 함수(`kbo_predict.parity.first_diff`, `same_predictions_close`)와 값 지문(`matchup_fingerprint`)으로 판정하고, 파일 바이트 SHA256은 정보로만 찍습니다. 그래서 Linux에서 도는 주간 재학습의 전체 parity(노트북 포함)도 Windows와 같은 기준으로 통과해야 합니다.
+- **명령과 시간** (Windows 기준): `python -X utf8 scripts/check_parity.py --quick` 약 37초(ci), 노트북까지 포함한 전체 실행 약 100초(주간 재학습, `--require-live`). 어느 폴더에서 실행해도 스크립트가 있는 저장소를 검사합니다(`--repo` 기본값). 결과는 항목별 표로 찍고, 하나라도 다르면 어떤 파일·키가 다른지 출력하며 exit 1입니다.
 
 ### 해석할 때 주의할 점 (한계)
 
-- **시리즈 시뮬레이션의 오늘 경기**: 스펙은 "오늘 경기는 선발 포함 확률, 이후 경기는 팀 모델"인데, 지금은 오늘 경기도 선발 없는 팀 모델로 값을 매깁니다. 예: 10-29 3차전을 시뮬레이션은 SS 승 49.7%로 보지만, 같은 경기의 예측 카드(선발 포함, v0.2)는 SS 승 55.4%입니다. 5단계 전에 고칩니다.
+- **시리즈 시뮬레이션에서 선발을 아는 건 오늘 경기뿐입니다.** 오늘 경기는 예측 카드와 같은 선발 포함 확률(10-29 3차전 SS 55.4%)로, 그 뒤 경기는 선발 없는 팀 모델로 굴립니다(해결: 예전에는 오늘 경기도 팀 모델 SS 49.7%로 굴려 카드와 숫자가 어긋났습니다). 선발 로테이션은 반영하지 않습니다.
 - **라이브 전망의 팀 모델은 2015~2024 학습**입니다(`team-2026`). 2015~2026으로 다시 학습한 라이브 팀 모델은 2027 시즌 전으로 미뤘습니다.
 - **시뮬레이션 안에서 팀 상태가 바뀌지 않습니다.** 한 경기 결과가 다음 경기의 승률·최근 10경기 같은 피처를 바꾸는 효과를 무시하고, 남은 경기를 모두 기준 날짜 상태로 계산합니다(불펜 피로 피처도 고정).
 - **가을야구 동률 배분은 실제 KBO 규정과 다릅니다.** 실제로는 상대 전적이나 순위 결정전으로 가르지만, 여기서는 승률만 보고 진출 몫을 나눕니다.
 - **포스트시즌 대진은 사람이 갱신합니다.** `config/postseason.yaml`에 없는 시리즈는 `next_game` 카드가 되고, 2026 한국시리즈는 상대가 정해지면 채워야 합니다. 데이터에서 끝나지 않은 채 남은 등록 시리즈는 다음 시리즈가 시작될 때까지 "진행 중"으로 보입니다.
 - **되감기는 실제 선발 가정입니다.** 백테스트와 같이 "경기 전에 선발을 정확히 안다"는 가정 위의 예측입니다. 예고 선발 이력은 따로 쌓지 않습니다(`starters.jsonl`은 경기당 가장 최근 발표만).
 - **값 지문의 경계**: 어떤 값이 소수 6자리 반올림 경계에 정확히 걸리면 플랫폼에 따라 지문이 달라질 수 있습니다(지금 데이터에서는 Linux·Windows가 같음).
-- **주간 재학습의 "유형표가 바뀐" 경로(`types_changed=1`)는 Actions에서 아직 돈 적이 없습니다.** 지금 데이터로는 유형표가 그대로라 정식 fit·publish를 건너뜁니다.
+- **주간 재학습은 얼린 군집을 스스로 다시 얼리지 않습니다.** 유형표가 바뀌면(`types_changed=1`) 실패로 멈추고 사람이 다시 얼립니다. 이 실패 경로는 Actions에서 아직 돈 적이 없습니다(지금 데이터로는 유형표가 그대로).
+- **`history.csv`는 아직 1행입니다**: 2026-10-29 14050(v0.2, 정산 전). 라이브 적중률은 기록이 쌓여야 말할 수 있습니다.
 
 ## 공개 파일
 
-`data/public/`에 있습니다. `latest.json`, `history.csv`, `status.json`은 매 실행마다 갱신되고(`latest.json`은 경기가 있는 날만), `model_report.json`과 `rewind/`는 고정, `players.json`·`teams.json`은 `python -m kbo_predict.cluster publish`(수동 또는 주간 재학습에서 유형표가 바뀌었을 때)를 돌릴 때만 바뀝니다. 사이트에서는 아래 주소를 기준으로 읽을 수 있습니다.
+`data/public/`에 있습니다. `latest.json`, `history.csv`, `status.json`은 매 실행마다 갱신되고(`latest.json`은 경기가 있는 날만), `model_report.json`과 `rewind/`는 고정, `players.json`·`teams.json`은 사람이 `python -m kbo_predict.cluster publish`를 돌릴 때만 바뀝니다(주간 재학습은 바꾸지 않음). 사이트에서는 아래 주소를 기준으로 읽을 수 있습니다.
 
 `https://raw.githubusercontent.com/kimminseo2323-prog/2610_KBO_predict/main/data/public/`
 
 | 파일 | 내용 |
 | --- | --- |
 | [`latest.json`](data/public/latest.json) | 오늘 경기 예측: 팀, 구장, 시간, 팀별 예고 선발(`starter`: 이름·ERA·K/9·BB/9·이닝·선발 등판 수, `type`: 직전 시즌 투수 유형 `{id, name}` 또는 직전 시즌 자격이 없으면 null), 홈 승률, 기여도(`contribution_pp`) 상위 5개 요인, `round`(`preseason`/`regular`/`postseason`), 메타(`generated_at`, `commit_sha`, `run_url`, `model_version`, `mode`). 취소 경기는 `status: "CANCELED"`, `home_win_prob: null`, `factors: []` |
-| `latest.json`의 `outlook` | 전망 카드 하나: `type`이 `series`(진행 중인 포스트시즌 시리즈: 전적·시리즈 승리 확률·가장 흔한 결말·최종전 확률·`next_game_date`), `playoff_race`(정규시즌: 팀별 승·패·현재 순위·기대 승수·가을야구 확률), `next_game`(그 밖: `next_game_date`) 중 하나, 모두 `as_of`. 팀 모델 `team-2026` + 몬테카를로 1만 회, 확률 소수 4자리 (위 "전망 카드" 절). 팀 모델을 읽지 못하면 `next_game` 꼴로 대신하고 `collect_errors`에 남김 |
+| `latest.json`의 `outlook` | 전망 카드 하나: `type`이 `series`(진행 중인 포스트시즌 시리즈: 전적·시리즈 승리 확률·가장 흔한 결말·최종전 확률·오늘 경기 확률 출처·`next_game_date` — 오늘 경기는 선발 포함 확률), `playoff_race`(정규시즌: 팀별 승·패·현재 순위·기대 승수·가을야구 확률), `next_game`(그 밖: `next_game_date`) 중 하나, 모두 `as_of`. 팀 모델 `team-2026` + 몬테카를로 1만 회, 확률 소수 4자리 (위 "전망 카드" 절). 팀 모델을 읽지 못하면 `next_game` 꼴로 대신하고 `collect_errors`에 남김 |
 | [`rewind/{season}/{date}.json`](data/public/rewind/2026/2026-09-01.json) | 되감기: 그날의 `latest.json`과 같은 모양 + 경기별 `result`(`home_score`, `away_score`, `winner`, `pick`, `correct`; 취소 경기는 null)와 `outlook`(`playoff_race`). 메타는 `mode: "rewind"`, `model_version: "report-2026"`, `team_model_version: "team-2026"`, `starter_source: "actual (boxscore pitching order 1)"`. 2026 정규시즌 165일, 압축 JSON 합계 933,712바이트(`index.json` 포함, 약 0.93 MB) |
 | [`rewind/{season}/index.json`](data/public/rewind/2026/index.json) | 되감기 목차: `season`, `model_version`, `dates`(날짜별 `date`, `games`, `decided`, `correct`), `accuracy`(0.594), `n_decided`(702), `note`(적중 규칙). 날짜별 `correct` 합 417 |
 | [`model_report.json`](data/public/model_report.json) | 모델 성적표(`report-2026`): 두 알고리즘의 검증·시험 지표, 기준선 3종, McNemar 검정, 캘리브레이션 구간표, 피처 중요도, 선발 피처 제외 비교, 선발 소스 표기, 유형 상성 피처 전후 비교(`matchup_feature_ablation`), 군집 품질(`cluster_quality`: K별 실루엣·유지율, 유형별 인원·대표 선수·중심 지표, 소속 확률 방식). 한 번 생성해 고정 (3단계에서 두 블록을 채우려고 다시 만들었고 기존 키의 값은 그대로) |
 | [`players.json`](data/public/players.json) | 선수-시즌 2,918개(타자 1,327 + 투수 1,591, 2015~2026). 메타(`generated_at`, `commit_sha`, `model_version: "clusters-2026"`, `fit_seasons`, `note`)와 `types`(그룹별 유형 `id`·`name`·`blurb`), `players[]`: `group`, `season`, `player_id`, `name`(로마자), `name_ko`, `team`, `pos`, `type {id, name}`, `prob`, `membership`(유형별 소속 확률), `x`·`y`(PCA 2D 좌표), `stats`(타자: 타석·타율·출루율·홈런·도루·K%·BB%·ISO·BABIP / 투수: 등판·선발·이닝·ERA·K%·BB%·HR%·BABIP), `similar`(유사 선수 5명 — 서로 다른 선수, 선수마다 가장 비슷한 시즌 하나; `player_id`·`season`·`similarity`만 — 이름은 같은 파일에서 찾음). 압축 JSON 1.77 MB (gzip -9 기준 약 270 KB) |
 | [`teams.json`](data/public/teams.json) | 팀-시즌 120개(10구단 × 2015~2026). `season`, `code`, `name`, `games`, `wins`·`losses`·`ties`, `win_pct`(무승부 제외), `home_pct`, `away_pct`, `pyth_pct`(피타고리안), `model_expected`(report-2026 모델의 홀드아웃 예측 평균, 2026만 — 2015~2025는 학습·검증 시즌이라 null), `roster_types`(타자는 타석, 투수는 아웃 수로 가중한 유형 비중), `vs`(상대 팀별 승률) |
-| [`history.csv`](data/public/history.csv) | 과거 예측과 결과 기록: date, game_id, home, away, home_win_prob, model_version, predicted_at, status, winner, correct |
+| [`history.csv`](data/public/history.csv) | 과거 예측과 결과 기록: date, game_id, home, away, home_win_prob, model_version, predicted_at, status, winner, correct. 지금은 1행(2026-10-29 14050, v0.2, 아직 정산 전) |
 | [`status.json`](data/public/status.json) | 파이프라인 상태: generated_at, run_url, commit_sha, mode, next_game_date, games_today, model_version, collect_errors (경기가 없는 날도 갱신). `mode`는 오늘부터 14일 안에 취소되지 않은 경기가 있으면 `live`, 없으면 `rewind`(비시즌 — 사이트가 되감기를 보여 줌) |
 
 수집에 실패한 경기가 있으면(`collect_errors`가 비어 있지 않으면) 일일 워크플로가 `collect-failure` 라벨의 GitHub 이슈를 새로 열거나 기존 이슈에 코멘트합니다([`scripts/collect_errors.py`](scripts/collect_errors.py)). 공개 파일·`games.jsonl`·`starters.jsonl`은 임시 파일에 쓴 뒤 바꿔 넣으므로(원자적 쓰기), 실행이 중간에 죽어도 반쯤 쓴 파일이 남지 않습니다.
@@ -363,7 +368,7 @@ config/postseason.yaml                           포스트시즌 대진표 (사�
 
 ## 노트북
 
-`notebooks/`에 단계별 설명 노트북을 둡니다. 01~05는 실행 결과를 포함하고 네트워크 없이 실행되며, `tests/test_notebooks.py`(slow)가 실행을 검증하고 `scripts/check_parity.py`가 02~05를 다시 실행합니다. 노트북은 로직을 복사하지 않고 `src/kbo_predict/`·`scripts/`의 같은 함수를 부르며, 마지막에 결과가 커밋된 산출물과 같은지 확인합니다: 02는 만든 parquet의 값 지문이 `models/manifest.json`의 `features_fingerprint`와, 03은 결과가 `data/public/model_report.json`과(상성 parquet는 `matchup_fingerprint`와), 04는 유형표가 `types_sha256`과, 05는 노트북에서 계산한 오늘 경기 예측·`outlook`이 `run_pipeline`을 임시 폴더에 실행한 `latest.json`과, 다시 만든 2026-09-01 되감기가 커밋된 `rewind/2026/2026-09-01.json`과 같은지 봅니다. 03은 02가 저장한 `data/processed/features.parquet`를 읽으므로 02를 먼저 실행합니다.
+`notebooks/`에 단계별 설명 노트북을 둡니다. 01~05는 실행 결과를 포함하고 네트워크 없이 실행되며, `tests/test_notebooks.py`(slow)가 실행을 검증하고 `scripts/check_parity.py`가 02~05를 다시 실행합니다(넷 다 필수, 주간 재학습에서 Linux로도 실행). 노트북은 로직을 복사하지 않고 `src/kbo_predict/`·`scripts/`의 같은 함수를 부르며, 마지막에 결과가 커밋된 산출물과 같은지 확인합니다: 02는 만든 parquet의 값 지문이 `models/manifest.json`의 `features_fingerprint`와, 03은 결과가 `data/public/model_report.json`과(상성 parquet는 `matchup_fingerprint`와), 04는 유형표가 `types_sha256`과, 05는 노트북에서 계산한 오늘 경기 예측·`outlook`이 `run_pipeline`을 임시 폴더에 실행한 `latest.json`과, 다시 만든 2026-09-01 되감기가 커밋된 `rewind/2026/2026-09-01.json`과 같은지 봅니다. 03은 02가 저장한 `data/processed/features.parquet`를 읽으므로 02를 먼저 실행합니다.
 
 05는 "오늘"을 2026-10-29로 고정합니다(저장된 예고 선발이 있는 날). 그날 포스트시즌 경기 하나를 상태 → 선발 블록 → 예측과 요인 → 시리즈 몬테카를로(정확한 경우의 수 계산과 비교, 시뮬레이션 횟수별 수렴) → 되감기와 누적 적중률 → `history.csv` → parity 순서로 따라갑니다(41셀, 약 5초).
 
@@ -390,7 +395,7 @@ python -m kbo_predict.cluster publish   # players.json, teams.json (report-2026.
 python -m kbo_predict.cluster compare --against models/clusters.pkl --new <새 pkl> [--types <유형 CSV>]   # 군집 재계산이 커밋본과 같은지
 python scripts/build_rewind.py --season 2026 [--dates YYYY-MM-DD,YYYY-MM-DD]   # 되감기 JSON → data/public/rewind/2026/ (약 15초)
 python scripts/run_pipeline.py [--date YYYY-MM-DD] [--no-fetch]
-python scripts/check_parity.py [--quick] [--require-live] [--out artifacts/parity]   # parity 검사 (약 39초 / 노트북 포함 약 90초)
+python scripts/check_parity.py [--quick] [--require-live] [--out artifacts/parity]   # parity 검사 (약 37초 / 노트북 포함 약 100초)
 ```
 
 - Windows에서는 한글 출력 때문에 `python -X utf8 …`로 실행합니다.
@@ -402,11 +407,11 @@ python scripts/check_parity.py [--quick] [--require-live] [--out artifacts/parit
 - `config/cluster_labels.yaml`(유형 이름)은 패키지 위치 기준으로 찾으므로 어느 폴더에서 실행해도 같은 이름이 나옵니다. 군집은 단일 스레드로 계산해 같은 기계에서는 비트 단위로 재현되지만, 다른 BLAS(예: Linux의 Actions)에서는 마지막 자리가 다를 수 있어 커밋된 `models/clusters.pkl`이 기준입니다. `cluster compare`가 다시 맞춘 군집을 커밋본과 비교하고(중심 차이 1e-9 이내, 맞춤 시즌 라벨 동일), Linux ci에서도 유형표 해시(`types_sha256`)가 같았습니다.
 - `check_parity`는 재생성본을 `--out`(기본 `artifacts/parity/`, gitignore)에만 쓰고 `data/public`·`models` 아래로의 출력은 거부합니다. 노트북 02는 스스로 `data/processed/features.parquet`를 씁니다(gitignore).
 
-테스트는 `python -X utf8 -m pytest -q -m "not slow"`(325개, ci와 같음)이고, `-m slow`로 6개를 더 돌립니다(노트북 01~05 실행 5개 + 실데이터 `check_parity --quick` 1개). 전부 돌리려면 `python -X utf8 -m pytest -q`입니다.
+테스트는 `python -X utf8 -m pytest -q -m "not slow"`(337개, ci와 같음)이고, `-m slow`로 6개를 더 돌립니다(노트북 01~05 실행 5개 + 실데이터 `check_parity --quick` 1개). 전부 돌리려면 `python -X utf8 -m pytest -q`입니다.
 
 ## 데이터 출처
 
-- 데이터 출처: [MyKBOStats](https://mykbostats.com) (비공식 팬 사이트). robots.txt의 `Crawl-delay: 5`를 지켜 요청 간 5초를 두고, 주간 일정 페이지, 경기 박스스코어 페이지(하단 기록표 포함), 예정 경기 페이지의 예고 선발("Starting pitchers" 섹션)을 파싱합니다. 선수 이름은 사이트 표기대로 로마자이고, 한글 이름(`name_ko`)은 같은 사이트 기록표의 한글 제목에서 모았습니다. 개인 학습용입니다.
+- 데이터 출처: [MyKBOStats](https://mykbostats.com) (비공식 팬 사이트). robots.txt의 `Crawl-delay: 5`를 지켜 요청 간 5초를 두고, 주간 일정 페이지, 경기 박스스코어 페이지(하단 기록표 포함), 예정 경기 페이지의 예고 선발("Starting pitchers" 섹션)을 파싱합니다. 선수 이름은 사이트 표기대로 로마자이고, 한글 이름(`name_ko`)은 같은 사이트 기록표의 한글 제목에서 모았습니다(정규시즌 FINAL 경기의 기록표만 투표 — 계속 쌓이는 포스트시즌·시범경기 기록표가 얼린 이름표를 바꾸지 않게). 개인 학습용입니다.
 - KBO 공식 사이트는 약관상 크롤링이 금지되어 사용하지 않습니다.
 - 네이버 스포츠의 내부 API는 Python 클라이언트를 차단해(TLS/UA 수준) 수집 대상에서 뺐습니다. 우회는 시도하지 않았습니다.
 
