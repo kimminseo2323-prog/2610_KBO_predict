@@ -55,12 +55,22 @@ def _win_pct(wins: np.ndarray, losses: np.ndarray) -> np.ndarray:
     return np.where(decided > 0, wins / np.maximum(decided, 1), 0.5)
 
 
+def _playoff_credit(win_pct: np.ndarray) -> np.ndarray:
+    """[sims, 팀] 승률 → [sims, 팀] 진출 몫 (0~1). 행마다 몫의 합은 정확히 PLAYOFF_SPOTS (팀이 그보다 많을 때).
+    같은 승률 묶음이 순위 lo..hi를 차지하면(lo = 최소 순위, hi = 최대 순위) 각 팀의 몫은
+    clip((PLAYOFF_SPOTS - lo + 1) / (hi - lo + 1), 0, 1) — 묶음 안에 남은 진출 자리를 똑같이 나눈다.
+    예: 4~6위 3팀 동률 → 2자리/3팀 = 각 2/3, 5·6위 2팀 동률 → 각 0.5, 단독 7위 → 0."""
+    lo = rankdata(-win_pct, method="min", axis=-1)
+    hi = rankdata(-win_pct, method="max", axis=-1)
+    return np.clip((PLAYOFF_SPOTS - lo + 1) / (hi - lo + 1), 0.0, 1.0)
+
+
 def playoff_race(standings: dict[str, tuple[int, int]], remaining: list[tuple[str, str, float]], *,
                  n_sims: int = N_SIMS, seed: int = SEED) -> dict[str, dict]:
     """남은 경기를 n_sims번 굴려 팀별 5위 안 진출 확률을 낸다.
     standings[code] = (승, 패) — 지금까지의 정규시즌 성적. remaining = [(홈, 원정, P(홈 승))].
-    순위는 승률 내림차순. 동률은 scipy.stats.rankdata(method="average")처럼 평균 순위를 준다
-    (예: 5·6위 동률이면 둘 다 5.5위 → 둘 다 탈락). 순위 ≤ PLAYOFF_SPOTS이면 진출.
+    순위는 승률 내림차순. 동률이 진출선(5위)에 걸치면 남은 자리를 동률 팀끼리 나눠 갖는다(_playoff_credit) —
+    그래서 시뮬레이션마다 정확히 PLAYOFF_SPOTS 자리가 배분되고, 진출 확률의 합은 항상 5다.
     반환: code -> {"playoff_prob": 진출 확률, "rank_now": 현재 순위(동률은 같은 최소 순위), "exp_wins": 기대 최종 승수}."""
     codes = list(standings)
     idx = {c: i for i, c in enumerate(codes)}
@@ -87,8 +97,7 @@ def playoff_race(standings: dict[str, tuple[int, int]], remaining: list[tuple[st
     else:
         wins, losses = w0[None, :], l0[None, :]                            # 남은 경기 없음 → 지금 순위 그대로
 
-    ranks = rankdata(-_win_pct(wins, losses), method="average", axis=1)    # 시뮬레이션마다 평균 순위
-    made = (ranks <= PLAYOFF_SPOTS).mean(axis=0)
+    made = _playoff_credit(_win_pct(wins, losses)).mean(axis=0)
     exp_wins = wins.mean(axis=0)
     return {c: {"playoff_prob": float(made[i]), "rank_now": int(rank_now[i]), "exp_wins": float(exp_wins[i])}
             for i, c in enumerate(codes)}
@@ -143,32 +152,39 @@ def _iso(v) -> str | None:
     return v.isoformat() if isinstance(v, _date) else str(v)
 
 
+def _normalise(entry: dict) -> dict:
+    """YAML 시리즈 한 줄 → {"name", "teams": [코드|None, 코드|None], "best_of", "start": 'YYYY-MM-DD'|None,
+    "homes": [...]|None}. 날짜 객체는 문자열로 바꾼다. 이미 정리된 줄을 다시 넣어도 그대로 나온다."""
+    return {
+        "name": entry["name"],
+        "teams": list(entry.get("teams") or [None, None]),
+        "best_of": int(entry["best_of"]),
+        "start": _iso(entry.get("start")),
+        "homes": list(entry["homes"]) if entry.get("homes") else None,
+    }
+
+
+def _season_entries(data: dict, season: int) -> list:
+    """YAML 전체 dict(시즌 → 목록)에서 그 시즌 목록. 키가 정수든 문자열이든 받는다."""
+    return list(data.get(season) or data.get(str(season)) or [])
+
+
 def load_postseason(season: int, path=POSTSEASON_YAML) -> list[dict]:
-    """config/postseason.yaml에서 그 시즌의 시리즈 목록. 시즌이 없으면(또는 파일이 없으면) 빈 목록.
-    각 시리즈: {"name", "teams": [코드|None, 코드|None], "best_of", "start": 'YYYY-MM-DD'|None, "homes": [...]|None}."""
+    """config/postseason.yaml에서 그 시즌의 시리즈 목록(_normalise 모양). 시즌이 없으면(또는 파일이 없으면) 빈 목록."""
     path = Path(path)
     if not path.exists():
         return []
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    out = []
-    for s in data.get(season) or data.get(str(season)) or []:
-        out.append({
-            "name": s["name"],
-            "teams": list(s.get("teams") or [None, None]),
-            "best_of": int(s["best_of"]),
-            "start": _iso(s.get("start")),
-            "homes": list(s["homes"]) if s.get("homes") else None,
-        })
-    return out
+    return [_normalise(e) for e in _season_entries(data, season)]
 
 
 def _series_list(season: int, ps_config) -> list[dict]:
-    """ps_config: load_postseason 결과(list) 또는 시즌 → 목록 dict(YAML 전체 모양) 또는 None."""
+    """ps_config: load_postseason 결과(list) 또는 시즌 → 목록 dict(yaml.safe_load 그대로) 또는 None.
+    어느 쪽이든 줄마다 _normalise를 거친다 (YAML 날짜 객체와 문자열 날짜를 비교하다 깨지지 않게)."""
     if ps_config is None:
         return []
-    if isinstance(ps_config, dict):
-        return list(ps_config.get(season) or ps_config.get(str(season)) or [])
-    return list(ps_config)
+    entries = _season_entries(ps_config, season) if isinstance(ps_config, dict) else list(ps_config)
+    return [_normalise(e) for e in entries]
 
 
 def _homes(s: dict) -> list[str]:
@@ -220,72 +236,95 @@ def _remaining_regular(games: list[dict], season: int, on: str) -> list[dict]:
     return out
 
 
-def _series_wins(games: list[dict], s: dict, on: str) -> tuple[int, int]:
-    """시리즈 전적: start ≤ 날짜 < on인 두 팀 맞대결 FINAL의 (팀0 승, 팀1 승). 무승부는 세지 않는다.
+def _pair_games(games: list[dict], s: dict) -> list[dict]:
+    """시리즈 두 팀의 start 이후 맞대결 (날짜·game_id 순)."""
+    pair = {s["teams"][0], s["teams"][1]}
+    return sorted((g for g in games if g["date"] >= s["start"] and {g["home_code"], g["away_code"]} == pair),
+                  key=lambda g: (g["date"], g["game_id"]))
+
+
+def _series_record(games: list[dict], s: dict, on: str) -> tuple[int, int, int]:
+    """시리즈 전적: start ≤ 날짜 < on인 두 팀 맞대결 FINAL의 (팀0 승, 팀1 승, 무승부).
     on 당일 경기는 이미 FINAL이어도 세지 않는다 — 전망은 '그날 경기 전' 카드다 (playoff_race와 같은 기준,
-    리와인드에서 그날 결과가 그날 전망에 새지 않게)."""
-    t0, t1 = s["teams"]
-    w = [0, 0]
-    for g in games:
-        if g["status"] != "FINAL" or not s["start"] <= g["date"] < on:
-            continue
-        if {g["home_code"], g["away_code"]} != {t0, t1}:
+    리와인드에서 그날 결과가 그날 전망에 새지 않게). 점수 없는 FINAL은 세지 않는다."""
+    t0 = s["teams"][0]
+    w0 = w1 = draws = 0
+    for g in _pair_games(games, s):
+        if g["status"] != "FINAL" or g["date"] >= on:
             continue
         hs, as_ = g["home_score"], g["away_score"]
-        if hs is None or as_ is None or hs == as_:
+        if hs is None or as_ is None:
             continue
-        winner = g["home_code"] if hs > as_ else g["away_code"]
-        w[0 if winner == t0 else 1] += 1
-    return w[0], w[1]
+        if hs == as_:
+            draws += 1
+            continue
+        if (g["home_code"] if hs > as_ else g["away_code"]) == t0:
+            w0 += 1
+        else:
+            w1 += 1
+    return w0, w1, draws
+
+
+def _decided(s: dict, w0: int, w1: int) -> bool:
+    need = s["best_of"] // 2 + 1
+    return w0 >= need or w1 >= need
 
 
 def _active_series(season: int, on: str, games: list[dict], ps_config) -> dict | None:
-    """오늘(on) 경기의 두 팀이 맞붙는, 이미 시작한(start ≤ on) 등록 시리즈. 여럿이면 가장 늦게 시작한 것."""
-    today = {frozenset((g["home_code"], g["away_code"])) for g in games if g["date"] == on}
+    """on 시점에 진행 중인 등록 시리즈: 두 팀이 정해졌고 start ≤ on이며 on 전날까지 아직 승부가 안 난 것.
+    그날 경기가 없어도(이동일·휴식일) 진행 중이면 고른다. 여럿이면 가장 늦게 시작한 것."""
     found = None
     for s in _series_list(season, ps_config):
         t0, t1 = s["teams"]
-        if t0 is None or t1 is None or s.get("start") is None or s["start"] > on:
+        if t0 is None or t1 is None or s["start"] is None or s["start"] > on:
             continue
-        if frozenset((t0, t1)) in today and (found is None or s["start"] >= found["start"]):
+        w0, w1, _ = _series_record(games, s, on)
+        if _decided(s, w0, w1):
+            continue
+        if found is None or s["start"] >= found["start"]:
             found = s
     return found
 
 
 def _series_outlook(s: dict, on: str, games: list[dict], state, team_bundle, n_sims: int, seed: int) -> dict:
     t0, t1 = s["teams"]
-    w0, w1 = _series_wins(games, s, on)
-    homes = _homes(s)
-    need = s["best_of"] // 2 + 1
-    if w0 >= need or w1 >= need:
-        left_homes = []
-    else:
-        left_homes = homes[w0 + w1:]          # 이미 치른 경기 수만큼 앞의 홈 순서를 건너뛴다
+    w0, w1, draws = _series_record(games, s, on)
+    n_left = 0 if _decided(s, w0, w1) else s["best_of"] - w0 - w1
+    # 홈 순서: 이미 치른 경기(승패 + 무승부) 수만큼 앞을 건너뛴다. 무승부로 경기가 늘어 homes가 모자라면
+    # 마지막 경기의 홈(최종전 홈)이 이어서 홈을 맡는다고 본다.
+    all_homes = _homes(s)
+    left_homes = (all_homes[w0 + w1 + draws:] + [all_homes[-1]] * n_left)[:n_left]
     # 남은 경기 각각의 P(팀0 승): 홈팀 기준 모델 확률을 팀0 기준으로 뒤집는다. 날짜는 모두 오늘(on)로 둔다.
     pairs = [{"home_code": h, "away_code": t1 if h == t0 else t0, "date": on} for h in left_homes]
     p_home = game_probs(team_bundle, pairs, state)
     p_t0 = [p if h == t0 else 1.0 - p for h, p in zip(left_homes, p_home)]
     res = series(s["best_of"], (w0, w1), ["team0" if h == t0 else "team1" for h in left_homes], p_t0,
                  n_sims=n_sims, seed=seed)
+    upcoming = [g["date"] for g in _pair_games(games, s) if g["date"] >= on and g["status"] != "CANCELED"]
     return {"type": "series", "as_of": on, "name": s["name"], "best_of": s["best_of"], "teams": [t0, t1],
             "wins": [w0, w1], "win_prob": res["win_prob"], "most_common_result": res["most_common_result"],
-            "goes_distance_prob": res["goes_distance_prob"], "games_remaining_max": res["games_remaining_max"]}
+            "goes_distance_prob": res["goes_distance_prob"], "games_remaining_max": res["games_remaining_max"],
+            "next_game_date": upcoming[0] if upcoming else None}
 
 
 def outlook_for(season: int, on: str, games: list[dict], *, state, team_bundle: dict, ps_config,
                 n_sims: int = N_SIMS, seed: int = SEED) -> dict:
-    """on('YYYY-MM-DD') 날짜의 전망 카드 데이터. games = 그 시즌 경기 전부(raw_store.load_games(season)).
+    """on('YYYY-MM-DD') 날짜의 전망 카드 데이터 — 모든 종류가 '그날 경기 전' 기준이다.
+    games = 그 시즌 경기 전부(raw_store.load_games(season)).
     state = on 경기 직전 리그 상태(run_pipeline.build_state(season, on)), team_bundle = 선발 없는 팀 모델 번들,
-    ps_config = load_postseason(season) 결과(또는 시즌 → 목록 dict, 또는 None).
+    ps_config = load_postseason(season) 결과, 시즌 → 목록 dict(yaml.safe_load 그대로), 또는 None.
+    남은 경기의 확률은 정규시즌·시리즈 모두 on에 고정한 상태로, 경기 날짜도 on으로 바꿔 낸다
+    (미래 날짜를 넣으면 휴식일 같은 피처가 날짜만으로 커진다).
     - 정규시즌 날짜: {"type": "playoff_race", "as_of", "teams": {code: {"playoff_prob", "rank_now", "exp_wins",
       "wins", "losses"}}} — 10팀 전부 (사이트가 오늘 경기 팀을 고른다).
-    - 포스트시즌에 오늘 두 팀이 등록 시리즈면: {"type": "series", "as_of", "name", "best_of", "teams", "wins",
-      "win_prob", "most_common_result", "goes_distance_prob", "games_remaining_max"}.
+    - 진행 중인(아직 승부 안 난) 등록 시리즈가 있으면 — 그날 경기가 없어도: {"type": "series", "as_of", "name",
+      "best_of", "teams", "wins", "win_prob", "most_common_result", "goes_distance_prob", "games_remaining_max",
+      "next_game_date"}.
     - 그 밖: {"type": "next_game", "as_of", "next_game_date": on 다음 경기 날짜(취소 제외) 또는 None}."""
     if is_regular(season, _date.fromisoformat(on)):
         standings = _standings(games, season, on)
         left = _remaining_regular(games, season, on)
-        probs = game_probs(team_bundle, left, state)
+        probs = game_probs(team_bundle, [{**g, "date": on} for g in left], state)
         race = playoff_race(standings, [(g["home_code"], g["away_code"], p) for g, p in zip(left, probs)],
                             n_sims=n_sims, seed=seed)
         return {"type": "playoff_race", "as_of": on,
