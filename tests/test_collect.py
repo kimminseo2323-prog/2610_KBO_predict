@@ -259,3 +259,11 @@ def test_fetch_starters_scheduled_only_and_continues_on_error(monkeypatch, fixtu
                                   "home": {"player_id": 2730, "name": "Shirakawa Keisho"}}
     assert out["starters"][2]["away"] is None and out["starters"][2]["home"] is None
     assert len(out["errors"]) == 1 and out["errors"][0]["path"] == "/games/4-D"
+
+
+def test_fetch_starters_unrecognised_section_is_error_not_tba(monkeypatch, fixture_html):
+    html = fixture_html("mykbo_game_14050_scheduled.html").replace("starter-comparison__pitcher--", "x--")
+    monkeypatch.setattr(collect, "fetch_html", lambda path, **kw: html)
+    out = collect.fetch_starters([{"game_id": 1, "date": "2026-10-29", "path": "/games/1-A", "status": "SCHEDULED"}],
+                                 fetched_at="t")
+    assert out["starters"] == {} and len(out["errors"]) == 1 and "unrecognised" in out["errors"][0]["error"]

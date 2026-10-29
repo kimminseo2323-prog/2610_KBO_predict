@@ -108,11 +108,13 @@ def load_starters(season: int) -> dict[int, dict]:
 
 
 def upsert_starters(season: int, rows: list[dict]) -> int:
-    """game_id 기준 덮어쓰기. 신규 + 내용이 바뀐 행 수를 반환."""
+    """game_id 기준 덮어쓰기(fetched_at 제외 비교). 신규 + 선발이 바뀐 행 수를 반환."""
     by_id = load_starters(season)
     changed = 0
     for r in rows:
-        if by_id.get(r["game_id"]) != r:
+        old = by_id.get(r["game_id"])
+        # 다시 받아도 선발이 같으면 저장된 행(원래 fetched_at)을 유지한다
+        if old is None or {k: v for k, v in old.items() if k != "fetched_at"} != {k: v for k, v in r.items() if k != "fetched_at"}:
             by_id[r["game_id"]] = r
             changed += 1
     if changed:

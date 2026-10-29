@@ -214,18 +214,22 @@ def parse_game(html: str) -> dict:
 
 
 def parse_starters(html: str) -> dict | None:
-    """경기 페이지의 예고 선발투수. 섹션이 없으면 None.
+    """경기 페이지의 예고 선발투수. 섹션이 아예 없으면 None.
 
-    첫 번째 선수 블록이 원정, 두 번째가 홈. 선수 링크가 없는 쪽은 None(미발표).
+    원정/홈은 블록 클래스(starter-comparison__pitcher--away/--home)로 구분한다. 선수 링크가 없는 쪽은 None(미발표).
+    섹션은 있는데 선수 블록을 알아볼 수 없으면 페이지 구조가 바뀐 것이므로 ValueError.
     같은 선수에 사진 링크와 이름 링크가 있으므로 텍스트가 있는 링크에서 이름을 읽는다.
     """
     section = BeautifulSoup(html, "html.parser").select_one('section[aria-label="Starting pitchers"]')
     if section is None:
         return None
-    group = section.select_one('[aria-label="Starting pitcher comparison"]')
-    blocks = [b for b in (group.find_all("div", recursive=False) if group else []) if b.find("a", attrs={"data-id": True})]
-    sides = []
-    for block in blocks[:2]:
-        link = next((a for a in block.find_all("a", attrs={"data-id": True}) if _norm(a.get_text())), None)
-        sides.append({"player_id": int(link["data-id"]), "name": _norm(link.get_text())} if link else None)
-    return {"away": sides[0] if sides else None, "home": sides[1] if len(sides) > 1 else None}
+    blocks = {side: section.select_one(f".starter-comparison__pitcher--{side}") for side in ("away", "home")}
+    if not any(blocks.values()):
+        raise ValueError("unrecognised starting pitchers section")
+    out = {}
+    for side, block in blocks.items():
+        link = None
+        if block is not None:
+            link = next((a for a in block.find_all("a", attrs={"data-id": True}) if _norm(a.get_text())), None)
+        out[side] = {"player_id": int(link["data-id"]), "name": _norm(link.get_text())} if link else None
+    return out

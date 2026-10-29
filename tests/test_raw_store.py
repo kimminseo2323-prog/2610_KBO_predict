@@ -64,6 +64,9 @@ def test_upsert_starters_dedupes_and_sorts(tmp_data_dir):
     r0 = {"game_id": 30, "date": "2026-10-28", "fetched_at": "t1", "home": None, "away": None}
     assert upsert_starters(2026, [r1, r2]) == 2
     assert upsert_starters(2026, [r1]) == 0
+    before = starters_path(2026).read_bytes()
+    assert upsert_starters(2026, [dict(r1, fetched_at="t2")]) == 0  # 선발이 같으면 fetched_at만 달라도 변경 아님
+    assert starters_path(2026).read_bytes() == before and load_starters(2026)[20]["fetched_at"] == "t1"
     assert upsert_starters(2026, [dict(r1, home={"player_id": 2, "name": "B"}), r0]) == 2
     loaded = load_starters(2026)
     assert set(loaded) == {10, 20, 30} and loaded[20]["home"]["player_id"] == 2

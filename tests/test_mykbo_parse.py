@@ -178,3 +178,16 @@ def test_parse_starters_one_side_missing(fixture_html):
     html = re.sub(r'<a ([^>]*data-id="2730"[^>]*)>(.*?)</a>', r"<span \1>\2</span>", html, flags=re.S)
     s = parse_starters(html)
     assert s["away"]["player_id"] == 1096 and s["home"] is None
+
+
+def test_parse_starters_only_away_missing_keeps_home_as_home(fixture_html):
+    html = fixture_html("mykbo_game_14050_scheduled.html")
+    html = re.sub(r'<a ([^>]*data-id="1096"[^>]*)>(.*?)</a>', r"<span ></span>", html, flags=re.S)
+    s = parse_starters(html)
+    assert s["away"] is None and s["home"] == {"player_id": 2730, "name": "Shirakawa Keisho"}
+
+
+def test_parse_starters_unrecognised_section_raises(fixture_html):
+    html = fixture_html("mykbo_game_14050_scheduled.html").replace("starter-comparison__pitcher--", "x--")
+    with pytest.raises(ValueError, match="unrecognised starting pitchers section"):
+        parse_starters(html)
