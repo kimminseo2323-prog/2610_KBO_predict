@@ -12,40 +12,46 @@ NAME_MIN_SHARE = 0.6
 
 
 def _season_boxes(season: int):
-    """정규시즌 FINAL 경기의 박스스코어를 (date, game_id) 순으로 낸다. 박스스코어 없는 경기는 건너뛴다."""
+    """정규시즌 FINAL 경기의 (game_id, 박스스코어)를 (date, game_id) 순으로 낸다. 박스스코어 없는 경기는 건너뛴다."""
     boxes = raw_store.load_boxscores(season)
     for g in regular_finals(raw_store.load_games(season), season):
         box = boxes.get(g["game_id"])
         if box is not None:
-            yield box
+            yield g["game_id"], box
 
 
-def _team_of(teams: Counter, last_team: str) -> str:
-    """출전 경기가 가장 많은 팀. 동률이면 마지막 출전 팀."""
-    top = max(teams.values())
-    return last_team if teams[last_team] == top else max(teams, key=teams.get)
+def _team_of(teams: dict[str, list[int]]) -> str:
+    """teams: 팀 -> [출전 경기 수, 마지막 출전 경기 순번]. 출전 경기가 가장 많은 팀, 동률이면 가장 최근에 출전한 팀."""
+    return max(teams, key=lambda t: (teams[t][0], teams[t][1]))
 
 
 def _aggregate(seasons, side_key: str, keys: tuple[str, ...]) -> list[dict]:
-    """(시즌, 선수)별로 줄을 모은다. 날짜순으로 훑으므로 name/last_team은 마지막 출전 값이 된다."""
+    """(시즌, 선수)별로 줄을 모은다. 날짜순으로 훑으므로 name은 마지막 출전 경기의 이름이 된다.
+    경기 수(games·games_with_records·starts·팀별 출전)는 game_id 단위로 센다 — 한 경기에 같은 선수 줄이
+    둘 있어도 1경기다. 기록 합계(sums)는 줄마다 더한다."""
     acc: dict[tuple[int, int], dict] = {}
+    idx = 0                                  # 전체 경기 순번 (팀 동률 때 '가장 최근' 판정용)
     for season in seasons:
-        for box in _season_boxes(season):
+        for gid, box in _season_boxes(season):
+            idx += 1
             for side in ("away", "home"):
                 team = box[side]["code"]
                 for row in box[side_key][side]:
                     a = acc.setdefault((season, row["player_id"]), {
-                        "season": season, "player_id": row["player_id"], "games": 0, "teams": Counter(),
-                        "pos": Counter(), "sums": dict.fromkeys(keys, 0), "rec": 0, "starts": 0})
-                    a["games"] += 1
-                    a["name"], a["last_team"] = row["name"], team
-                    a["teams"][team] += 1
+                        "season": season, "player_id": row["player_id"], "games": set(), "teams": {},
+                        "pos": Counter(), "sums": dict.fromkeys(keys, 0), "rec": set(), "starts": set()})
+                    new_game = gid not in a["games"]
+                    a["games"].add(gid)
+                    a["name"] = row["name"]
+                    t = a["teams"].setdefault(team, [0, 0])
+                    t[0] += new_game
+                    t[1] = idx
                     if row.get("pos"):
                         a["pos"][row["pos"]] += 1
                     if row.get("doubles") is not None:
-                        a["rec"] += 1
+                        a["rec"].add(gid)
                     if row.get("order") == 1:
-                        a["starts"] += 1
+                        a["starts"].add(gid)
                     for k in keys:
                         a["sums"][k] += _num(row.get(k))
     return [acc[k] for k in sorted(acc)]
@@ -57,9 +63,9 @@ def batting_seasons(seasons: list[int]) -> pd.DataFrame:
     for a in _aggregate(seasons, "batting", BATTING_SUM):
         s = a["sums"]
         rows.append({"season": a["season"], "player_id": a["player_id"], "name": a["name"],
-                     "team": _team_of(a["teams"], a["last_team"]),
+                     "team": _team_of(a["teams"]),
                      "pos": max(a["pos"], key=a["pos"].get) if a["pos"] else None,   # 동률이면 먼저 나온 포지션
-                     "games": a["games"], "games_with_records": a["rec"],
+                     "games": len(a["games"]), "games_with_records": len(a["rec"]),
                      "pa": s["ab"] + s["bb"] + s["hbp"], **s})
     cols = ["season", "player_id", "name", "team", "pos", "games", "games_with_records", "pa", *BATTING_SUM]
     return pd.DataFrame(rows, columns=cols)
@@ -71,8 +77,8 @@ def pitching_seasons(seasons: list[int]) -> pd.DataFrame:
     for a in _aggregate(seasons, "pitching", PITCHING_SUM):
         s = a["sums"]
         rows.append({"season": a["season"], "player_id": a["player_id"], "name": a["name"],
-                     "team": _team_of(a["teams"], a["last_team"]),
-                     "games": a["games"], "starts": a["starts"],
+                     "team": _team_of(a["teams"]),
+                     "games": len(a["games"]), "starts": len(a["starts"]),
                      "bf": s["ip_outs"] + s["h"] + s["bb"] + s["hbp"], **s})
     cols = ["season", "player_id", "name", "team", "games", "starts", "bf", *PITCHING_SUM]
     return pd.DataFrame(rows, columns=cols)

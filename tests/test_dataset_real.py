@@ -64,8 +64,6 @@ def test_player_seasons_real():
     bat, pit = batting_seasons(seasons), pitching_seasons(seasons)
     qual_bat = (bat.pa >= 200).groupby(bat.season).sum()
     qual_pit = ((pit.ip_outs >= 150) | (pit.games - pit.starts >= 30)).groupby(pit.season).sum()
-    print("batters pa>=200:", qual_bat.to_dict(), "pitchers:", qual_pit.to_dict(),
-          "names:", len(korean_names(seasons)))
-    assert qual_bat.between(90, 200).all()   # 실측 107~117 (10개 팀 x ~11명), 브리프의 하한 120은 과대      # 시즌당 규정급 타자 수 상식 범위
+    assert qual_bat.between(90, 200).all()   # 시즌당 규정급 타자 수 상식 범위: 실측 107~117 (10개 팀 x ~11명)
     assert qual_pit.between(100, 200).all()
     assert len(korean_names(seasons)) > 1500

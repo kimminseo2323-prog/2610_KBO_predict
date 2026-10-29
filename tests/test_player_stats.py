@@ -7,8 +7,8 @@ from kbo_predict.player_stats import batting_seasons, korean_names, pitching_sea
 S = 2025
 
 
-def brow(pid, pos="CF", ab=4, bb=0, hbp=0, doubles=1, sb=0):
-    return {"order": 1, "player_id": pid, "name": f"n{pid}", "pos": pos, "ab": ab, "r": 0, "h": 1, "hr": 0,
+def brow(pid, pos="CF", ab=4, bb=0, hbp=0, doubles=1, sb=0, name=None):
+    return {"order": 1, "player_id": pid, "name": name or f"n{pid}", "pos": pos, "ab": ab, "r": 0, "h": 1, "hr": 0,
             "rbi": 0, "bb": bb, "so": 0, "hbp": hbp, "doubles": doubles, "triples": 0, "sb": sb}
 
 
@@ -24,6 +24,13 @@ def box(gid, date, away, home, bat_away, bat_home, pit_away, pit_home, names):
             "names_ko": names}
 
 
+def install(monkeypatch, boxes):
+    games = [{k: b[k] for k in ("game_id", "date", "status", "home", "away")} for b in boxes]
+    monkeypatch.setattr(raw_store, "load_games", lambda season: games if season == S else [])
+    monkeypatch.setattr(raw_store, "load_boxscores",
+                        lambda season: {b["game_id"]: b for b in boxes} if season == S else {})
+
+
 @pytest.fixture
 def fake_raw(monkeypatch):
     boxes = [
@@ -36,10 +43,7 @@ def fake_raw(monkeypatch):
         # 정규시즌 종료 후(포스트시즌): 타자 집계에서 제외
         box(4, "2025-11-20", "LG", "HT", [brow(1, ab=100)], [brow(5)], [prow(10)], [prow(11)], {}),
     ]
-    games = [{k: b[k] for k in ("game_id", "date", "status", "home", "away")} for b in boxes]
-    monkeypatch.setattr(raw_store, "load_games", lambda season: games if season == S else [])
-    monkeypatch.setattr(raw_store, "load_boxscores",
-                        lambda season: {b["game_id"]: b for b in boxes} if season == S else {})
+    install(monkeypatch, boxes)
 
 
 def test_batting_sums_and_pa(fake_raw):
@@ -69,3 +73,37 @@ def test_postseason_excluded(fake_raw):
     df = batting_seasons([S]).set_index("player_id")
     assert df.loc[1, "ab"] == 7 and df.loc[1, "games"] == 2
     assert 5 in df.index and df.loc[5, "games"] == 2      # 11월 경기 제외 확인
+
+
+def test_name_is_last_games_row_and_pos_tie_first_seen(monkeypatch):
+    # 선수 7: 1경기 "Old Name"/CF, 2경기 "New Name"/LF -> 이름은 마지막 경기 값, 포지션은 1:1 동률이라 먼저 나온 CF
+    install(monkeypatch, [
+        box(1, "2025-04-01", "LG", "HT", [brow(7, pos="CF", name="Old Name")], [], [], [], {}),
+        box(2, "2025-04-02", "LG", "HT", [brow(7, pos="LF", name="New Name")], [], [], [], {}),
+    ])
+    row = batting_seasons([S]).set_index("player_id").loc[7]
+    assert (row["name"], row["pos"]) == ("New Name", "CF")
+
+
+def test_team_tie_goes_to_most_recent_team(monkeypatch):
+    # 선수 8: LG, HT, LG, HT, SS 순서 -> LG 2·HT 2 동률. 가장 최근 출전한 HT (마지막 팀 SS는 1경기라 후보 아님)
+    order = ["LG", "HT", "LG", "HT", "SS"]
+    install(monkeypatch, [box(i + 1, f"2025-04-0{i + 1}", t, "OB", [brow(8)], [], [], [], {})
+                          for i, t in enumerate(order)])
+    assert batting_seasons([S]).set_index("player_id").loc[8, "team"] == "HT"
+
+
+def test_two_rows_in_one_game_count_one_game(monkeypatch):
+    # 한 경기에 같은 선수 줄이 둘: 경기 수는 1, 기록은 둘 다 더한다
+    install(monkeypatch, [
+        box(1, "2025-04-01", "LG", "HT", [brow(9, ab=3), brow(9, ab=1)], [], [prow(20), prow(20, order=2)], [], {}),
+    ])
+    bat = batting_seasons([S]).set_index("player_id").loc[9]
+    assert (bat["games"], bat["games_with_records"], bat["ab"]) == (1, 1, 4)
+    pit = pitching_seasons([S]).set_index("player_id").loc[20]
+    assert (pit["games"], pit["starts"], pit["ip_outs"]) == (1, 1, 36)
+
+
+def test_korean_names_single_vote_accepted(monkeypatch):
+    install(monkeypatch, [box(1, "2025-04-01", "LG", "HT", [brow(9)], [], [], [], {"9": "홍길동"})])
+    assert korean_names([S]) == {9: "홍길동"}
