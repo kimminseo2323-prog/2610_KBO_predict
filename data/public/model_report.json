@@ -124,8 +124,255 @@
       "pred_mean": null
     }
   ],
-  "cluster_quality": null,
-  "commit_sha": "f5e08b93203df079bbd1b2664516cb87574c8ace",
+  "cluster_quality": {
+    "batter": {
+      "gmm_agreement": 0.8431,
+      "gmm_candidates": {
+        "diag": 0.5267,
+        "full": 0.5809,
+        "tied": 0.8431
+      },
+      "k": 4,
+      "k_table": [
+        {
+          "k": 4,
+          "retention": 0.6536,
+          "score": 0.8251,
+          "silhouette": 0.1715
+        },
+        {
+          "k": 5,
+          "retention": 0.5622,
+          "score": 0.7271,
+          "silhouette": 0.1649
+        },
+        {
+          "k": 6,
+          "retention": 0.5431,
+          "score": 0.709,
+          "silhouette": 0.1659
+        },
+        {
+          "k": 7,
+          "retention": 0.4987,
+          "score": 0.6653,
+          "silhouette": 0.1666
+        }
+      ],
+      "membership_agreement": 1.0,
+      "membership_method": "kmeans_softmax",
+      "n_all": 1327,
+      "n_fit": 1217,
+      "retention": 0.6555,
+      "types": [
+        {
+          "center": {
+            "babip": 0.33,
+            "bb_pct": 0.11,
+            "hr_pct": 0.049,
+            "iso": 0.229,
+            "k_pct": 0.19,
+            "sb_rate": 0.035
+          },
+          "examples": [
+            "디아즈",
+            "오스틴",
+            "데이비슨"
+          ],
+          "id": 0,
+          "n": 299,
+          "n_fit": 274,
+          "name": "파워형"
+        },
+        {
+          "center": {
+            "babip": 0.32,
+            "bb_pct": 0.078,
+            "hr_pct": 0.026,
+            "iso": 0.138,
+            "k_pct": 0.221,
+            "sb_rate": 0.035
+          },
+          "examples": [
+            "김건희",
+            "양석환",
+            "고명준"
+          ],
+          "id": 1,
+          "n": 368,
+          "n_fit": 333,
+          "name": "장타 지향형"
+        },
+        {
+          "center": {
+            "babip": 0.32,
+            "bb_pct": 0.097,
+            "hr_pct": 0.013,
+            "iso": 0.098,
+            "k_pct": 0.135,
+            "sb_rate": 0.043
+          },
+          "examples": [
+            "허경민",
+            "최재훈",
+            "문성주"
+          ],
+          "id": 2,
+          "n": 456,
+          "n_fit": 421,
+          "name": "컨택형"
+        },
+        {
+          "center": {
+            "babip": 0.33,
+            "bb_pct": 0.081,
+            "hr_pct": 0.012,
+            "iso": 0.098,
+            "k_pct": 0.184,
+            "sb_rate": 0.186
+          },
+          "examples": [
+            "오태곤",
+            "이원석",
+            "황성빈"
+          ],
+          "id": 3,
+          "n": 204,
+          "n_fit": 189,
+          "name": "주루형"
+        }
+      ]
+    },
+    "fit_seasons": [
+      2015,
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "pitcher": {
+      "gmm_agreement": 0.7498,
+      "gmm_candidates": {
+        "diag": 0.5086,
+        "full": 0.5079,
+        "tied": 0.7498
+      },
+      "k": 4,
+      "k_table": [
+        {
+          "k": 4,
+          "retention": 0.5322,
+          "score": 0.7367,
+          "silhouette": 0.2045
+        },
+        {
+          "k": 5,
+          "retention": 0.5213,
+          "score": 0.7196,
+          "silhouette": 0.1983
+        },
+        {
+          "k": 6,
+          "retention": 0.4544,
+          "score": 0.6378,
+          "silhouette": 0.1833
+        },
+        {
+          "k": 7,
+          "retention": 0.4423,
+          "score": 0.6259,
+          "silhouette": 0.1836
+        }
+      ],
+      "membership_agreement": 1.0,
+      "membership_method": "kmeans_softmax",
+      "n_all": 1591,
+      "n_fit": 1451,
+      "retention": 0.5333,
+      "types": [
+        {
+          "center": {
+            "babip": 0.299,
+            "bb_pct": 0.086,
+            "hr_pct": 0.02,
+            "k_pct": 0.185,
+            "start_share": 0.958
+          },
+          "examples": [
+            "후라도",
+            "알칸타라",
+            "임찬규"
+          ],
+          "id": 0,
+          "n": 512,
+          "n_fit": 465,
+          "name": "선발형"
+        },
+        {
+          "center": {
+            "babip": 0.307,
+            "bb_pct": 0.097,
+            "hr_pct": 0.036,
+            "k_pct": 0.154,
+            "start_share": 0.285
+          },
+          "examples": [
+            "이승현",
+            "김연주",
+            "박주성"
+          ],
+          "id": 1,
+          "n": 301,
+          "n_fit": 279,
+          "name": "스윙맨형"
+        },
+        {
+          "center": {
+            "babip": 0.265,
+            "bb_pct": 0.129,
+            "hr_pct": 0.019,
+            "k_pct": 0.186,
+            "start_share": 0.085
+          },
+          "examples": [
+            "함덕주",
+            "송재영",
+            "최지민"
+          ],
+          "id": 2,
+          "n": 368,
+          "n_fit": 334,
+          "name": "파워 불펜형"
+        },
+        {
+          "center": {
+            "babip": 0.326,
+            "bb_pct": 0.101,
+            "hr_pct": 0.017,
+            "k_pct": 0.2,
+            "start_share": 0.043
+          },
+          "examples": [
+            "정해영",
+            "최지강",
+            "윤성빈"
+          ],
+          "id": 3,
+          "n": 410,
+          "n_fit": 373,
+          "name": "삼진 불펜형"
+        }
+      ]
+    },
+    "version": "clusters-2026"
+  },
+  "commit_sha": "7d79821c41a96c75d641a9c2d27b742b5fcb536f",
   "feature_importance": [
     {
       "importance": 0.10649089124682375,
@@ -259,8 +506,65 @@
     }
   ],
   "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
-  "generated_at": "2026-10-29T14:03:02+09:00",
-  "matchup_feature_ablation": null,
+  "generated_at": "2026-10-29T18:39:00+09:00",
+  "matchup_feature_ablation": {
+    "adopt": false,
+    "cluster_version": "clusters-2026",
+    "features_added": [
+      "bat_type0_diff",
+      "bat_type1_diff",
+      "bat_type2_diff",
+      "bat_type3_diff",
+      "starter_type0_diff",
+      "starter_type1_diff",
+      "starter_type2_diff",
+      "starter_type3_diff",
+      "types_known"
+    ],
+    "fit_seasons": [
+      2015,
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "mcnemar_p_test": 0.8450189828872681,
+    "note": "선택된 알고리즘·캘리브레이션·트리 수 고정, 피처만 추가. 라이브 반영은 4단계. 유형 군집 중심은 2015~2025 선수-시즌 성적으로만 맞췄다(비지도, 경기 승패는 쓰지 않음). 피처는 직전 시즌 유형이라 test 시즌(2026) 경기에는 2026 성적이 중심에 들어가지 않았다. 반면 학습·검증 시즌 경기의 직전 시즌 유형은 그 뒤 시즌 성적까지 본 중심으로 매겨졌다 (예: 2018 경기의 2017 유형도 2025까지의 성적으로 맞춘 중심 기준).",
+    "with": {
+      "test": {
+        "accuracy": 0.5911680911680912,
+        "brier": 0.2393286363526504,
+        "log_loss": 0.6713472067893882,
+        "n": 702
+      },
+      "val": {
+        "accuracy": 0.5687679083094556,
+        "brier": 0.24241762657136304,
+        "log_loss": 0.6778319688742834,
+        "n": 698
+      }
+    },
+    "without": {
+      "test": {
+        "accuracy": 0.594017094017094,
+        "brier": 0.23927358428788292,
+        "log_loss": 0.6712265100209293,
+        "n": 702
+      },
+      "val": {
+        "accuracy": 0.5730659025787965,
+        "brier": 0.24208719725726602,
+        "log_loss": 0.6771062292097383,
+        "n": 698
+      }
+    }
+  },
   "model_version": "report-2026",
   "models": {
     "lgbm": {
