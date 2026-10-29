@@ -26,6 +26,9 @@ explain은 캘리브레이션 전 로짓(log-odds)을 피처별 기여 + 기본�
         선발 가정: 학습·평가 행의 선발 피처는 박스스코어의 '실제' 선발(투수 순서 1)로 만든다 — 지표는
         "경기 전에 선발을 안다"는 가정 위의 값이다 (라이브는 예고 선발). 그래서 선발 피처를 뺀
         팀 피처 19개 모델(ablation.no_starter)도 같은 절차로 학습해 함께 적는다.
+    python -m kbo_predict.train_win report --force --matchup data/processed/matchup.parquet --clusters models/clusters.pkl
+        위와 같고, 상성 피처(직전 시즌 선수 유형) 전후 비교(matchup_feature_ablation)와 군집 품질(cluster_quality)을
+        보고서에 더한다. 본 모델·선택·지표는 상성 피처 없이 만든 것 그대로다 (상성은 비교로만 기록, 라이브 반영은 4단계).
     python -m kbo_predict.train_win live    → models/win_model.pkl (v0.2, 2015~2026 전체 학습)
         보고서에서 selected·캘리브레이션 방법·LightGBM 트리 수만 읽는다 → report를 먼저 돌린다.
         parquet가 보고서 때와 달라도(새 경기가 쌓여도) 다시 학습할 수 있다 (해시 일치를 요구하지 않음).
@@ -339,6 +342,67 @@ def _no_starter_ablation(kind: str, calibration: str, train: pd.DataFrame, val: 
             "val": evaluate(b, val), "test": evaluate(b, test)}
 
 
+MATCHUP_ADOPT_MARGIN = 0.001  # 상성 피처 채택 기준: val 로그 손실이 이만큼보다 더 줄어야 한다
+MATCHUP_NOTE = "선택된 알고리즘·캘리브레이션·트리 수 고정, 피처만 추가. 라이브 반영은 4단계."
+
+
+def _fit_fixed(kind: str, calibration: str, n_estimators: int | None, train: pd.DataFrame,
+               train_seasons: list[int], features: list[str]) -> dict:
+    """정해 둔 알고리즘·트리 수·캘리브레이션 방법으로 학습. 캘리브레이터는 본 모델과 똑같이 train 시즌
+    LOSO OOF 예측으로 맞춘다 (n_estimators가 None이면 300 — lr에서는 쓰이지 않는다, _choose_calibration과 같음)."""
+    n_est = n_estimators or 300
+    b = fit_model(train, kind=kind, n_estimators=n_est, version=REPORT_VERSION, seasons=train_seasons,
+                  features=features)
+    if calibration != "none":
+        oof = oof_predictions(train, kind=kind, n_estimators=n_est, features=features)
+        b.update(calibration=calibration, calibrator=fit_calibrator(calibration, oof, train["y"].to_numpy()))
+    return b
+
+
+def _matchup_note(fit_seasons: list[int] | None) -> str:
+    """전후 비교의 단서: 군집 중심이 어떤 시즌 성적으로 맞춰졌는지 (승패 결과는 쓰지 않은 비지도 군집)."""
+    span = f"{min(fit_seasons)}~{max(fit_seasons)}" if fit_seasons else "맞춤 시즌"
+    return (f"{MATCHUP_NOTE} 유형 군집 중심은 {span} 선수-시즌 성적으로만 맞췄다(비지도, 경기 승패는 쓰지 않음). "
+            "피처는 직전 시즌 유형이라 test 시즌(2026) 경기에는 2026 성적이 중심에 들어가지 않았다. "
+            "반면 학습·검증 시즌 경기의 직전 시즌 유형은 그 뒤 시즌 성적까지 본 중심으로 매겨졌다 "
+            "(예: 2018 경기의 2017 유형도 2025까지의 성적으로 맞춘 중심 기준).")
+
+
+def _matchup_ablation(selected: str, calibration: str, best_iteration: int, train: pd.DataFrame,
+                      val: pd.DataFrame, test: pd.DataFrame, train_seasons: list[int], names: list[str], *,
+                      fit_seasons: list[int] | None = None, cluster_version: str | None = None) -> dict:
+    """상성 피처 전후 비교: 선택된 알고리즘(selected)·캘리브레이션 방법·트리 수(best_iteration)를 고정하고
+    피처만 FEATURE_NAMES → FEATURE_NAMES + names로 늘려 같은 절차(캘리브레이터는 train LOSO OOF)로 학습한다.
+    without은 본 모델과 같은 절차이므로 본 모델의 val·test 지표와 똑같다.
+    mcnemar_p_test: test 경기에서 with와 without의 적중 차이 검정. adopt: with의 val 로그 손실이
+    without보다 MATCHUP_ADOPT_MARGIN보다 더 낮을 때만 True (test는 채택 판단에 쓰지 않는다)."""
+    n_est = best_iteration if selected == "lgbm" else None
+    out, correct = {}, {}
+    for key, feats in (("without", list(FEATURE_NAMES)), ("with", list(FEATURE_NAMES) + list(names))):
+        b = _fit_fixed(selected, calibration, n_est, train, train_seasons, feats)
+        out[key] = {"val": evaluate(b, val), "test": evaluate(b, test)}
+        correct[key] = _correct(predict_proba(b, test), test["y"].to_numpy())
+    return {
+        "features_added": list(names),
+        "without": out["without"], "with": out["with"],
+        "mcnemar_p_test": mcnemar_p(correct["with"], correct["without"]),
+        "adopt": bool(out["with"]["val"]["log_loss"] < out["without"]["val"]["log_loss"] - MATCHUP_ADOPT_MARGIN),
+        "note": _matchup_note(fit_seasons),
+        "fit_seasons": [int(s) for s in fit_seasons] if fit_seasons else None,
+        "cluster_version": cluster_version,
+    }
+
+
+def _with_matchup(df: pd.DataFrame, matchup: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """df에 상성 열을 game_id로 붙인다 (행 순서 유지). 상성 표에 없는 경기가 있으면 데이터가 어긋난 것이므로 거부."""
+    names = [c for c in matchup.columns if c != "game_id"]
+    merged = df.merge(matchup, on="game_id", how="left", validate="one_to_one", indicator=True)
+    missing = int((merged["_merge"] != "both").sum())
+    if missing:
+        raise ValueError(f"matchup table is missing {missing} game_id(s) present in the feature frame")
+    return merged.drop(columns="_merge"), names
+
+
 def _significance(bundle: dict, val: pd.DataFrame, test: pd.DataFrame) -> dict:
     """유의성: 선택 모델 vs 베이스라인, test 경기들 위의 McNemar 검정.
     비교 대상(vs)은 val 정확도가 가장 높은 베이스라인으로 '미리' 정한다 — test에서 가장 잘한 것을 고르면
@@ -357,9 +421,12 @@ def _significance(bundle: dict, val: pd.DataFrame, test: pd.DataFrame) -> dict:
 
 
 def train_report(df: pd.DataFrame, *, train_seasons=range(2015, 2025), val_season: int = 2025,
-                 test_season: int = 2026, meta: dict) -> tuple[dict, dict]:
+                 test_season: int = 2026, meta: dict, matchup: pd.DataFrame | None = None,
+                 cluster_quality: dict | None = None) -> tuple[dict, dict]:
     """보고서용 모델: train 시즌으로 학습(캘리브레이터는 train OOF로) → val 시즌으로 트리 수·캘리브레이션 방법·
     알고리즘·유의성 비교 대상 선택 → test 시즌은 마지막에 한 번만 평가. 선발 없는 변형(ablation.no_starter)도 함께.
+    matchup(game_id + 상성 열)을 주면 상성 피처 전후 비교(matchup_feature_ablation)를, cluster_quality를 주면
+    그 dict를 그대로 보고서에 넣는다. 둘 다 본 모델·선택·나머지 지표에는 영향이 없다 (없으면 None).
     반환: (model_report.json 내용, 선택된 번들 version=REPORT_VERSION)."""
     train_seasons = [int(s) for s in train_seasons]
     parts = {"train": df[df["season"].isin(train_seasons)], "val": df[df["season"] == val_season],
@@ -407,9 +474,17 @@ def train_report(df: pd.DataFrame, *, train_seasons=range(2015, 2025), val_seaso
         "feature_importance": feature_importance(bundle),
         "ablation": {"no_starter": _no_starter_ablation(selected, bundle["calibration"], train, val, test,
                                                         train_seasons)},
-        "matchup_feature_ablation": None,  # 3단계(맞대결 피처) 자리
-        "cluster_quality": None,           # 3단계(선수 유형 군집) 자리
+        "matchup_feature_ablation": None,  # 상성 피처 전후 비교 (matchup을 줄 때만)
+        "cluster_quality": cluster_quality,  # 선수 유형 군집 품질 (cluster.quality)
     }
+    if matchup is not None:
+        merged, names = _with_matchup(df, matchup)
+        m_parts = [merged[merged["season"].isin(train_seasons)], merged[merged["season"] == val_season],
+                   merged[merged["season"] == test_season]]
+        cq = cluster_quality or {}
+        report["matchup_feature_ablation"] = _matchup_ablation(
+            selected, bundle["calibration"], best_iteration, *m_parts, train_seasons, names,
+            fit_seasons=cq.get("fit_seasons"), cluster_version=cq.get("version"))
     return report, bundle
 
 
@@ -439,13 +514,17 @@ def _write_json(path: Path, obj) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def write_manifest(path: Path, *, name: str, bundle_path: Path, features_path: Path, meta: dict) -> None:
+def write_manifest(path: Path, *, name: str, bundle_path: Path, features_path: Path, meta: dict,
+                   matchup_path: Path | None = None) -> None:
     """models/manifest.json의 모델 하나(name) 항목만 갱신한다: 모델 파일 SHA256·버전 + 그 모델을 만든 parquet SHA256.
     다른 모델 항목은 기존 manifest에서 그대로 둔다 — 이번에 다시 학습하지 않은 모델 파일에 새 parquet 해시를
-    붙이지 않기 위해서다. generated_at·commit_sha는 마지막으로 manifest를 쓴 실행의 값."""
-    update_manifest(path, name=name, meta=meta, entry={
-        "path": Path(bundle_path).as_posix(), "sha256": _sha256(bundle_path),
-        "version": load_bundle(bundle_path).get("version"), "features_sha256": _sha256(features_path)})
+    붙이지 않기 위해서다. generated_at·commit_sha는 마지막으로 manifest를 쓴 실행의 값.
+    matchup_path를 주면(보고서의 상성 전후 비교에 쓴 parquet) 그 SHA256도 matchup_sha256으로 적는다."""
+    entry = {"path": Path(bundle_path).as_posix(), "sha256": _sha256(bundle_path),
+             "version": load_bundle(bundle_path).get("version"), "features_sha256": _sha256(features_path)}
+    if matchup_path is not None:
+        entry["matchup_sha256"] = _sha256(matchup_path)
+    update_manifest(path, name=name, meta=meta, entry=entry)
 
 
 def update_manifest(path: Path, *, name: str, entry: dict, meta: dict) -> None:
@@ -482,6 +561,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("command", choices=["report", "live"])
     ap.add_argument("--features", default="data/processed/features.parquet", help="피처 parquet 경로")
     ap.add_argument("--force", action="store_true", help="report: 이미 있는(얼려 둔) model_report.json을 덮어쓴다")
+    ap.add_argument("--matchup", help="report: 상성 피처 parquet (features --matchup-out) → matchup_feature_ablation")
+    ap.add_argument("--clusters", help="report: 군집 묶음 pkl (models/clusters.pkl) → cluster_quality")
     args = ap.parse_args(argv)
     if args.command == "report" and REPORT_JSON.exists() and not args.force:
         raise SystemExit(f"{REPORT_JSON.name} exists; use --force to overwrite the frozen report")
@@ -492,7 +573,16 @@ def main(argv: list[str] | None = None) -> None:
     df = load_features(features_path)
     t0 = time.time()
     if args.command == "report":
-        report, bundle = train_report(df, meta=meta)
+        cluster_quality = None
+        if args.clusters:
+            from . import cluster  # cluster가 train_win을 import하므로 순환을 피해 여기서 읽는다
+
+            obj = cluster.load_bundle(Path(args.clusters))
+            cluster_quality = cluster.quality(bundles={g: obj[g]["bundle"] for g in cluster.GROUPS},
+                                              assigned={g: obj[g]["assigned"] for g in cluster.GROUPS},
+                                              names_cfg=cluster.load_labels())
+        matchup = load_features(Path(args.matchup)) if args.matchup else None
+        report, bundle = train_report(df, meta=meta, matchup=matchup, cluster_quality=cluster_quality)
         _write_json(REPORT_JSON, report)
         save_bundle(bundle, REPORT_PKL)
         sel = report["models"][report["selected"]]
@@ -506,6 +596,13 @@ def main(argv: list[str] | None = None) -> None:
         sig = report["significance"]
         print(f"vs {sig['vs']} (chosen on {sig['selected_on']}): McNemar p={sig['mcnemar_p']:.4f}  "
               + "  ".join(f"{k}={v['mcnemar_p']:.4f}" for k, v in sig["all"].items()))
+        mf = report["matchup_feature_ablation"]
+        if mf is not None:
+            for part in ("val", "test"):
+                w, o = mf["with"][part], mf["without"][part]
+                print(f"matchup {part}: acc {o['accuracy']:.4f} -> {w['accuracy']:.4f}  "
+                      f"log_loss {o['log_loss']:.4f} -> {w['log_loss']:.4f}  brier {o['brier']:.4f} -> {w['brier']:.4f}")
+            print(f"matchup McNemar p(test)={mf['mcnemar_p_test']:.4f}  adopt={mf['adopt']}")
     else:
         if not REPORT_JSON.exists():
             raise SystemExit(f"{REPORT_JSON} not found — run `python -m kbo_predict.train_win report` first")
@@ -520,7 +617,8 @@ def main(argv: list[str] | None = None) -> None:
               f"seasons={bundle['seasons'][0]}~{bundle['seasons'][-1]} n={bundle['n_games']}")
     print(f"done in {time.time() - t0:.1f}s")
     name, bundle_path = ("report", REPORT_PKL) if args.command == "report" else ("live", LIVE_PKL)
-    write_manifest(MANIFEST, name=name, bundle_path=bundle_path, features_path=features_path, meta=meta)
+    write_manifest(MANIFEST, name=name, bundle_path=bundle_path, features_path=features_path, meta=meta,
+                   matchup_path=Path(args.matchup) if args.command == "report" and args.matchup else None)
 
 
 if __name__ == "__main__":

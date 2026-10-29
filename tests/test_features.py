@@ -1,5 +1,6 @@
 import math
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -12,8 +13,10 @@ from kbo_predict.features import (
     LeagueState,
     build_training_frame,
     game_features,
+    matchup_feature_names,
     regular_finals,
     starter_ids,
+    starter_type,
 )
 from kbo_predict.mykbo_parse import parse_week
 
@@ -469,3 +472,152 @@ def test_features_parquet_roundtrip_and_sha(two_season_data, tmp_path):
     assert features_sha256(a) == features_sha256(b) and len(features_sha256(a)) == 64
     save_features(df.assign(y=1 - df.y), b)
     assert features_sha256(a) != features_sha256(b)
+
+
+# ---------- 상성(직전 시즌 유형) 피처 ----------
+
+def _matchup_game(date, gid, hs, as_, home_bat, away_bat, home_sp=10, away_sp=20):
+    """LG(홈) vs HH(원정) 한 경기 + 박스스코어. 타자 dict 목록과 양 팀 선발 player_id를 받는다."""
+    g = mk(date, gid, hs=hs, as_=as_)
+    return g, mkbox(g, home_pitchers=[{"player_id": home_sp, "ip_outs": 27}],
+                    away_pitchers=[{"player_id": away_sp, "ip_outs": 24}],
+                    home_bat=home_bat, away_bat=away_bat)
+
+
+@pytest.fixture
+def two_season_games():
+    """합성 2시즌. 타자 1 = LG, 타자 2 = HH (각 4타수 + 볼넷 1 = 5타석), LG 선발 10, HH 선발 20.
+    2025: 2경기, 2026: 3경기 (4/1 개막일, 4/2, 4/3)."""
+    bat_h, bat_a = [{"player_id": 1, "ab": 4, "bb": 1}], [{"player_id": 2, "ab": 4, "bb": 1}]
+    games, boxes = {2025: [], 2026: []}, {2025: {}, 2026: {}}
+    for date, gid, hs, as_ in (("2025-04-10", 1, 5, 2), ("2025-04-11", 2, 1, 3),
+                               ("2026-04-01", 11, 4, 2), ("2026-04-02", 12, 2, 6), ("2026-04-03", 13, 3, 1)):
+        g, b = _matchup_game(date, gid, hs, as_, bat_h, bat_a)
+        games[g["season"]].append(g)
+        boxes[g["season"]][gid] = b
+    return games, boxes
+
+
+def build_dataset_from(data, *, types=None, kb=0, kp=0):
+    """테스트용 시즌 연결: build_dataset과 같은 순서(시즌마다 start_season → build_training_frame)."""
+    games, boxes = data
+    state = LeagueState(types=types, kb=kb, kp=kp)
+    frames = []
+    for season in sorted(games):
+        state.start_season(season)
+        frames.append(build_training_frame(games[season], boxes[season], season=season, state=state))
+    return pd.concat(frames, ignore_index=True)
+
+
+# (2025, 1) = 타자 유형 1, (2026, 1) = 타자 유형 0 (당해 시즌 유형 — 쓰면 누수), (2025, 2) = 타자 유형 0,
+# (2025, 10) = 투수 유형 2. HH 선발 20은 유형 없음.
+MATCHUP_TYPES = {(2025, 1): {"batter": 1}, (2026, 1): {"batter": 0}, (2025, 2): {"batter": 0},
+                 (2025, 10): {"pitcher": 2}}
+
+
+def test_matchup_feature_names_order():
+    assert matchup_feature_names(2, 3) == ["bat_type0_diff", "bat_type1_diff", "starter_type0_diff",
+                                           "starter_type1_diff", "starter_type2_diff", "types_known"]
+    assert matchup_feature_names(0, 0) == ["types_known"]
+
+
+def test_matchup_uses_previous_season_types_only(two_season_games):
+    """2026 경기에서 타자 1의 타석은 2025 유형(1)으로 센다 — 2026 유형(0)을 쓰면 홈·원정 모두 유형 0이라 차이가 0."""
+    df = build_dataset_from(two_season_games, types=MATCHUP_TYPES, kb=2, kp=3)
+    row = df[df.season == 2026].iloc[-1]
+    assert row["bat_type1_diff"] > 0 and row["starter_type2_diff"] != 0
+    assert row["bat_type1_diff"] == pytest.approx(1.0) and row["bat_type0_diff"] == pytest.approx(-1.0)
+    assert row["starter_type2_diff"] == 1 and row["starter_type0_diff"] == 0 and row["starter_type1_diff"] == 0
+    assert row["types_known"] == 0  # 원정 선발(20)에 유형이 없다
+    # 2025 경기는 2024 유형을 찾는다 → 유형표에 없으므로 타선 NaN, 선발 0 벡터
+    r25 = df[df.season == 2025].iloc[-1]
+    assert math.isnan(r25["bat_type0_diff"]) and r25["starter_type2_diff"] == 0 and r25["types_known"] == 0
+
+
+def test_matchup_opening_day_is_nan(two_season_games):
+    """개막일에는 당해 시즌 타석이 없다 (직전 시즌 타석은 start_season에서 비워진다) → 타선 비중 NaN."""
+    df = build_dataset_from(two_season_games, types=MATCHUP_TYPES, kb=2, kp=3)
+    first = df[df.season == 2026].iloc[0]
+    assert np.isnan(first["bat_type0_diff"]) and np.isnan(first["bat_type1_diff"]) and first["types_known"] == 0
+    assert first["starter_type2_diff"] == 1  # 선발 유형은 개막일에도 안다
+
+
+def test_matchup_types_known_requires_both_lineups_and_starters(two_season_games):
+    types = {**MATCHUP_TYPES, (2025, 20): {"pitcher": 0}}
+    df = build_dataset_from(two_season_games, types=types, kb=2, kp=3)
+    last = df[df.season == 2026].iloc[-1]
+    assert last["types_known"] == 1
+    assert last["starter_type2_diff"] == 1 and last["starter_type0_diff"] == -1
+
+
+def test_lineup_shares_weights_by_pa_and_known_share():
+    """유형별 비중은 유형 있는 타석 기준(합 1), 두 번째 값은 팀 전체 타석 중 유형 있는 타석 비율."""
+    s = LeagueState(types={(2025, 1): {"batter": 0}, (2025, 2): {"batter": 1}}, kb=2, kp=1)
+    s.start_season(2026)
+    assert s.lineup_shares("LG") == (None, 0.0)
+    g = mk("2026-04-01", 1, hs=3, as_=2)
+    s.update(g, mkbox(g, home_bat=[{"player_id": 1, "ab": 3}, {"player_id": 2, "ab": 1, "hbp": 1},
+                                   {"player_id": 3, "ab": 4}, {"player_id": None, "ab": 9}]))
+    shares, known = s.lineup_shares("LG")
+    assert shares == pytest.approx([0.6, 0.4]) and known == pytest.approx(5 / 9)  # player_id 없는 줄은 안 센다
+    assert s.lineup_shares("HH") == (None, 0.0)  # 타자 기록 없음
+    assert starter_type(s, 99) is None and starter_type(s, None) is None
+    s.start_season(2027)  # 새 시즌: 당해 타석이 비워지고 2026 유형을 찾는다
+    assert s.lineup_shares("LG") == (None, 0.0)
+
+
+def test_matchup_columns_absent_without_types(two_season_games):
+    """유형표 없이(라이브 기본값) 만들면 기존 26개 피처 열 그대로, game_features에도 상성 키가 없다.
+    유형표를 줘도 기본 26개 피처 값은 바뀌지 않는다."""
+    plain = build_dataset_from(two_season_games)
+    assert list(plain.columns) == ["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES, "y"]
+    typed = build_dataset_from(two_season_games, types=MATCHUP_TYPES, kb=2, kp=3)
+    assert list(typed.columns) == ["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES,
+                                   *matchup_feature_names(2, 3), "y"]
+    pd.testing.assert_frame_equal(typed[plain.columns], plain)
+    f = game_features(mk("2026-04-05", 99), LeagueState())
+    assert not set(matchup_feature_names(4, 4)) & set(f)
+
+
+@pytest.fixture
+def stored_two_seasons(tmp_data_dir, two_season_games):
+    from kbo_predict import raw_store
+
+    games, boxes = two_season_games
+    for season in games:
+        raw_store.upsert_games(season, games[season])
+        raw_store.append_boxscores(season, boxes[season])
+    return two_season_games
+
+
+def test_build_dataset_with_types(stored_two_seasons):
+    from kbo_predict.features import build_dataset
+
+    df = build_dataset([2025, 2026], types=MATCHUP_TYPES, kb=2, kp=3)
+    pd.testing.assert_frame_equal(df, build_dataset_from(stored_two_seasons, types=MATCHUP_TYPES, kb=2, kp=3))
+    assert "types_known" not in build_dataset([2025, 2026]).columns
+
+
+def _fake_clusters():
+    """cluster.types_map이 읽는 모양의 최소 군집 묶음 (MATCHUP_TYPES와 같은 유형, K_b=2, K_p=3)."""
+    bat = pd.DataFrame({"season": [2025, 2026, 2025], "player_id": [1, 1, 2], "type": [1, 0, 0]})
+    pit = pd.DataFrame({"season": [2025], "player_id": [10], "type": [2]})
+    return {"batter": {"bundle": {"k": 2}, "assigned": bat}, "pitcher": {"bundle": {"k": 3}, "assigned": pit}}
+
+
+def test_cli_matchup_out_keeps_features_parquet_identical(stored_two_seasons, tmp_path, monkeypatch):
+    """--matchup-out은 game_id + 상성 열만 저장하고, 같이 쓰는 --out은 유형 없이 만든 parquet와 바이트까지 같다."""
+    from kbo_predict import cluster
+    from kbo_predict.features import features_sha256, load_features, main
+
+    monkeypatch.setattr(cluster, "load_bundle", lambda path: _fake_clusters())
+    plain, both, mu = tmp_path / "plain.parquet", tmp_path / "both.parquet", tmp_path / "matchup.parquet"
+    main(["--out", str(plain)])
+    main(["--out", str(both), "--matchup-out", str(mu), "--clusters", "fake.pkl"])
+    assert features_sha256(plain) == features_sha256(both)
+    m = load_features(mu)
+    assert list(m.columns) == ["game_id", *matchup_feature_names(2, 3)]
+    want = build_dataset_from(stored_two_seasons, types=MATCHUP_TYPES, kb=2, kp=3)
+    pd.testing.assert_frame_equal(m, want[["game_id", *matchup_feature_names(2, 3)]])
+    with pytest.raises(SystemExit):
+        main([])  # --out도 --matchup-out도 없으면 거부

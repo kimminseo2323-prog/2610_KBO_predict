@@ -549,3 +549,121 @@ def test_cli_report_refuses_to_overwrite_frozen_report(tmp_path, monkeypatch):
     assert frozen.read_text(encoding="utf-8") == "{}\n" and not (tmp_path / "models").exists()
     train_win.main(["report", "--force"])
     assert set(json.loads(frozen.read_text(encoding="utf-8"))) == REPORT_KEYS
+
+
+# ---------- 상성 피처 전후 비교 · 군집 품질 ----------
+
+MATCHUP_NAMES = ["bat_type0_diff", "bat_type1_diff", "starter_type0_diff", "starter_type1_diff", "types_known"]
+ABLATION_KEYS = {"features_added", "without", "with", "mcnemar_p_test", "adopt", "note", "fit_seasons",
+                 "cluster_version"}
+
+
+@pytest.fixture(scope="module")
+def small_df(season_df):
+    return season_df.assign(game_id=np.arange(len(season_df)) + 1000)
+
+
+@pytest.fixture(scope="module")
+def small_matchup(small_df):
+    """game_id + 상성 열 (일부는 y와 약하게 상관, 일부 NaN). 행 순서를 섞어 game_id로 붙는지 확인한다."""
+    rng = np.random.default_rng(11)
+    n = len(small_df)
+    y = small_df["y"].to_numpy()
+    b0 = 0.3 * (y - 0.5) + rng.normal(0, 0.3, n)
+    m = pd.DataFrame({"game_id": small_df["game_id"].to_numpy(), "bat_type0_diff": b0, "bat_type1_diff": -b0,
+                      "starter_type0_diff": rng.integers(-1, 2, n), "starter_type1_diff": rng.integers(-1, 2, n),
+                      "types_known": rng.integers(0, 2, n)})
+    m.loc[rng.random(n) < 0.1, ["bat_type0_diff", "bat_type1_diff"]] = np.nan
+    return m.sample(frac=1.0, random_state=1).reset_index(drop=True)
+
+
+@pytest.fixture(scope="module")
+def matchup_report(small_df, small_matchup):
+    cq = {"version": "x", "fit_seasons": [2015, 2016]}
+    return train_report(small_df, **SPLIT, matchup=small_matchup, cluster_quality=cq, meta={})
+
+
+def test_report_matchup_ablation_keys(matchup_report):
+    report, _ = matchup_report
+    ab = report["matchup_feature_ablation"]
+    assert set(ab) == ABLATION_KEYS
+    assert report["cluster_quality"] == {"version": "x", "fit_seasons": [2015, 2016]}
+    assert ab["features_added"] == MATCHUP_NAMES
+    assert ab["cluster_version"] == "x" and ab["fit_seasons"] == [2015, 2016]
+    assert ab["without"]["test"] == report["models"][report["selected"]]["test"]  # 전 = 본 모델과 동일
+    assert ab["without"]["val"] == report["models"][report["selected"]]["val"]
+    for part in ("val", "test"):
+        assert set(ab["with"][part]) == {"n", "accuracy", "log_loss", "brier"} and ab["with"][part]["n"] == 500
+    assert 0 <= ab["mcnemar_p_test"] <= 1
+    assert ab["adopt"] is (ab["with"]["val"]["log_loss"] < ab["without"]["val"]["log_loss"] - 0.001)
+    assert ab["note"].startswith("선택된 알고리즘·캘리브레이션·트리 수 고정, 피처만 추가. 라이브 반영은 4단계.")
+    assert "2015~2016" in ab["note"]
+    json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+
+def test_report_matchup_does_not_change_main_report(report, matchup_report):
+    """상성 비교를 더해도 나머지 보고서(본 모델·선택·지표)와 선택 번들의 확률은 그대로다."""
+    plain, plain_bundle = report
+    rep, bundle = matchup_report
+    drop = {"matchup_feature_ablation", "cluster_quality", "generated_at", "commit_sha", "run_url",
+            "features_sha256"}
+    assert {k: v for k, v in rep.items() if k not in drop} == {k: v for k, v in plain.items() if k not in drop}
+    assert bundle["features"] == FEATURE_NAMES
+
+
+def test_report_matchup_with_reproduces_by_hand(matchup_report, small_df, small_matchup):
+    """with = 선택된 알고리즘·캘리브레이션 방법·트리 수를 고정하고 피처만 늘려, 캘리브레이터는 train LOSO OOF로."""
+    rep, _ = matchup_report
+    kind, cal = rep["selected"], rep["models"][rep["selected"]]["calibration"]
+    n_est = rep["models"]["lgbm"]["best_iteration"] if kind == "lgbm" else 300
+    df = small_df.merge(small_matchup, on="game_id")
+    train, test = df[df["season"].isin([2023, 2024])], df[df["season"] == 2026]
+    feats = FEATURE_NAMES + MATCHUP_NAMES
+    b = fit_model(train, kind=kind, n_estimators=n_est, version="x", seasons=[2023, 2024], features=feats)
+    if cal != "none":
+        oof = oof_predictions(train, kind=kind, n_estimators=n_est, features=feats)
+        b["calibrator"] = fit_calibrator(cal, oof, train["y"].to_numpy())
+    assert evaluate(b, test) == rep["matchup_feature_ablation"]["with"]["test"]
+
+
+def test_report_without_matchup_unchanged(small_df):
+    a, _ = train_report(small_df, **SPLIT, meta={})
+    b, _ = train_report(small_df, **SPLIT, matchup=None, meta={})
+    assert a == b and a["matchup_feature_ablation"] is None and a["cluster_quality"] is None
+
+
+def test_report_matchup_rejects_missing_games(small_df, small_matchup):
+    with pytest.raises(ValueError, match="missing 3 game_id"):
+        train_report(small_df, **SPLIT, matchup=small_matchup.iloc[3:], meta={})
+
+
+def test_cli_report_with_matchup_and_clusters(tmp_path, monkeypatch):
+    """CLI report --matchup --clusters: 상성 전후 비교와 cluster.quality 결과가 보고서에, 상성 parquet 해시가
+    manifest의 report 항목에 들어간다."""
+    from kbo_predict import cluster
+
+    monkeypatch.chdir(tmp_path)
+    feats = _cli_parquet(tmp_path)
+    df = load_features(feats).assign(game_id=lambda d: np.arange(len(d)))
+    save_features(df, feats)
+    rng = np.random.default_rng(5)
+    mu = tmp_path / "data/processed/matchup.parquet"
+    save_features(pd.DataFrame({"game_id": df["game_id"], "bat_type0_diff": rng.normal(0, 1, len(df)),
+                                "types_known": rng.integers(0, 2, len(df))}), mu)
+    calls = {}
+    monkeypatch.setattr(cluster, "load_bundle", lambda path: {g: {"bundle": g, "assigned": g} for g in cluster.GROUPS})
+
+    def fake_quality(bundles, assigned, names_cfg):
+        calls.update(bundles=bundles, assigned=assigned, names_cfg=names_cfg)
+        return {"version": "clusters-test", "fit_seasons": [2015, 2025]}
+
+    monkeypatch.setattr(cluster, "quality", fake_quality)
+    train_win.main(["report", "--matchup", str(mu), "--clusters", "models/clusters.pkl"])
+    rep = json.loads((tmp_path / "data/public/model_report.json").read_text(encoding="utf-8"))
+    assert rep["cluster_quality"] == {"version": "clusters-test", "fit_seasons": [2015, 2025]}
+    assert calls["bundles"] == {"batter": "batter", "pitcher": "pitcher"} and set(calls["names_cfg"]) == {
+        "batter", "pitcher"}
+    ab = rep["matchup_feature_ablation"]
+    assert ab["features_added"] == ["bat_type0_diff", "types_known"] and ab["cluster_version"] == "clusters-test"
+    entry = json.loads((tmp_path / "models/manifest.json").read_text(encoding="utf-8"))["models"]["report"]
+    assert entry["matchup_sha256"] == hashlib.sha256(mu.read_bytes()).hexdigest()

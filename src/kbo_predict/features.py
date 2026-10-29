@@ -2,11 +2,17 @@
 
 핵심 규칙: 어떤 경기의 피처는 '그 경기 날짜 전날까지' 끝난 경기로만 만든다.
 그래서 build_training_frame은 하루치 경기의 피처를 모두 계산한 뒤에야 상태를 갱신한다.
+
+상성(유형) 피처 (3단계, 선택): LeagueState(types=...)로 선수 유형표를 넘길 때만 붙는다 (라이브는 넘기지 않는다).
+    유형은 '직전 시즌' 유형만 쓴다 — 2026 경기에는 (2025, 선수) 유형. 당해 시즌 유형은 그 시즌이 끝나야 정해지므로
+    쓰면 누수다. 타선 구성은 당해 시즌 지금까지 팀 타석(PA)을 선수 유형별로 나눈 비중, 선발은 유형 원-핫.
+    matchup_feature_names(kb, kp) 순서: bat_type{t}_diff(K_b개), starter_type{t}_diff(K_p개), types_known.
+    기본 피처 26개(FEATURE_NAMES)와 features.parquet는 그대로 두고, 상성 열은 별도 parquet(--matchup-out)에 저장한다.
 """
 import argparse
 import hashlib
 import time
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from datetime import date as _date, timedelta
 from itertools import groupby
 from pathlib import Path
@@ -30,6 +36,14 @@ STARTER_FEATURES = [
     "starter_bb9_diff", "starter_ip_diff", "starter_last3_runs_diff",
 ]
 FEATURE_NAMES = TEAM_FEATURES + STARTER_FEATURES  # 26개, 이 순서 고정 (모델·사이트가 의존)
+
+
+def matchup_feature_names(kb: int, kp: int) -> list[str]:
+    """상성 피처 이름: 타선 유형 비중 차이 K_b개 + 선발 유형 원-핫 차이 K_p개 + 유형 정보 충분 여부."""
+    return [f"bat_type{t}_diff" for t in range(kb)] + [f"starter_type{t}_diff" for t in range(kp)] + ["types_known"]
+
+
+TYPES_KNOWN_MIN_SHARE = 0.5  # types_known: 양 팀 모두 타석의 이 비율 이상이 유형 있는 타자여야 한다
 
 FACTOR_LABELS = {
     "win_pct_diff": "팀 승률 차이",
@@ -136,6 +150,7 @@ def _new_team() -> dict:
         "last_game_date": None,                           # 마지막 FINAL 경기 날짜 (date)
         "relief": deque(),                                # (date, 구원 투구수) — 최근 며칠만 남긴다
         "prev_win_pct": None,                             # 직전 시즌 최종 승률
+        "pa_by_player": Counter(),                        # 당해 시즌 타자별 타석(PA = AB+BB+HBP) — 상성 피처용
     }
 
 
@@ -149,9 +164,13 @@ def _new_pitcher() -> dict:
 
 
 class LeagueState:
-    """FINAL 경기만 누적하는 리그 상태: 팀별 기록, 맞대결, 투수별 기록(당해 + 직전 시즌)."""
+    """FINAL 경기만 누적하는 리그 상태: 팀별 기록, 맞대결, 투수별 기록(당해 + 직전 시즌).
+    types: (season, player_id) -> {"batter": 유형} / {"pitcher": 유형} (cluster.types_map). 주면 game_features가
+    상성 피처를 붙인다. kb·kp는 타자·투수 유형 수(K). 없으면(None) 상성 피처를 만들지 않는다 (라이브 기본값)."""
 
-    def __init__(self) -> None:
+    def __init__(self, types: dict[tuple[int, int], dict] | None = None, kb: int = 0, kp: int = 0) -> None:
+        self.types = types
+        self.kb, self.kp = int(kb), int(kp)
         self.season: int | None = None
         self._t: dict[str, dict] = defaultdict(_new_team)
         self._h2h: dict[tuple[str, str], int] = defaultdict(int)  # (승팀, 패팀) -> 당해 시즌 승수
@@ -207,6 +226,10 @@ class LeagueState:
         batting = box.get("batting", {}).get(side) or []
         pitching = box.get("pitching", {}).get(side) or []
         _add_rows(t["bat"], batting, BAT_KEYS)
+        # 타자별 타석: 팀 타선의 유형 구성(lineup_shares)에 쓴다. 팀 dict 안이라 start_season에서 함께 비워진다
+        for row in batting:
+            if row.get("player_id") is not None:
+                t["pa_by_player"][row["player_id"]] += _num(row.get("ab")) + _num(row.get("bb")) + _num(row.get("hbp"))
         _add_rows(t["pit"], pitching, PIT_KEYS)
         # 구원 투구수: 최근 3일 창만 쓰므로 그보다 오래된 기록은 버린다 (갱신은 날짜순이라 안전)
         t["relief"].append((day, sum(_num(r.get("np")) for r in pitching if _num(r.get("order")) > 1)))
@@ -244,6 +267,28 @@ class LeagueState:
             "bullpen3": sum(n for d, n in t["relief"] if day - timedelta(days=3) <= d < day),
         }
 
+    def _prev_type(self, player_id, group: str) -> int | None:
+        """직전 시즌(season-1) 유형. 유형표가 없거나 시즌이 정해지지 않았거나 그 선수-시즌 유형이 없으면 None."""
+        if self.types is None or self.season is None or player_id is None:
+            return None
+        return self.types.get((self.season - 1, player_id), {}).get(group)
+
+    def lineup_shares(self, code: str) -> tuple[list[float] | None, float]:
+        """팀 타선의 유형 구성: (유형별 비중 K_b개, 유형이 있는 타석 비중).
+        유형별 비중 = '직전 시즌 유형이 있는 타자'의 당해 시즌 타석 중 유형 t 타자의 몫 (합 1).
+        두 번째 값 = 당해 시즌 팀 전체 타석 중 유형이 있는 타자의 몫. 유형 있는 타석이 0이면 (None, 0.0)."""
+        t = self._t.get(code)
+        counts, known, total = [0] * self.kb, 0, 0
+        for pid, pa in (t["pa_by_player"].items() if t else ()):
+            total += pa
+            ty = self._prev_type(pid, "batter")
+            if ty is not None and pa:
+                counts[ty] += pa
+                known += pa
+        if known == 0:
+            return None, 0.0
+        return [c / known for c in counts], known / total
+
     def h2h_home_pct(self, home: str, away: str) -> float | None:
         """올 시즌 맞대결에서 home 팀의 승률 (장소 무관). 승패 난 맞대결이 없으면 None."""
         return _pct(self._h2h.get((home, away), 0), self._h2h.get((away, home), 0))
@@ -279,13 +324,39 @@ def starter_ids(box: dict | None) -> dict:
     return out
 
 
+def starter_type(state: LeagueState, player_id) -> int | None:
+    """선발 투수의 직전 시즌 투수 유형 (없으면 None)."""
+    return state._prev_type(player_id, "pitcher")
+
+
+def _matchup_features(state: LeagueState, home: str, away: str, starters: dict | None) -> dict:
+    """상성 피처 (matchup_feature_names 순서). 모두 홈 − 원정.
+    - bat_type{t}_diff: 타선 유형 비중 차이. 어느 팀이라도 유형 있는 타석이 없으면 NaN (개막일 등).
+    - starter_type{t}_diff: 선발 유형 원-핫 차이 (-1/0/1). 유형 없는 선발(신인·첫해 외국인 등)은 0 벡터.
+    - types_known: 양 팀 모두 타석의 절반 이상이 유형 있는 타자이고, 양 선발 모두 유형이 있으면 1."""
+    (h_share, h_known), (a_share, a_known) = state.lineup_shares(home), state.lineup_shares(away)
+    f = {}
+    for t in range(state.kb):
+        f[f"bat_type{t}_diff"] = float("nan") if h_share is None or a_share is None else h_share[t] - a_share[t]
+    st = {}
+    for side in ("home", "away"):
+        s = (starters or {}).get(side)
+        st[side] = starter_type(state, s.get("player_id")) if s else None
+    for t in range(state.kp):
+        f[f"starter_type{t}_diff"] = int(st["home"] == t) - int(st["away"] == t)
+    f["types_known"] = int(h_known >= TYPES_KNOWN_MIN_SHARE and a_known >= TYPES_KNOWN_MIN_SHARE
+                           and st["home"] is not None and st["away"] is not None)
+    return f
+
+
 def _starter_line(state: LeagueState, starters: dict | None, side: str) -> dict | None:
     s = (starters or {}).get(side)
     return state.pitcher_line(s["player_id"]) if s and s.get("player_id") is not None else None
 
 
 def game_features(game: dict, state: LeagueState, starters: dict | None = None) -> dict:
-    """경기 하나의 피처 26개(결측은 NaN)와 사이트 표시용 팀·선발 요약."""
+    """경기 하나의 피처 26개(결측은 NaN)와 사이트 표시용 팀·선발 요약.
+    state.types가 있으면 상성 피처(matchup_feature_names(state.kb, state.kp))도 붙인다 — 없으면 그 키 자체가 없다."""
     home, away, on = game["home_code"], game["away_code"], game["date"]
     h, a = state.team_line(home, on), state.team_line(away, on)
     f = {
@@ -309,10 +380,13 @@ def game_features(game: dict, state: LeagueState, starters: dict | None = None) 
     f["starter_known"] = int(known)
     for key in ("era", "fip", "k9", "bb9", "ip", "last3_runs"):
         f[f"starter_{key}_diff"] = _diff(hs[key], as_[key]) if known else float("nan")
-    return {
+    out = {
         **{n: f[n] for n in FEATURE_NAMES},
         "home_line": h, "away_line": a, "home_starter": hs, "away_starter": as_,
     }
+    if state.types is not None:
+        out.update(_matchup_features(state, home, away, starters))
+    return out
 
 
 def regular_finals(games: list[dict], season: int) -> list[dict]:
@@ -329,8 +403,10 @@ def build_training_frame(
     """정규시즌 FINAL 경기를 날짜순으로 훑으며 학습 행을 만든다.
     같은 날짜 경기는 피처를 모두 계산한 뒤 상태를 갱신한다 (더블헤더 1차전 결과가 2차전에 새지 않게).
     선발은 박스스코어의 실제 선발(order==1)을 쓴다. 무승부는 행을 만들지 않지만 상태에는 반영한다.
-    state를 넘기면 그 상태에 이어서 누적한다 (시즌 연결은 호출하는 쪽에서 start_season으로)."""
+    state를 넘기면 그 상태에 이어서 누적한다 (시즌 연결은 호출하는 쪽에서 start_season으로).
+    state에 유형표(types)가 있으면 상성 열(matchup_feature_names)이 FEATURE_NAMES 뒤, y 앞에 붙는다."""
     state = state if state is not None else LeagueState()
+    extra = matchup_feature_names(state.kb, state.kp) if state.types is not None else []
     rows = []
     for _, grp in groupby(regular_finals(games, season), key=lambda g: g["date"]):
         day_games = list(grp)
@@ -342,25 +418,31 @@ def build_training_frame(
                 "game_id": g["game_id"], "date": g["date"], "season": season,
                 "home_code": g["home_code"], "away_code": g["away_code"],
                 **{k: f[k] for k in FEATURE_NAMES},
+                **{k: f[k] for k in extra},
                 "y": int(g["home_score"] > g["away_score"]),
             })
         for g in day_games:
             state.update(g, boxscores.get(g["game_id"]))
-    return pd.DataFrame(rows, columns=["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES, "y"])
+    return pd.DataFrame(rows, columns=["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES,
+                                       *extra, "y"])
 
 
 # ---------- 시즌 연결 데이터셋 + 저장 ----------
 
-def build_dataset(seasons: list[int]) -> pd.DataFrame:
+BASE_COLUMNS = ["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES, "y"]  # features.parquet 열
+
+
+def build_dataset(seasons: list[int], *, types: dict | None = None, kb: int = 0, kp: int = 0) -> pd.DataFrame:
     """시즌을 오름차순으로 이어 붙인 학습 데이터. 시즌마다 start_season으로 '직전 시즌' 기록을 넘긴다.
-    행 순서는 시즌 → (date, game_id). 저장된 원본(raw_store)을 읽는다."""
-    state = LeagueState()
+    행 순서는 시즌 → (date, game_id). 저장된 원본(raw_store)을 읽는다.
+    types(cluster.types_map)·kb·kp를 주면 상성 열도 붙는다 (기본 26개 피처 값은 types가 있든 없든 같다)."""
+    state = LeagueState(types=types, kb=kb, kp=kp)
     frames = []
     for season in sorted(set(seasons)):
         state.start_season(season)
         frames.append(build_training_frame(
             raw_store.load_games(season), raw_store.load_boxscores(season), season=season, state=state))
-    return pd.concat(frames, ignore_index=True) if frames else build_training_frame([], {}, season=0)
+    return pd.concat(frames, ignore_index=True) if frames else build_training_frame([], {}, season=0, state=state)
 
 
 def save_features(df: pd.DataFrame, path) -> None:
@@ -380,19 +462,37 @@ def features_sha256(path) -> str:
 
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="전 시즌 피처 데이터셋을 만들어 parquet로 저장")
-    ap.add_argument("--out", required=True, help="저장할 parquet 경로")
+    ap.add_argument("--out", help="기본 피처(26개) parquet 경로 (예: data/processed/features.parquet)")
+    ap.add_argument("--matchup-out", help="상성 피처 parquet 경로 (game_id + 상성 열만). --clusters의 유형을 쓴다")
+    ap.add_argument("--clusters", default="models/clusters.pkl", help="--matchup-out에 쓸 군집 묶음 pkl")
     ap.add_argument("--seasons", nargs=2, type=int, metavar=("START", "END"), help="시즌 범위 (기본: 있는 시즌 전부)")
     args = ap.parse_args(argv)
+    if not args.out and not args.matchup_out:
+        ap.error("--out 또는 --matchup-out 중 하나는 있어야 합니다")
     seasons = raw_store.available_seasons()
     if args.seasons:
         seasons = [s for s in seasons if args.seasons[0] <= s <= args.seasons[1]]
     t0 = time.time()
-    df = build_dataset(seasons)
-    save_features(df, args.out)
+    kb = kp = 0
+    if args.matchup_out:
+        from . import cluster  # cluster → train_win → features 순환 import를 피하려고 여기서 읽는다
+
+        obj = cluster.load_bundle(args.clusters)
+        kb, kp = obj["batter"]["bundle"]["k"], obj["pitcher"]["bundle"]["k"]
+        df = build_dataset(seasons, types=cluster.types_map(obj), kb=kb, kp=kp)
+    else:
+        df = build_dataset(seasons)
     print(f"rows: {len(df)}  ({time.time() - t0:.1f}s)")
     for season, n in df.groupby("season").size().items():
         print(f"  {season}: {n}")
-    print(f"sha256: {features_sha256(args.out)}")
+    if args.out:
+        save_features(df[BASE_COLUMNS], args.out)  # 상성 열은 빼고 기존 열만 → 유형 유무와 관계없이 같은 바이트
+        print(f"sha256: {features_sha256(args.out)}")
+    if args.matchup_out:
+        names = matchup_feature_names(kb, kp)
+        save_features(df[["game_id", *names]], args.matchup_out)
+        print(f"matchup: {len(names)} cols, types_known mean={df['types_known'].mean():.3f}  "
+              f"sha256: {features_sha256(args.matchup_out)}")
 
 
 if __name__ == "__main__":
