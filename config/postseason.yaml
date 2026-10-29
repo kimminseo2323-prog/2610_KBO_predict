@@ -1,0 +1,28 @@
+# 포스트시즌 대진표 — simulate.py(load_postseason)가 읽는 설정 파일. 사람이 손으로 갱신한다.
+# 시즌(정수) -> 시리즈 목록. 각 시리즈:
+#   name:    시리즈 이름 (사이트에 그대로 나간다)
+#   teams:   [팀0, 팀1] 팀 코드 (teams.TEAMS). 아직 정해지지 않은 팀은 null → 그 시리즈는 건너뛴다.
+#   best_of: 최대 경기 수 (5판 3선승이면 5). 와일드카드는 단판으로 본다(1).
+#   start:   1차전 날짜 (YYYY-MM-DD). 미정이면 null → 건너뛴다. 이 날짜부터의 두 팀 FINAL 경기를 시리즈 전적으로 센다.
+#   homes:   1차전부터 차례로 각 경기의 홈 팀 코드 (best_of 개). 미정 칸은 null. 없으면 모든 경기를 팀0 홈으로 본다.
+# 우천 취소 경기는 전적에 들어가지 않고, 다음 경기가 같은 순번(같은 홈)으로 다시 치러진다고 본다.
+2026:
+  - name: 와일드카드
+    teams: [LG, OB]
+    best_of: 1
+    start: 2026-10-14
+  - name: 준플레이오프
+    teams: [HT, LG]
+    best_of: 5
+    start: 2026-10-17
+    homes: [HT, HT, LG, LG, HT]
+  - name: 플레이오프
+    teams: [SS, HT]
+    best_of: 5
+    start: 2026-10-25
+    homes: [SS, SS, HT, HT, SS]
+  - name: 한국시리즈
+    teams: [KT, null]
+    best_of: 7
+    start: null
+    homes: [KT, KT, null, null, KT, null, KT]
