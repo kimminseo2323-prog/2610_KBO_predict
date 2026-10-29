@@ -443,10 +443,16 @@ def write_manifest(path: Path, *, name: str, bundle_path: Path, features_path: P
     """models/manifest.json의 모델 하나(name) 항목만 갱신한다: 모델 파일 SHA256·버전 + 그 모델을 만든 parquet SHA256.
     다른 모델 항목은 기존 manifest에서 그대로 둔다 — 이번에 다시 학습하지 않은 모델 파일에 새 parquet 해시를
     붙이지 않기 위해서다. generated_at·commit_sha는 마지막으로 manifest를 쓴 실행의 값."""
+    update_manifest(path, name=name, meta=meta, entry={
+        "path": Path(bundle_path).as_posix(), "sha256": _sha256(bundle_path),
+        "version": load_bundle(bundle_path).get("version"), "features_sha256": _sha256(features_path)})
+
+
+def update_manifest(path: Path, *, name: str, entry: dict, meta: dict) -> None:
+    """manifest의 models[name]만 entry로 바꾸고 다른 항목은 그대로 둔다 (승패 모델·군집 번들이 함께 쓴다)."""
     path = Path(path)
     models = json.loads(path.read_text(encoding="utf-8")).get("models", {}) if path.exists() else {}
-    models[name] = {"path": Path(bundle_path).as_posix(), "sha256": _sha256(bundle_path),
-                    "version": load_bundle(bundle_path).get("version"), "features_sha256": _sha256(features_path)}
+    models[name] = entry
     _write_json(path, {"generated_at": meta.get("generated_at"), "commit_sha": meta.get("commit_sha"),
                        "models": models})
 
