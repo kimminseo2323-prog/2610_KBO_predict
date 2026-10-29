@@ -125,7 +125,7 @@
     }
   ],
   "cluster_quality": null,
-  "commit_sha": null,
+  "commit_sha": "f5e08b93203df079bbd1b2664516cb87574c8ace",
   "feature_importance": [
     {
       "importance": 0.10649089124682375,
@@ -259,7 +259,7 @@
     }
   ],
   "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
-  "generated_at": "2026-10-29T13:09:22+09:00",
+  "generated_at": "2026-10-29T14:03:02+09:00",
   "matchup_feature_ablation": null,
   "model_version": "report-2026",
   "models": {

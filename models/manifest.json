@@ -1,17 +1,17 @@
 {
-  "commit_sha": null,
-  "features_path": "data/processed/features.parquet",
-  "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
-  "generated_at": "2026-10-29T13:09:30+09:00",
+  "commit_sha": "f5e08b93203df079bbd1b2664516cb87574c8ace",
+  "generated_at": "2026-10-29T14:03:05+09:00",
   "models": {
     "live": {
+      "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
       "path": "models/win_model.pkl",
-      "sha256": "20ea959e3813779e0e43623d9a049a4a0043df38bf4e7e7da98824d562cae4f1",
+      "sha256": "48b18dbb31706193b0be87832f762f485883ebb4a7d82dd98a1e62ff205b2af5",
       "version": "v0.2"
     },
     "report": {
+      "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
       "path": "models/report-2026.pkl",
-      "sha256": "d0df8b0f2501d1b6de84c5e4f8e01f1108ef468f28c4ff8aba812394daf879f9",
+      "sha256": "a3a35db5e19bc5bc1e81bcab17a4cffe2de362285a4a1f46d4ca84e691bb1338",
       "version": "report-2026"
     }
   }
