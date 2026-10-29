@@ -198,3 +198,18 @@ def test_predict_game_adds_starter_type(bundle, fixture_html):
     assert without["home"]["starter"]["type"] is None and without["away"]["starter"]["type"] is None
     assert with_t["home_win_prob"] == without["home_win_prob"] and with_t["factors"] == without["factors"]
     assert predict_game(bundle, game, state, None, starter_types=types)["home"]["starter"] is None  # 미발표는 그대로
+
+
+def test_round_preseason(bundle, fixture_html):
+    """round: 개막일(2026-03-28) 전 = preseason(시범경기), 정규시즌 = regular, 종료일(10-12) 뒤 = postseason.
+    날짜로는 정규시즌이지만 따로 뺀 경기(2024-10-01 5위 결정전 12234)는 postseason."""
+    base, state = _game(fixture_html), _played_state()
+
+    def rnd(d, season=2026, game_id=14050):
+        return predict_game(bundle, {**base, "date": d, "season": season, "game_id": game_id}, state)["round"]
+
+    assert rnd("2026-03-20") == "preseason" and rnd("2026-03-27") == "preseason"
+    assert rnd("2026-03-28") == "regular" and rnd("2026-05-01") == "regular" and rnd("2026-10-12") == "regular"
+    assert rnd("2026-10-29") == "postseason"
+    assert rnd("2024-10-01", season=2024, game_id=12234) == "postseason"
+    assert rnd("2024-10-01", season=2024, game_id=12233) == "regular"

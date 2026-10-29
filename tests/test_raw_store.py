@@ -112,3 +112,27 @@ def test_rewrite_boxscores_leaves_no_tmp_files(tmp_data_dir):
     append_boxscores(2030, {1: {"game_id": 1, "date": "2030-04-01"}})
     rewrite_boxscores(2030, {1: {"game_id": 1, "date": "2030-04-01", "x": 2}})
     assert sorted(p.name for p in boxscores_dir(2030).iterdir()) == ["2030-04.jsonl.gz"]
+
+
+def test_upsert_games_atomic(tmp_data_dir, fixture_html, monkeypatch):
+    """games.jsonl 바꿔치기(os.replace)가 실패해도 기존 파일은 그대로, .tmp는 남지 않는다."""
+    import pytest
+
+    from kbo_predict import raw_store
+
+    rows = parse_week(fixture_html("mykbo_week_2026-10-27.html"))
+    upsert_games(2026, rows[:2])
+    path = raw_store.games_path(2026)
+    before = path.read_bytes()
+
+    def boom(src, dst):
+        raise OSError("disk full")
+
+    with monkeypatch.context() as m:  # undo()는 KBO_DATA_DIR까지 되돌리므로 이 블록만 바꾼다
+        m.setattr(raw_store.os, "replace", boom)
+        with pytest.raises(OSError, match="disk full"):
+            upsert_games(2026, rows)
+    assert path.read_bytes() == before
+    assert sorted(p.name for p in path.parent.iterdir()) == ["games.jsonl"]
+    assert upsert_games(2026, rows) == len(rows) - 2 and len(load_games(2026)) == len(rows)
+    assert sorted(p.name for p in path.parent.iterdir()) == ["games.jsonl"]

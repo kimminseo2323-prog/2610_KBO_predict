@@ -2,6 +2,7 @@
 
 predict_game이 돌려주는 항목(latest.json의 games[] 한 칸):
     game_id, date, time, stadium, round, status  경기 정보
+                      round = "preseason"(개막일 전 시범경기) | "regular" | "postseason"(종료일 뒤, 결정전 등 제외 경기) — _round
     home / away       {code, name, starter, win_pct_season, last10, run_diff}
                       starter = {player_id, name, era, k9, bb9, ip, starts, type} (당해 시즌 기록) 또는 None(미발표)
                       type = {id, name} 직전 시즌 투수 유형 (clusters.pkl) 또는 None
@@ -9,13 +10,13 @@ predict_game이 돌려주는 항목(latest.json의 games[] 한 칸):
     factors           요인 상위 5개 [{name, contribution_pp}] — |pp| 큰 순서
     starter_known     두 선발 모두 기록이 있어 선발 피처를 쓸 수 있었는가 (피처 starter_known과 같은 값)
 
-요인(pp) 계산: train_win.explain이 캘리브레이션 전 로짓을 '피처 26개 기여 + 기본값(bias)'으로 정확히 나눈다.
+요인(pp) 계산: train_win.explain이 캘리브레이션 전 로짓을 '번들 피처 기여 + 기본값(bias)'으로 정확히 나눈다.
 platt 캘리브레이션은 최종 로짓 = a · (캘리브레이션 전 로짓) + b 이므로, 캘리브레이션 전 로짓 1만큼의 변화는
 최종 로짓 a만큼의 변화다. 최종 로짓 1만큼의 변화는 최종 확률 p 근처에서 약 p(1−p)만큼의 확률 변화이므로
     pp = 기여 × a × p(1−p) × 100 (퍼센트포인트)   — platt
     pp = 기여 × p(1−p) × 100                      — isotonic·none (기울기 보정 없음)
-bias(평균적인 경기의 홈 어드밴티지)도 후보에 넣고 27개 중 |pp| 상위 5개를 고른다.
-주의: 요인 pp는 캘리브레이션 후 확률에 대한 **1차 근사**다. 그래서 27개 pp의 합이 `home_win_prob − 0.5`와
+bias(평균적인 경기의 홈 어드밴티지)도 후보에 넣고 (번들 피처 수 + 1)개 중 |pp| 상위 5개를 고른다.
+주의: 요인 pp는 캘리브레이션 후 확률에 대한 **1차 근사**다. 그래서 (번들 피처 수 + 1)개 pp의 합이 `home_win_prob − 0.5`와
 정확히 같지 않을 수 있다 (platt 절편 b와 시그모이드의 곡률은 요인으로 나누지 않는다).
 """
 from datetime import date as _date
@@ -23,7 +24,7 @@ from datetime import date as _date
 import pandas as pd
 
 from .features import FACTOR_LABELS, LeagueState, game_features
-from .seasons import is_regular
+from .seasons import REGULAR_SEASON, is_regular
 from .teams import TEAMS
 from .train_win import explain, predict_proba
 
@@ -76,10 +77,20 @@ def factor_pp(bundle: dict, X: pd.DataFrame, p: float) -> list[tuple[str, float]
 
 
 def _factors(bundle: dict, X: pd.DataFrame, p: float) -> list[dict]:
-    """요인 27개(피처 26 + bias)를 pp로 바꿔 |pp| 상위 TOP_FACTORS개. 순서는 반올림 전 |pp| 기준 (동률은 피처 순서)."""
+    """요인 (번들 피처 수 + 1)개(bundle["features"] + bias)를 pp로 바꿔 |pp| 상위 TOP_FACTORS개. 순서는 반올림 전 |pp| 기준 (동률은 피처 순서)."""
     items = sorted(factor_pp(bundle, X, p), key=lambda kv: -abs(kv[1]))
     # + 0.0: 반올림 결과가 -0.0이면 0.0으로 (JSON에 "-0.0"이 나오지 않게)
     return [{"name": name, "contribution_pp": round(v, 1) + 0.0} for name, v in items[:TOP_FACTORS]]
+
+
+def _round(season: int, d: _date, game_id) -> str:
+    """경기 구분. 등록된 시즌(seasons.REGULAR_SEASON)이면 개막일 전 = "preseason"(시범경기).
+    그 밖에는 is_regular로 "regular" / "postseason" — 종료일 뒤 경기와, 날짜로는 정규시즌이지만 따로 뺀 경기
+    (seasons.EXCLUDED_GAMES, 예: 2024-10-01 5위 결정전 12234)는 "postseason".
+    등록 전 시즌은 is_regular의 3/1~10/31 대체 범위를 쓰고 시범경기를 따로 가리지 않는다."""
+    if season in REGULAR_SEASON and d < REGULAR_SEASON[season][0]:
+        return "preseason"
+    return "regular" if is_regular(season, d, game_id) else "postseason"
 
 
 def predict_game(bundle: dict, game: dict, state: LeagueState, starters: dict | None = None,
@@ -97,7 +108,7 @@ def predict_game(bundle: dict, game: dict, state: LeagueState, starters: dict | 
         "date": game["date"],
         "time": game.get("time_kst"),
         "stadium": game.get("stadium"),
-        "round": "regular" if is_regular(season, _date.fromisoformat(game["date"]), game["game_id"]) else "postseason",
+        "round": _round(season, _date.fromisoformat(game["date"]), game["game_id"]),
         "status": game["status"],
         "home": _side(game["home"], game["home_code"], f["home_line"],
                       _starter(announced.get("home"), f["home_starter"], starter_types)),

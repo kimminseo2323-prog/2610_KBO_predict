@@ -281,3 +281,44 @@ def test_fetch_starters_wrong_or_non_game_page_is_error_not_tba(monkeypatch, fix
     assert [e["game_id"] for e in out["errors"]] == [14051, 14052]
     assert "starters page mismatch: expected 14051, got 14050" in out["errors"][0]["error"]
     assert "not a game page" in out["errors"][1]["error"]
+
+
+def test_collect_missing_boxscores_refetches_final_without_box(monkeypatch, tmp_data_dir, fixture_html):
+    """games.jsonl에서 정규시즌 FINAL인데 박스스코어가 없는 경기만, 오래된 순으로 최대 limit개 다시 받는다.
+    이미 있는 경기 · 취소 · 포스트시즌은 건너뛰고, 실패한 경기는 errors에 남긴 채 계속한다 (다음 실행에서 다시)."""
+    from kbo_predict.mykbo_parse import parse_game
+
+    rows = parse_week(fixture_html("mykbo_week_2015-06-02.html"))
+    post = dict(rows[0], game_id=9999, date="2015-10-20", path="/games/9999-X-vs-Y-20151020")  # 포스트시즌
+    raw_store.upsert_games(2015, rows + [post])
+    finals = sorted((r for r in rows if r["status"] == "FINAL"), key=lambda r: (r["date"], r["game_id"]))
+    page = fixture_html("mykbo_game_1189_final.html")
+
+    def page_for(gid):
+        return page.replace("/games/1189-", f"/games/{gid}-")
+
+    have, bad = finals[0]["game_id"], finals[2]["game_id"]
+    raw_store.append_boxscores(2015, {have: parse_game(page_for(have))})
+    calls = []
+
+    def fake_fetch(path, **kw):
+        calls.append((path, kw.get("sleep_s"), kw.get("session")))
+        gid = int(path.split("/")[2].split("-")[0])
+        return "<html><body>Checking your browser</body></html>" if gid == bad else page_for(gid)
+
+    monkeypatch.setattr(collect, "fetch_html", fake_fetch)
+    session = object()
+    out = collect.collect_missing_boxscores(2015, session=session, limit=5)
+    assert [c[0] for c in calls] == [r["path"] for r in finals[1:6]]           # 있는 경기(finals[0]) 건너뜀
+    assert all(c[1] == mykbo_client.SLEEP_S == 5.0 and c[2] is session for c in calls)  # 5초 간격 그대로
+    assert out["fetched"] == 4 and [e["game_id"] for e in out["errors"]] == [bad]
+    assert set(raw_store.load_boxscores(2015)) == {r["game_id"] for r in finals[:6]} - {bad}
+    calls.clear()
+    out = collect.collect_missing_boxscores(2015, sleep_s=0, limit=100)
+    paths = [c[0] for c in calls]
+    assert paths == [r["path"] for r in finals if r["game_id"] == bad or r in finals[6:]]
+    assert post["path"] not in paths and out["fetched"] == len(finals) - 6
+    assert [e["game_id"] for e in out["errors"]] == [bad]
+    calls.clear()
+    assert collect.collect_missing_boxscores(2015, sleep_s=0)["fetched"] == 0 and [c[0] for c in calls] == [
+        next(r["path"] for r in finals if r["game_id"] == bad)]

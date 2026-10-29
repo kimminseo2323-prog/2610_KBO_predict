@@ -47,7 +47,8 @@ def load_games(season: int) -> list[dict]:
 
 
 def upsert_games(season: int, games: list[dict]) -> int:
-    """game_id 기준 덮어쓰기. 신규 + 내용이 바뀐 경기 수를 반환."""
+    """game_id 기준 덮어쓰기. 신규 + 내용이 바뀐 경기 수를 반환.
+    games.jsonl.tmp에 다 쓴 뒤 os.replace로 바꿔치기한다 — 도중에 실패해도 기존 시즌 파일이 잘리지 않는다."""
     by_id = {g["game_id"]: g for g in load_games(season)}
     changed = 0
     for g in games:
@@ -64,9 +65,14 @@ def upsert_games(season: int, games: list[dict]) -> int:
         path = games_path(season)
         path.parent.mkdir(parents=True, exist_ok=True)
         ordered = sorted(by_id.values(), key=lambda g: (g["date"], g["game_id"]))
-        with path.open("w", encoding="utf-8", newline="\n") as f:
-            for g in ordered:
-                f.write(_dumps(g) + "\n")
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        try:
+            with tmp.open("w", encoding="utf-8", newline="\n") as f:
+                for g in ordered:
+                    f.write(_dumps(g) + "\n")
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)  # 성공했으면 이미 바꿔치기돼 없다
     return changed
 
 

@@ -9,23 +9,25 @@ import requests
 from kbo_predict import KST, raw_store
 from kbo_predict.mykbo_client import SLEEP_S, drop_cache, fetch_html, week_path
 from kbo_predict.mykbo_parse import parse_game, parse_starters, parse_week
+from kbo_predict.seasons import is_regular
 
 PROGRESS_EVERY = 20
 STALE_LIVE_DAYS = 2  # 이만큼 지난 LIVE 행은 경기 페이지로 확인한다 (경기 페이지가 하루쯤 늦을 수 있다)
+MISSING_BOX_LIMIT = 20  # collect_missing_boxscores가 한 번에 다시 받는 최대 경기 수 (20경기 x 5초 간격 = 약 100초)
 
 
 def season_range(season: int) -> tuple[date, date]:
     return date(season, 3, 1), date(season, 11, 30)
 
 
-def _fetch_box(row: dict, sleep_s: float, errors: list[dict]) -> dict | None:
+def _fetch_box(row: dict, sleep_s: float, errors: list[dict], session=None) -> dict | None:
     """경기 페이지 가져오기 + 파싱 + game_id 검사. 실패하면 errors에 기록하고 None.
 
     HTML 캐시에는 '파싱 성공 + FINAL' 페이지만 남긴다. 그 외(챌린지 페이지, 아직 LIVE 등)는
     캐시를 지워 다음 실행에서 다시 요청하게 한다.
     """
     try:
-        box = parse_game(fetch_html(row["path"], sleep_s=sleep_s))
+        box = parse_game(fetch_html(row["path"], session=session, sleep_s=sleep_s))
         if box["game_id"] != row["game_id"]:
             raise ValueError(f"game_id mismatch: week={row['game_id']} page={box['game_id']}")
         if box["status"] != "FINAL":
@@ -43,6 +45,49 @@ def _same_score(box: dict, row: dict) -> bool:
     """경기 페이지가 FINAL이 아니어도(우천 단축 등) 주간 일정의 FINAL 점수와 양팀 점수가 같으면 받아들인다."""
     a, h = box["away"]["score"], box["home"]["score"]
     return None not in (a, h) and a == row["away_score"] and h == row["home_score"]
+
+
+def _not_final_error(box: dict, row: dict) -> dict:
+    """주간 일정은 FINAL인데 경기 페이지가 FINAL도 아니고 점수도 다를 때의 오류 칸 (박스스코어는 저장하지 않는다)."""
+    return {"game_id": row["game_id"], "path": row["path"],
+            "error": (f"page not final: {box['status']} {box['away']['score']}-{box['home']['score']}"
+                      f" vs week {row['away_score']}-{row['home_score']}")}
+
+
+def collect_missing_boxscores(season: int, *, session=None, limit: int = MISSING_BOX_LIMIT,
+                              sleep_s: float = SLEEP_S) -> dict:
+    """games.jsonl에는 FINAL(정규시즌)인데 박스스코어가 없는 경기를 다시 받는다 — 한 번 실패한 경기가 collect_range의
+    수집 창(오늘 −7일 ~ +14일)을 벗어나면 다시는 시도되지 않던 구멍을 메운다. 박스스코어가 빠지면 선발·타격 상태가
+    그 경기만큼 비어 예측이 학습 때와 달라진다.
+    대상: 그 시즌 정규시즌(seasons.is_regular) FINAL 중 load_boxscores에 없는 것, (date, game_id) 오래된 순으로
+    최대 limit개 (실행마다 요청 수를 묶는다 — 요청마다 sleep_s초 간격, 기본 5초 = robots.txt Crawl-delay).
+    받기·파싱·game_id 검사·캐시 처리는 collect_range와 같은 _fetch_box. 경기 하나가 실패해도 errors에 남기고 계속한다.
+    경기 페이지가 FINAL이 아니면 주간 일정 점수와 같을 때만 저장한다 (collect_range와 같은 규칙).
+    받은 것은 끝에(예외가 나도) append_boxscores로 저장한다. 반환: {"fetched": 저장한 수, "errors": [...]}."""
+    have = set(raw_store.load_boxscores(season))
+    todo = [g for g in sorted(raw_store.load_games(season), key=lambda g: (g["date"], g["game_id"]))
+            if g["status"] == "FINAL" and g["game_id"] not in have
+            and is_regular(season, date.fromisoformat(g["date"]), g["game_id"])][:limit]
+    errors: list[dict] = []
+    got: dict[int, dict] = {}
+    fetched = 0
+    try:
+        for row in todo:
+            box = _fetch_box(row, sleep_s, errors, session=session)
+            if box is None:
+                continue
+            if box["status"] != "FINAL" and not _same_score(box, row):
+                err = _not_final_error(box, row)
+                errors.append(err)
+                print(f"[collect] {err['path']}: {err['error']}", file=sys.stderr, flush=True)
+                continue
+            got[row["game_id"]] = box
+    finally:
+        if got:
+            fetched = raw_store.append_boxscores(season, got)
+    if todo:
+        print(f"[collect] missing boxscores {season}: {fetched}/{len(todo)} fetched", file=sys.stderr, flush=True)
+    return {"fetched": fetched, "errors": errors}
 
 
 def collect_range(from_date: date, to_date: date, *, season: int | None = None, sleep_s: float = SLEEP_S,
@@ -95,9 +140,7 @@ def collect_range(from_date: date, to_date: date, *, season: int | None = None, 
                         continue
                     if box["status"] != "FINAL" and not _same_score(box, r):
                         # 진행 중 박스스코어를 영구 저장하지 않는다. 캐시는 _fetch_box가 이미 지웠고, 다음 실행에서 다시 받는다.
-                        err = {"game_id": r["game_id"], "path": r["path"],
-                               "error": (f"page not final: {box['status']} {box['away']['score']}-{box['home']['score']}"
-                                         f" vs week {r['away_score']}-{r['home_score']}")}
+                        err = _not_final_error(box, r)
                         errors.append(err)
                         print(f"[collect] {err['path']}: {err['error']}", file=sys.stderr, flush=True)
                         continue

@@ -65,7 +65,7 @@ def test_write_latest_and_status_contain_meta(tmp_path):
     meta = {"generated_at": "2026-10-28T09:00:00+09:00", "model_version": "v0.1", "commit_sha": None, "run_url": "http://x/1"}
     write_latest(tmp_path / "latest.json", date="2026-10-29", games=[{"game_id": 1}], meta=meta)
     d = json.loads((tmp_path / "latest.json").read_text(encoding="utf-8"))
-    assert d == {**meta, "date": "2026-10-29", "mode": "live", "games": [{"game_id": 1}]}
+    assert d == {**meta, "date": "2026-10-29", "mode": "live", "games": [{"game_id": 1}], "outlook": None}
     write_status(tmp_path / "status.json", mode="live", next_game_date="2026-10-29", games_today=1, meta=meta)
     s = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
     assert s["next_game_date"] == "2026-10-29" and s["games_today"] == 1 and s["mode"] == "live"
@@ -103,3 +103,29 @@ def test_upsert_history_model_version_from_entry_or_bundle(tmp_path):
 def test_upsert_history_requires_a_model_version(tmp_path):
     with pytest.raises(ValueError, match="model_version"):
         upsert_history(tmp_path / "history.csv", [pred("g1", 0.55)], predicted_at="t")
+
+
+def test_write_json_atomic(tmp_path, monkeypatch):
+    """바꿔치기(os.replace) 직전에 실패해도 기존 latest.json · history.csv는 그대로이고 .tmp는 남지 않는다."""
+    import kbo_predict.publish as publish
+
+    meta = {"generated_at": "t", "model_version": "v", "commit_sha": None, "run_url": None}
+    latest, hist = tmp_path / "latest.json", tmp_path / "history.csv"
+    write_latest(latest, date="2026-10-29", games=[{"game_id": 1}], meta=meta)
+    upsert_history(hist, [pred("g1", 0.55)], predicted_at="t", model_version="v")
+    before = latest.read_bytes(), hist.read_bytes()
+
+    def boom(src, dst):
+        raise OSError("disk full")
+
+    with monkeypatch.context() as m:
+        m.setattr(publish.os, "replace", boom)
+        with pytest.raises(OSError, match="disk full"):
+            write_latest(latest, date="2026-10-30", games=[{"game_id": 2}], meta=meta)
+        with pytest.raises(OSError, match="disk full"):
+            upsert_history(hist, [pred("g2", 0.40)], predicted_at="t2", model_version="v")
+    assert (latest.read_bytes(), hist.read_bytes()) == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["history.csv", "latest.json"]  # .tmp 없음
+    write_latest(latest, date="2026-10-30", games=[{"game_id": 2}], meta=meta)  # 정상 쓰기도 .tmp를 남기지 않는다
+    assert json.loads(latest.read_text(encoding="utf-8"))["date"] == "2026-10-30"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["history.csv", "latest.json"]

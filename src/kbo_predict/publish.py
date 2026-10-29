@@ -1,5 +1,8 @@
-"""발행 파일(latest.json / history.csv / status.json) 쓰기. 네트워크 없음."""
+"""발행 파일(latest.json / history.csv / status.json) 쓰기. 네트워크 없음.
+모든 쓰기는 원자적이다: 같은 폴더의 .tmp에 다 쓴 뒤 os.replace로 바꿔치기한다 (_atomic_write).
+쓰는 도중 실패해도(디스크·직렬화 오류, Actions 중단) 기존 파일은 그대로 남고 반쯤 쓴 파일이 커밋되지 않는다."""
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -10,18 +13,32 @@ HISTORY_COLUMNS = [
 ]
 
 
+def _atomic_write(path, write) -> None:
+    """write(tmp)로 path와 같은 폴더의 path.tmp에 쓴 뒤 os.replace(tmp, path).
+    어디서 실패하든 .tmp는 지우고 예외를 다시 낸다 (바꿔치기 전이므로 기존 path는 그대로).
+    raw_store.rewrite_boxscores · upsert_games와 같은 방식."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        write(tmp)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)  # 성공했으면 이미 바꿔치기돼 없다
+
+
 def _write_json(path, obj, *, indent: int | None = 2, sort_keys: bool = False,
                 separators: tuple[str, str] | None = None) -> None:
     """UTF-8 JSON(한글 그대로) + 끝 줄바꿈. 기본값(indent=2, 키 순서 유지)은 latest/status.json 형식 그대로.
     사이트 데이터는 sort_keys=True로 바이트를 결정적으로 만든다: teams.json은 indent=1,
-    players.json은 크기를 줄이려고 indent=None + separators=(",", ":") (공백 없는 compact)."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    players.json은 크기를 줄이려고 indent=None + separators=(",", ":") (공백 없는 compact).
+    직렬화를 먼저 끝낸 뒤 원자적으로 쓴다 (_atomic_write)."""
     text = json.dumps(obj, ensure_ascii=False, indent=indent, sort_keys=sort_keys, separators=separators)
-    path.write_text(text + "\n", encoding="utf-8")
+    _atomic_write(path, lambda tmp: tmp.write_text(text + "\n", encoding="utf-8"))
 
 
-def write_latest(path, *, date: str, games: list[dict], meta: dict) -> None:
+def write_latest(path, *, date: str, games: list[dict], meta: dict, outlook: dict | None = None) -> None:
+    """latest.json. outlook = 전망 카드(simulate.outlook_for의 series / playoff_race / next_game) 또는 None."""
     _write_json(path, {
         "generated_at": meta.get("generated_at"),
         "date": date,
@@ -30,6 +47,7 @@ def write_latest(path, *, date: str, games: list[dict], meta: dict) -> None:
         "commit_sha": meta.get("commit_sha"),
         "run_url": meta.get("run_url"),
         "games": games,
+        "outlook": outlook,
     })
 
 
@@ -60,12 +78,11 @@ def _read_history(path) -> pd.DataFrame:
 
 
 def _write_history(path, df: pd.DataFrame) -> None:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
     key = df["game_id"].astype(str)
     order = pd.DataFrame({"d": df["date"], "k": pd.to_numeric(key, errors="coerce"), "s": key})
     idx = order.sort_values(["d", "k", "s"], kind="stable").index
-    df.loc[idx].to_csv(path, index=False, encoding="utf-8")
+    out = df.loc[idx]
+    _atomic_write(path, lambda tmp: out.to_csv(tmp, index=False, encoding="utf-8"))
 
 
 def upsert_history(path, predictions: list[dict], *, predicted_at: str, model_version: str | None = None) -> None:
