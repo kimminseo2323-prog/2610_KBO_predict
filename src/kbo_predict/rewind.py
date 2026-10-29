@@ -2,7 +2,8 @@
 
 하루치 파일(data/public/rewind/{season}/{YYYY-MM-DD}.json) = "이 날 모델은 이렇게 예측했고, 결과는 이랬다".
 - games[]: 그날 정규시즌 FINAL·CANCELED 경기 (game_id 순). 중단된 채 남은 LIVE 등은 결과가 없으니 뺀다.
-  FINAL = latest.json의 경기 항목(predict.predict_game)과 같은 모양 + result {home_score, away_score, winner, correct}.
+  FINAL = latest.json의 경기 항목(predict.predict_game)과 같은 모양 + result {home_score, away_score, winner, pick, correct}
+  (pick = 모델이 고른 쪽 "HOME"|"AWAY", 반올림 전 확률 기준).
   CANCELED = latest.json의 취소 항목(predict.canceled_entry: home_win_prob null, factors []) + result null.
   그래서 경기가 모두 취소된 날도 파일이 있다 (전망 카드는 그대로 보인다).
   예측 모델은 평가용 고정 모델 report-2026(2015~2024 학습)이다 — 2026은 학습에 안 쓴 시험 시즌이라
@@ -96,15 +97,18 @@ def _raw_prob(bundle: dict, game: dict, state: LeagueState, starters: dict) -> f
 
 def _result(game: dict, p_raw: float) -> dict:
     """경기 결과와 예측 적중 여부. 예측 규칙은 학습 평가(train_win._correct)와 같다:
-    반올림 전 P(홈 승) ≥ 0.5면 홈 승으로 예측. 그래서 시즌 정확도가 model_report.json의 시험 정확도와 같다.
-    무승부·점수 없는 경기는 correct = None (정확도 계산에서 빠진다)."""
+    반올림 전 P(홈 승) ≥ 0.5면 홈 승으로 예측 → pick = "HOME", 아니면 "AWAY".
+    사이트는 pick을 그대로 보여 준다 (home_win_prob 0.5000처럼 반올림된 값으로 다시 판정하지 않게).
+    그래서 시즌 정확도가 model_report.json의 시험 정확도와 같다.
+    무승부·점수 없는 경기는 correct = None (정확도 계산에서 빠진다). 취소 경기는 result 자체가 None."""
     hs, as_ = game.get("home_score"), game.get("away_score")
     if hs is None or as_ is None:
         winner = None
     else:
         winner = "HOME" if hs > as_ else "AWAY" if as_ > hs else "DRAW"
-    correct = None if winner not in ("HOME", "AWAY") else (p_raw >= 0.5) == (winner == "HOME")
-    return {"home_score": hs, "away_score": as_, "winner": winner, "correct": correct}
+    pick = "HOME" if p_raw >= 0.5 else "AWAY"
+    correct = None if winner not in ("HOME", "AWAY") else pick == winner
+    return {"home_score": hs, "away_score": as_, "winner": winner, "pick": pick, "correct": correct}
 
 
 def day_payload(season: int, on: str, *, games: list[dict], boxscores: dict[int, dict], bundle: dict,
@@ -165,12 +169,27 @@ def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict, meta:
     대상 날짜 = 정규시즌 FINAL·CANCELED 경기가 하나라도 있는 날 전부 (dates를 주면 그중 그 날짜만).
     상태는 개막 직전 상태 하나를 날짜순으로 이어 쌓는다: 그날 피처·전망을 모두 계산한 뒤 그날 경기를 반영.
     dates를 주면 기존 index.json의 나머지 날짜는 그대로 두고 그 날짜 칸만 바꾼다 (일부만 다시 만들 때).
+    dates의 검사는 파일을 하나라도 쓰기 전에 모두 한다 (ValueError) — 빈 목록, 시즌에 없는 날짜,
+    기존 index.json의 model_version이 이번 번들과 다름(다른 모델의 날짜와 섞인 정확도가 나오지 않게).
     index.json = {"season", "model_version", "generated_at", "commit_sha",
                   "dates": [{"date", "games", "correct", "decided"}], "accuracy", "n_decided", "note"}."""
     season_dir = Path(out_dir) / str(season)
+    index_path = season_dir / "index.json"
     games = raw_store.load_games(season)
     boxes = raw_store.load_boxscores(season)
     wanted = None if dates is None else set(dates)
+    old_index = None
+    if wanted is not None:  # 쓰기 전에 모두 검사한다
+        if not wanted:
+            raise ValueError("dates is empty (pass None to rebuild the whole season)")
+        missing = sorted(wanted - {g["date"] for g in day_rows(games, season)})
+        if missing:
+            raise ValueError(f"no regular-season FINAL/CANCELED games on {missing} in season {season}")
+        if index_path.exists():
+            old_index = json.loads(index_path.read_text(encoding="utf-8"))
+            if old_index.get("model_version") != bundle["version"]:
+                raise ValueError(f"{index_path} was built with model_version {old_index.get('model_version')!r}, "
+                                 f"not {bundle['version']!r}; rebuild the whole season instead of merging dates")
     state = _opening_state(season)
     entries: dict[str, dict] = {}
     for on, grp in groupby(day_rows(games, season), key=lambda g: g["date"]):
@@ -185,14 +204,8 @@ def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict, meta:
         for g in day_games:
             if g["status"] == "FINAL":  # 취소 경기는 상태에 넣지 않는다 (= regular_finals만 쌓는 state_before와 같다)
                 state.update(g, boxes.get(g["game_id"]))
-    if wanted is not None:
-        missing = sorted(wanted - entries.keys())
-        if missing:
-            raise ValueError(f"no regular-season FINAL/CANCELED games on {missing} in season {season}")
-        index_path = season_dir / "index.json"
-        if index_path.exists():
-            old = json.loads(index_path.read_text(encoding="utf-8"))
-            entries = {**{d["date"]: d for d in old.get("dates", [])}, **entries}
+    if old_index is not None:
+        entries = {**{d["date"]: d for d in old_index.get("dates", [])}, **entries}
     rows = [entries[d] for d in sorted(entries)]
     n_decided = sum(r["decided"] for r in rows)
     n_correct = sum(r["correct"] for r in rows)
@@ -206,5 +219,5 @@ def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict, meta:
         "n_decided": n_decided,
         "note": INDEX_NOTE,
     }
-    _write_json(season_dir / "index.json", index, indent=1)
+    _write_json(index_path, index, indent=1)
     return index

@@ -77,9 +77,12 @@ def test_rewind_day_has_results_and_outlook(day):
         assert g["status"] == "FINAL" and g["round"] == "regular" and g["date"] == DAY
         assert g["home"]["starter"] is not None and g["away"]["starter"] is not None  # 박스스코어 실제 선발
         r = g["result"]
-        assert set(r) == {"home_score", "away_score", "winner", "correct"}
+        assert set(r) == {"home_score", "away_score", "winner", "pick", "correct"}
         assert r["winner"] == ("HOME" if r["home_score"] > r["away_score"] else "AWAY")
-        assert r["correct"] == ((g["home_win_prob"] > 0.5) == (r["winner"] == "HOME"))
+        # 적중 = 반올림 전 확률로 고른 쪽(pick)이 이긴 쪽인가 — 공개 칸 home_win_prob(4자리)로 다시 판정하지 않는다
+        assert r["pick"] in ("HOME", "AWAY") and r["correct"] == (r["pick"] == r["winner"])
+        if abs(g["home_win_prob"] - 0.5) > 1e-4:  # 반올림 경계가 아니면 pick은 공개 확률과도 맞는다
+            assert r["pick"] == ("HOME" if g["home_win_prob"] > 0.5 else "AWAY")
     o = day["outlook"]
     assert o["type"] == "playoff_race" and o["as_of"] == DAY
     assert set(o["teams"]) == set(TEAM_CODES) and len(o["teams"]) == 10
@@ -147,6 +150,47 @@ def test_partial_rebuild_keeps_other_index_dates(tmp_path, real_small):
     assert idx["n_decided"] == sum(d["decided"] for d in idx["dates"])
     with pytest.raises(ValueError, match="2026-12-25"):  # 정규시즌 경기가 없는 날
         build_season(SEASON, dates=["2026-12-25"], **kw)
+
+
+def test_partial_rebuild_validates_before_writing(tmp_path, real_small):
+    """--dates 검사는 파일을 쓰기 전에 모두: 없는 날짜가 하나라도 섞이면 아무 파일도 안 쓴다, 빈 목록 거절,
+    기존 index.json의 model_version이 다르면 합치지 않는다."""
+    kw = dict(out_dir=tmp_path, bundle=real_small["bundle"], team_bundle=real_small["team_bundle"], meta=META,
+              starter_types=real_small["starter_types"])
+    with pytest.raises(ValueError, match="2026-12-25"):
+        build_season(SEASON, dates=["2026-04-15", "2026-12-25"], **kw)
+    assert not (tmp_path / "2026").exists() or not list((tmp_path / "2026").iterdir())
+    with pytest.raises(ValueError, match="empty"):
+        build_season(SEASON, dates=[], **kw)
+    build_season(SEASON, dates=["2026-04-15"], **kw)
+    idx_path = tmp_path / "2026" / "index.json"
+    idx = json.loads(idx_path.read_text(encoding="utf-8"))
+    idx_path.write_text(json.dumps({**idx, "model_version": "other-model"}), encoding="utf-8")
+    before = idx_path.read_bytes()
+    with pytest.raises(ValueError, match="other-model"):
+        build_season(SEASON, dates=["2026-04-16"], **kw)
+    assert not (tmp_path / "2026" / "2026-04-16.json").exists() and idx_path.read_bytes() == before
+
+
+def test_build_rewind_cli_fails_on_broken_clusters(tmp_path):
+    """clusters.pkl이 있는데 못 읽으면 유형을 null로 조용히 바꾸지 않고 exit 1 (되감기 재현성). 아무 파일도 안 쓴다."""
+    from scripts import build_rewind
+
+    bad = tmp_path / "clusters.pkl"
+    bad.write_bytes(b"not a pickle")
+    out = tmp_path / "out"
+    with pytest.raises(SystemExit) as exc:
+        build_rewind.main(["--season", "2026", "--dates", DAY, "--out-dir", str(out), "--clusters", str(bad)])
+    assert exc.value.code not in (0, None) and not out.exists()
+
+
+def test_build_rewind_cli_rejects_empty_dates(tmp_path):
+    """--dates ""(빈 목록)는 시즌 전체로 바뀌지 않고 거절된다."""
+    from scripts import build_rewind
+
+    with pytest.raises(ValueError, match="empty"):
+        build_rewind.main(["--season", "2026", "--dates", "", "--out-dir", str(tmp_path / "out")])
+    assert not (tmp_path / "out").exists()
 
 
 def test_canceled_games_are_listed(tmp_path, real_small):
