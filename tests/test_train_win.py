@@ -712,6 +712,15 @@ def test_train_team_matches_report_ablation(small_df):
     assert b2["trained_at"] == "2026-10-29T00:00:00+09:00"
 
 
+def test_train_team_lgbm_uses_early_stopping_rounds(small_df):
+    """lgbm 분기: 팀 피처 19개로 val early stopping을 다시 돌리고, 그 트리 수로 번들을 학습한다."""
+    summary, bundle = train_team(small_df, kind="lgbm", calibration="none")
+    assert summary["kind"] == "lgbm" and isinstance(summary["best_iteration"], int)
+    assert summary["best_iteration"] == bundle["n_estimators"]
+    assert bundle["model"].n_estimators == bundle["n_estimators"]
+    assert bundle["features"] == list(TEAM_FEATURES) and bundle["calibrator"] is None
+
+
 def test_team_cli_writes_manifest_entry_only(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     feats = _cli_parquet(tmp_path)

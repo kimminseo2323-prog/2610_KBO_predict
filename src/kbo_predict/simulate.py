@@ -337,5 +337,12 @@ def outlook_for(season: int, on: str, games: list[dict], *, state, team_bundle: 
     s = _active_series(season, on, games, ps_config)
     if s is not None:
         return _series_outlook(s, on, games, state, team_bundle, n_sims, seed)
+    return next_game_card(on, games)
+
+
+def next_game_card(on: str, games: list[dict]) -> dict:
+    """전망 카드의 기본형 {"type": "next_game", "as_of": on, "next_game_date": on 다음 경기 날짜(취소 제외) 또는 None}.
+    outlook_for(정규시즌·시리즈가 아닐 때)와 run_pipeline의 대체 카드(팀 모델이 없거나 실패할 때)가 함께 쓴다 —
+    키 순서까지 같게."""
     later = sorted(g["date"] for g in games if g["date"] > on and g["status"] != "CANCELED")
     return {"type": "next_game", "as_of": on, "next_game_date": later[0] if later else None}

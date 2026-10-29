@@ -5,7 +5,7 @@ import yaml
 
 from kbo_predict import simulate
 from kbo_predict.features import LeagueState
-from kbo_predict.simulate import TEAM_CODES, load_postseason, outlook_for, playoff_race, series
+from kbo_predict.simulate import TEAM_CODES, load_postseason, next_game_card, outlook_for, playoff_race, series
 
 
 def g(date, gid, home, away, hs=None, as_=None, status="FINAL"):
@@ -289,3 +289,14 @@ def test_game_probs_uses_team_features_only(bundle):
     p = simulate.game_probs(bundle, [g("2026-05-01", 1, "LG", "HH"), g("2026-05-01", 2, "HH", "LG")], state)
     assert len(p) == 2 and all(0.0 < x < 1.0 for x in p)
     assert simulate.game_probs(bundle, [], state) == []
+
+
+def test_next_game_card_shape_and_key_order():
+    """next_game 카드: 키 순서 (type, as_of, next_game_date), 취소 경기는 다음 경기로 치지 않는다, 없으면 None.
+    outlook_for와 run_pipeline의 대체 카드가 이 함수 하나를 쓴다."""
+    games = [{"date": "2026-10-30", "status": "CANCELED"}, {"date": "2026-11-01", "status": "SCHEDULED"},
+             {"date": "2026-10-29", "status": "SCHEDULED"}]
+    card = next_game_card("2026-10-29", games)
+    assert list(card) == ["type", "as_of", "next_game_date"]
+    assert card == {"type": "next_game", "as_of": "2026-10-29", "next_game_date": "2026-11-01"}
+    assert next_game_card("2026-11-01", games)["next_game_date"] is None

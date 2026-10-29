@@ -54,19 +54,23 @@ def _not_final_error(box: dict, row: dict) -> dict:
                       f" vs week {row['away_score']}-{row['home_score']}")}
 
 
-def collect_missing_boxscores(season: int, *, session=None, limit: int = MISSING_BOX_LIMIT,
-                              sleep_s: float = SLEEP_S) -> dict:
+def collect_missing_boxscores(season: int, *, before: str | None = None, session=None,
+                              limit: int = MISSING_BOX_LIMIT, sleep_s: float = SLEEP_S) -> dict:
     """games.jsonl에는 FINAL(정규시즌)인데 박스스코어가 없는 경기를 다시 받는다 — 한 번 실패한 경기가 collect_range의
     수집 창(오늘 −7일 ~ +14일)을 벗어나면 다시는 시도되지 않던 구멍을 메운다. 박스스코어가 빠지면 선발·타격 상태가
     그 경기만큼 비어 예측이 학습 때와 달라진다.
-    대상: 그 시즌 정규시즌(seasons.is_regular) FINAL 중 load_boxscores에 없는 것, (date, game_id) 오래된 순으로
+    대상: 그 시즌 정규시즌(seasons.is_regular) FINAL 중 load_boxscores에 없는 것, (date, game_id) 최근 순으로
     최대 limit개 (실행마다 요청 수를 묶는다 — 요청마다 sleep_s초 간격, 기본 5초 = robots.txt Crawl-delay).
+    before('YYYY-MM-DD')를 주면 date < before인 경기만 본다 — run_pipeline은 수집 창 시작(오늘 −7일)을 넘겨
+    collect_range가 방금 시도한 경기를 같은 실행에서 두 번 요청하지 않게 한다.
+    최근 순인 이유: 끝내 받을 수 없는 옛 경기가 limit개 이상 쌓여도 새로 빠진 경기가 막히지 않게 (최근 경기가
+    예측 상태에 더 크게 영향을 준다).
     받기·파싱·game_id 검사·캐시 처리는 collect_range와 같은 _fetch_box. 경기 하나가 실패해도 errors에 남기고 계속한다.
     경기 페이지가 FINAL이 아니면 주간 일정 점수와 같을 때만 저장한다 (collect_range와 같은 규칙).
     받은 것은 끝에(예외가 나도) append_boxscores로 저장한다. 반환: {"fetched": 저장한 수, "errors": [...]}."""
     have = set(raw_store.load_boxscores(season))
-    todo = [g for g in sorted(raw_store.load_games(season), key=lambda g: (g["date"], g["game_id"]))
-            if g["status"] == "FINAL" and g["game_id"] not in have
+    todo = [g for g in sorted(raw_store.load_games(season), key=lambda g: (g["date"], g["game_id"]), reverse=True)
+            if g["status"] == "FINAL" and g["game_id"] not in have and (before is None or g["date"] < before)
             and is_regular(season, date.fromisoformat(g["date"]), g["game_id"])][:limit]
     errors: list[dict] = []
     got: dict[int, dict] = {}

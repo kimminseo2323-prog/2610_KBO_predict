@@ -136,3 +136,26 @@ def test_upsert_games_atomic(tmp_data_dir, fixture_html, monkeypatch):
     assert sorted(p.name for p in path.parent.iterdir()) == ["games.jsonl"]
     assert upsert_games(2026, rows) == len(rows) - 2 and len(load_games(2026)) == len(rows)
     assert sorted(p.name for p in path.parent.iterdir()) == ["games.jsonl"]
+
+
+def test_upsert_starters_atomic(tmp_data_dir, monkeypatch):
+    """starters.jsonl도 games.jsonl처럼 원자적으로 쓴다: 바꿔치기가 실패해도 기존 파일 그대로, .tmp 없음."""
+    import pytest
+
+    from kbo_predict import raw_store
+
+    p = {"player_id": 1, "name": "A"}
+    raw_store.upsert_starters(2026, [{"game_id": 1, "date": "2026-10-29", "fetched_at": "t", "home": p, "away": None}])
+    path = raw_store.starters_path(2026)
+    before = path.read_bytes()
+
+    def boom(src, dst):
+        raise OSError("disk full")
+
+    with monkeypatch.context() as m:
+        m.setattr(raw_store.os, "replace", boom)
+        with pytest.raises(OSError, match="disk full"):
+            raw_store.upsert_starters(2026, [{"game_id": 2, "date": "2026-10-30", "fetched_at": "t", "home": p,
+                                              "away": p}])
+    assert path.read_bytes() == before
+    assert sorted(x.name for x in path.parent.iterdir()) == ["starters.jsonl"]

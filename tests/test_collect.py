@@ -284,14 +284,15 @@ def test_fetch_starters_wrong_or_non_game_page_is_error_not_tba(monkeypatch, fix
 
 
 def test_collect_missing_boxscores_refetches_final_without_box(monkeypatch, tmp_data_dir, fixture_html):
-    """games.jsonl에서 정규시즌 FINAL인데 박스스코어가 없는 경기만, 오래된 순으로 최대 limit개 다시 받는다.
+    """games.jsonl에서 정규시즌 FINAL인데 박스스코어가 없는 경기만, 최근 순으로 최대 limit개 다시 받는다.
     이미 있는 경기 · 취소 · 포스트시즌은 건너뛰고, 실패한 경기는 errors에 남긴 채 계속한다 (다음 실행에서 다시)."""
     from kbo_predict.mykbo_parse import parse_game
 
     rows = parse_week(fixture_html("mykbo_week_2015-06-02.html"))
     post = dict(rows[0], game_id=9999, date="2015-10-20", path="/games/9999-X-vs-Y-20151020")  # 포스트시즌
     raw_store.upsert_games(2015, rows + [post])
-    finals = sorted((r for r in rows if r["status"] == "FINAL"), key=lambda r: (r["date"], r["game_id"]))
+    finals = sorted((r for r in rows if r["status"] == "FINAL"), key=lambda r: (r["date"], r["game_id"]),
+                    reverse=True)  # 최근 순 = 다시 받는 순서
     page = fixture_html("mykbo_game_1189_final.html")
 
     def page_for(gid):
@@ -322,3 +323,23 @@ def test_collect_missing_boxscores_refetches_final_without_box(monkeypatch, tmp_
     calls.clear()
     assert collect.collect_missing_boxscores(2015, sleep_s=0)["fetched"] == 0 and [c[0] for c in calls] == [
         next(r["path"] for r in finals if r["game_id"] == bad)]
+
+
+def test_collect_missing_boxscores_before_cutoff(monkeypatch, tmp_data_dir, fixture_html):
+    """before를 주면 date < before인 경기만 최근 순으로 받는다 (수집 창 안의 경기는 collect_range 몫)."""
+    rows = parse_week(fixture_html("mykbo_week_2015-06-02.html"))
+    raw_store.upsert_games(2015, rows)
+    page = fixture_html("mykbo_game_1189_final.html")
+    calls = []
+
+    def fake_fetch(path, **kw):
+        calls.append(path)
+        return page.replace("/games/1189-", f"/games/{int(path.split('/')[2].split('-')[0])}-")
+
+    monkeypatch.setattr(collect, "fetch_html", fake_fetch)
+    out = collect.collect_missing_boxscores(2015, before="2015-06-04", sleep_s=0, limit=100)
+    want = sorted((r for r in rows if r["status"] == "FINAL" and r["date"] < "2015-06-04"),
+                  key=lambda r: (r["date"], r["game_id"]), reverse=True)
+    assert calls == [r["path"] for r in want] and len(want) == 10
+    assert out["fetched"] == 10 and out["errors"] == []
+    assert all(b["date"] < "2015-06-04" for b in raw_store.load_boxscores(2015).values())

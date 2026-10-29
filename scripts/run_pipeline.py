@@ -20,7 +20,7 @@ from kbo_predict.collect import collect_missing_boxscores, collect_range, fetch_
 from kbo_predict.predict import canceled_entry, predict_game
 from kbo_predict.publish import settle_history, upsert_history, write_latest, write_status
 from kbo_predict.rewind import state_before
-from kbo_predict.simulate import load_postseason, outlook_for
+from kbo_predict.simulate import load_postseason, next_game_card, outlook_for
 from kbo_predict.train_win import load_bundle
 
 
@@ -74,8 +74,7 @@ def latest_outlook(team_path: Path, season: int, on: str, games: list[dict], sta
     except Exception as e:  # 깨진 pkl, 대진표 오류 등
         collect_errors.append(f"outlook unavailable ({team_path}): {e!r}")
         print(f"[pipeline] outlook unavailable, using next_game: {e!r}", file=sys.stderr)
-        later = sorted(g["date"] for g in games if g["date"] > on and g["status"] != "CANCELED")
-        return {"type": "next_game", "next_game_date": later[0] if later else None, "as_of": on}
+        return next_game_card(on, games)
 
 
 def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bool = True,
@@ -85,15 +84,13 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     iso = target.isoformat()
     pub = data_dir / "public"
 
-    # ① 수집 (경기·박스스코어 → 빠진 박스스코어 다시 받기 → 오늘 예정 경기의 예고 선발)
+    # ① 수집 (경기·박스스코어 → 오늘 예정 경기의 예고 선발 → 빠진 박스스코어 다시 받기)
     collect_errors: list[str] = []
     if fetch:
+        window_start = target - timedelta(days=7)
         try:
-            out = collect_range(target - timedelta(days=7), target + timedelta(days=14))
+            out = collect_range(window_start, target + timedelta(days=14))
             collect_errors += [f"{e['path']}: {e['error']}" for e in out["errors"]]
-            # 수집 창(−7일)을 벗어난 FINAL인데 박스스코어가 없는 경기 (최대 20경기, 5초 간격)
-            miss = collect_missing_boxscores(season)
-            collect_errors += [f"{e['path']}: {e['error']}" for e in miss["errors"]]
             today = [g for g in raw_store.load_games(season) if g["date"] == iso and g["status"] == "SCHEDULED"]
             if today:  # 오늘 예정 경기가 없으면(비시즌·휴식일) 경기 페이지를 요청하지 않는다
                 st = fetch_starters(today, fetched_at=meta["generated_at"])
@@ -104,6 +101,14 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
             print(f"[pipeline] collect failed, continuing with existing data: {e!r}", file=sys.stderr)
             if not raw_store.load_games(season):
                 raise
+        # 수집 창(−7일) 밖의 FINAL인데 박스스코어가 없는 경기 (최근 순 최대 20경기, 5초 간격).
+        # 예고 선발 뒤에 따로 돌린다 — 여기서 실패해도 오늘 예측에 필요한 수집은 이미 끝났다.
+        try:
+            miss = collect_missing_boxscores(season, before=window_start.isoformat())
+            collect_errors += [f"{e['path']}: {e['error']}" for e in miss["errors"]]
+        except Exception as e:
+            collect_errors.append(f"missing boxscores: {e!r}")
+            print(f"[pipeline] missing-boxscore refetch failed: {e!r}", file=sys.stderr)
     if season not in seasons.REGULAR_SEASON:
         collect_errors.append(f"season {season} not registered in REGULAR_SEASON; using 03-01..10-31 fallback")
     games = raw_store.load_games(season)

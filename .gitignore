@@ -10,6 +10,10 @@ venv/
 
 # parity / local artifacts
 artifacts/
+models/clusters.new.pkl
+
+# half-written atomic writes (publish._atomic_write, raw_store)
+*.tmp
 
 # editors / os
 .vscode/

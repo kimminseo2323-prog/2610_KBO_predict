@@ -38,6 +38,20 @@ def _dumps(obj: dict) -> str:
     return json.dumps(obj, ensure_ascii=False, sort_keys=True)
 
 
+def _write_jsonl_atomic(path: Path, rows: list[dict]) -> None:
+    """rows를 한 줄에 하나씩(JSON, 키 정렬) path.tmp에 다 쓴 뒤 os.replace로 바꿔치기한다.
+    도중에 실패해도 기존 파일이 잘리지 않고 .tmp는 지운다 (upsert_games · upsert_starters가 함께 쓴다)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        with tmp.open("w", encoding="utf-8", newline="\n") as f:
+            for r in rows:
+                f.write(_dumps(r) + "\n")
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)  # 성공했으면 이미 바꿔치기돼 없다
+
+
 def load_games(season: int) -> list[dict]:
     path = games_path(season)
     if not path.exists():
@@ -62,17 +76,7 @@ def upsert_games(season: int, games: list[dict]) -> int:
             by_id[g["game_id"]] = g
             changed += 1
     if changed:
-        path = games_path(season)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        ordered = sorted(by_id.values(), key=lambda g: (g["date"], g["game_id"]))
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        try:
-            with tmp.open("w", encoding="utf-8", newline="\n") as f:
-                for g in ordered:
-                    f.write(_dumps(g) + "\n")
-            os.replace(tmp, path)
-        finally:
-            tmp.unlink(missing_ok=True)  # 성공했으면 이미 바꿔치기돼 없다
+        _write_jsonl_atomic(games_path(season), sorted(by_id.values(), key=lambda g: (g["date"], g["game_id"])))
     return changed
 
 
@@ -151,10 +155,6 @@ def upsert_starters(season: int, rows: list[dict]) -> int:
         if old is None or {k: v for k, v in old.items() if k != "fetched_at"} != {k: v for k, v in r.items() if k != "fetched_at"}:
             by_id[r["game_id"]] = r
             changed += 1
-    if changed:
-        path = starters_path(season)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8", newline="\n") as f:
-            for r in sorted(by_id.values(), key=lambda r: (r["date"], r["game_id"])):
-                f.write(_dumps(r) + "\n")
+    if changed:  # upsert_games와 같은 원자적 쓰기 — 도중에 실패해도 기존 starters.jsonl이 잘리지 않는다
+        _write_jsonl_atomic(starters_path(season), sorted(by_id.values(), key=lambda r: (r["date"], r["game_id"])))
     return changed

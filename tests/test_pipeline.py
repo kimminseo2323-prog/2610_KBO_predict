@@ -19,7 +19,7 @@ LATEST_KEYS = {"generated_at", "date", "mode", "model_version", "commit_sha", "r
 ROOT = Path(__file__).resolve().parents[1]
 REAL_TEAM_PKL = ROOT / "models" / "team-2026.pkl"      # 커밋된 팀 모델 (전망용)
 REAL_CLUSTERS_PKL = ROOT / "models" / "clusters.pkl"
-REAL_RAW_2026 = ROOT / "data" / "raw" / "2026"
+FIXTURES = ROOT / "tests" / "fixtures"
 OUTLOOK_WARNING = "outlook unavailable"
 STATUS_KEYS = {"generated_at", "run_url", "commit_sha", "mode", "next_game_date", "games_today", "model_version",
                "collect_errors"}
@@ -49,7 +49,7 @@ def fake_missing_boxscores(monkeypatch):
     """빠진 박스스코어 재수집(collect_missing_boxscores)은 네트워크를 쓰므로 가짜로 바꾼다. 호출된 시즌을 기록한다."""
     calls = []
 
-    def fake(season, *, session=None, limit=20):
+    def fake(season, *, before=None, session=None, limit=20):
         calls.append(season)
         return {"fetched": 0, "errors": []}
 
@@ -440,12 +440,14 @@ def test_pipeline_survives_corrupt_clusters_pkl(tmp_data_dir, bundle_path, fixtu
 
 @pytest.fixture
 def tmp_data_dir_postseason(tmp_data_dir):
-    """실제 2026 경기·예고 선발(data/raw/2026의 games.jsonl · starters.jsonl)을 복사한 tmp 데이터 폴더.
-    박스스코어는 복사하지 않는다 (전망·시리즈 전적에는 필요 없고, 선발 통계만 비게 된다)."""
+    """2026 포스트시즌 경기(14040~14055)와 14050 예고 선발을 10-29 아침 그대로 떠 둔 스냅숏
+    (tests/fixtures/games_2026_postseason.jsonl · starters_2026_postseason.jsonl)을 넣은 tmp 데이터 폴더.
+    실제 data/raw/2026은 매일 바뀌므로(14050이 FINAL이 되는 등) 쓰지 않는다. 정규시즌 경기·박스스코어는 없다
+    (전망·시리즈 전적에는 필요 없고, 상태·선발 통계만 비게 된다)."""
     dst = tmp_data_dir / "raw" / "2026"
     dst.mkdir(parents=True)
-    for name in ("games.jsonl", "starters.jsonl"):
-        shutil.copy(REAL_RAW_2026 / name, dst / name)
+    for src, name in (("games_2026_postseason.jsonl", "games.jsonl"), ("starters_2026_postseason.jsonl", "starters.jsonl")):
+        shutil.copy(FIXTURES / src, dst / name)
     return tmp_data_dir
 
 
@@ -489,8 +491,9 @@ def test_outlook_without_team_model_warns(tmp_data_dir, bundle_path, fixture_htm
         out = run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False,
                   team_path=team_path)
         assert out["games_today"] == 1
-        assert _latest(tmp_data_dir)["outlook"] == {"type": "next_game", "next_game_date": "2026-10-30",
-                                                     "as_of": "2026-10-29"}
+        outlook = _latest(tmp_data_dir)["outlook"]
+        assert outlook == {"type": "next_game", "next_game_date": "2026-10-30", "as_of": "2026-10-29"}
+        assert list(outlook) == ["type", "as_of", "next_game_date"]  # outlook_for의 next_game과 같은 키 순서
         errs = _status(tmp_data_dir)["collect_errors"]
         assert len(errs) == 1 and errs[0].startswith(f"{OUTLOOK_WARNING} ({team_path})")
     assert OUTLOOK_WARNING in capsys.readouterr().err
@@ -532,16 +535,32 @@ def test_no_fetch_starters_when_no_games(monkeypatch, tmp_data_dir, bundle_path,
 
 
 def test_missing_boxscore_errors_join_collect_errors(monkeypatch, tmp_data_dir, bundle_path, fixture_html):
-    """collect_missing_boxscores는 collect_range 다음에 현재 시즌으로 불리고, 그 오류는 collect_errors에 붙는다.
-    --no-fetch면 부르지 않는다."""
+    """collect_missing_boxscores는 collect_range · fetch_starters 다음에 현재 시즌, before = 수집 창 시작(오늘 −7일)으로
+    불리고, 그 오류는 collect_errors에 붙는다. --no-fetch면 부르지 않는다."""
     _seed(fixture_html)
     order = []
+    real_starters = rp.fetch_starters  # autouse 가짜(14050 예고 선발)
     monkeypatch.setattr(rp, "collect_range", lambda *a, **k: order.append("range") or _no_collect())
-    monkeypatch.setattr(rp, "collect_missing_boxscores", lambda season, **kw: order.append(("missing", season)) or {
+    monkeypatch.setattr(rp, "fetch_starters", lambda games, **kw: order.append("starters") or real_starters(games, **kw))
+    monkeypatch.setattr(rp, "collect_missing_boxscores", lambda season, **kw: order.append(("missing", season, kw)) or {
         "fetched": 0, "errors": [{"game_id": 9, "path": "/games/9-x", "error": "ValueError: unrecognised"}]})
     run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
-    assert order == ["range", ("missing", 2026)]
+    assert order == ["range", "starters", ("missing", 2026, {"before": "2026-10-22"})]
     assert _errors(_status(tmp_data_dir)) == ["/games/9-x: ValueError: unrecognised"]
     order.clear()
     run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False)
     assert order == []
+
+
+def test_missing_boxscore_crash_is_isolated(monkeypatch, tmp_data_dir, bundle_path, fixture_html):
+    """빠진 박스스코어 재수집이 예외를 내도 예고 선발은 이미 저장됐고, 예외는 collect_errors에 남고 발행은 계속된다."""
+    _seed(fixture_html)
+    monkeypatch.setattr(rp, "collect_range", _no_collect)
+
+    def boom(season, **kw):
+        raise RuntimeError("box down")
+
+    monkeypatch.setattr(rp, "collect_missing_boxscores", boom)
+    out = run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
+    assert out["games_today"] == 1 and set(load_starters(2026)) == {14050}
+    assert _errors(_status(tmp_data_dir)) == ["missing boxscores: RuntimeError('box down')"]

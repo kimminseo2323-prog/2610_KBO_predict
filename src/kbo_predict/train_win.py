@@ -635,7 +635,8 @@ def _guard_report_blocks(path: Path, *, matchup, clusters, reset: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(description="승패 모델 학습: report(2015~2024 학습/2025 검증/2026 평가) live(전 시즌) 또는 team(선발 없는 팀 모델 저장)")
+    ap = argparse.ArgumentParser(description="승패 모델 학습: report(2015~2024 학습/2025 검증/2026 평가) · "
+                                             "live(전 시즌) · team(선발 없는 팀 모델 저장)")
     ap.add_argument("command", choices=["report", "live", "team"])
     ap.add_argument("--features", default="data/processed/features.parquet", help="피처 parquet 경로")
     ap.add_argument("--force", action="store_true", help="report: 이미 있는(얼려 둔) model_report.json을 덮어쓴다")
