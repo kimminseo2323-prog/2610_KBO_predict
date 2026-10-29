@@ -16,9 +16,13 @@
 소속 확률(membership) 방식:
     1) K-means 중심에서 출발하는 GMM을 공분산 tied / diag / full 세 가지로 맞추고, 맞춤 행 일치도가 가장 높은 것
        (동률이면 이 순서)을 고른다 -> "gmm_tied" 등.
-    2) 그 최고 일치도도 AGREEMENT_FLOOR(0.80) 미만이면 GMM을 버리고 거리 기반 소프트맥스를 쓴다 -> "kmeans_softmax":
-       membership_t ∝ exp(-d_t² / (2·s²)), d_t = 표준화 공간에서 중심 t까지 거리, s² = 맞춤 행의 군집 내 평균 제곱거리.
+    2) 그 최고 일치도도 AGREEMENT_FLOOR(0.95) 미만이면 GMM을 버리고 거리 기반 소프트맥스를 쓴다 -> "kmeans_softmax":
+       membership_t ∝ exp(-d_t² / (2·s²)), d_t = 표준화 공간에서 중심 t까지 거리,
+       s² = 차원당 군집 내 분산 = (맞춤 행에서 자기 중심까지 제곱거리의 평균) / D, D = 피처 수.
+       (d_t²는 D개 차원의 합이므로 s²도 차원당 값으로 맞춰야 확률이 지나치게 평평해지지 않는다.)
        가장 가까운 중심이 가장 큰 확률이므로 최댓값 성분 == 유형이 구조적으로 항상 성립한다.
+    화면의 유형과 '가장 높은 소속 확률'이 어긋나면 안 되므로 기준을 0.95로 높게 둔다 (실데이터는 두 그룹 모두 2)).
+    GMM 후보 세 개는 그래도 맞춰서 일치도(gmm_candidates, gmm_agreement = 최고 후보)를 'GMM vs K-means 비교'로 남긴다.
 유형 번호: 타자는 표준화 HR% 중심이 큰 순서(0 = 가장 장타형), 투수는 선발 비중 큰 순서, 같으면 K% 큰 순서.
 
 재현성: seed 42 고정, KMeans n_init=10, PCA svd_solver="full", 계산은 1스레드(_single_thread).
@@ -63,7 +67,7 @@ FEATURES = {"batter": BATTER_FEATURES, "pitcher": PITCHER_FEATURES}
 GROUPS = ("batter", "pitcher")
 CLUSTER_VERSION = "clusters-2026"
 GMM_COVARIANCES = ("tied", "diag", "full")   # 소속 확률 GMM 후보 (일치도 동률이면 이 순서)
-AGREEMENT_FLOOR = 0.80                      # GMM 최고 일치도가 이보다 낮으면 kmeans_softmax로 대체
+AGREEMENT_FLOOR = 0.95                      # GMM 최고 일치도가 이보다 낮으면 kmeans_softmax로 대체
 EXAMPLE_SEASON = 2025                       # 유형 예시 선수를 고르는 시즌 (없으면 그 유형의 최근 시즌)
 
 CLUSTERS_PKL = Path("models/clusters.pkl")
@@ -195,20 +199,23 @@ def fit_group(df: pd.DataFrame, group: str, *, fit_seasons=FIT_SEASONS, k: int |
         candidates[cov] = agr
         if best is None or agr > best[1]:                 # 동률이면 먼저 나온 후보 유지
             best = (cov, agr, g)
-    # 군집 내 평균 제곱거리 (kmeans_softmax의 s²): 각 맞춤 행에서 자기 중심까지 제곱거리의 평균
-    s2 = float(np.mean(((Z - km.cluster_centers_[km.labels_]) ** 2).sum(axis=1)))
+    # kmeans_softmax의 s²: 차원당 군집 내 분산 = 각 맞춤 행에서 자기 중심까지 제곱거리의 평균 / 피처 수
+    s2 = float(np.mean(((Z - km.cluster_centers_[km.labels_]) ** 2).sum(axis=1))) / len(feats)
     if best[1] >= agreement_floor:
         method, gmm = f"gmm_{best[0]}", best[2]
-        agreement = best[1]
+        member_agreement = best[1]
     else:
         method, gmm = "kmeans_softmax", None
-        agreement = float(np.mean(_softmax_membership(Z, km.cluster_centers_, s2).argmax(axis=1) == km.labels_))
+        member_agreement = float(np.mean(
+            _softmax_membership(Z, km.cluster_centers_, s2).argmax(axis=1) == km.labels_))
     pca = PCA(n_components=2, random_state=SEED, svd_solver="full").fit(Z)
     index = pd.RangeIndex(k, name="type")
     return {
         "group": group, "features": list(feats), "fit_seasons": fit_seasons, "k": int(k), "k_table": k_table,
         "scaler": scaler, "kmeans": km, "gmm": gmm, "pca": pca, "version": CLUSTER_VERSION, "n_fit": len(fit),
-        "membership_method": method, "gmm_agreement": agreement, "gmm_candidates": candidates, "softmax_s2": s2,
+        # gmm_agreement = 최고 GMM 후보의 맞춤 행 일치도(비교용), membership_agreement = 선택된 방식의 일치도
+        "membership_method": method, "membership_agreement": member_agreement, "gmm_agreement": best[1],
+        "gmm_candidates": candidates, "softmax_s2": s2,
         "centers": pd.DataFrame(scaler.inverse_transform(km.cluster_centers_), columns=feats, index=index),
         "centers_z": pd.DataFrame(km.cluster_centers_, columns=feats, index=index),
     }
@@ -220,7 +227,8 @@ def _sq_dist(Z: np.ndarray, centers: np.ndarray) -> np.ndarray:
 
 
 def _softmax_membership(Z: np.ndarray, centers: np.ndarray, s2: float) -> np.ndarray:
-    """membership_t ∝ exp(-d_t² / (2·s²)). 가장 큰 지수를 빼고 계산해 넘침(underflow)을 막는다."""
+    """membership_t ∝ exp(-d_t² / (2·s2)), s2 = 차원당 분산(번들의 softmax_s2). 가장 큰 지수를 빼고 계산해
+    넘침(underflow)을 막는다."""
     logits = -_sq_dist(Z, centers) / (2.0 * s2)
     w = np.exp(logits - logits.max(axis=1, keepdims=True))
     return w / w.sum(axis=1, keepdims=True)
@@ -251,7 +259,7 @@ def assign(bundle: dict, df_rates: pd.DataFrame) -> pd.DataFrame:
 
 
 def gmm_agreement(assigned: pd.DataFrame) -> float:
-    """소속 확률 최댓값 성분이 유형과 같은 행의 비율 (배정된 행 기준)."""
+    """소속 확률(membership) 최댓값 성분이 유형과 같은 행의 비율 (배정된 행 기준). kmeans_softmax면 항상 1."""
     mem = np.array(assigned["membership"].tolist())
     return float(np.mean(mem.argmax(axis=1) == assigned["type"].to_numpy()))
 
@@ -317,8 +325,8 @@ def _num(v, nd: int = 4):
 
 def quality(bundles: dict, assigned: dict, names_cfg: dict) -> dict:
     """model_report.json의 cluster_quality 값. bundles·assigned는 {group: 번들 / assign 결과}.
-    유지율·일치도(gmm_agreement)는 배정된 전체 행(2026 포함) 기준이고, k_table의 유지율과
-    gmm_agreement_fit·gmm_candidates(방식 선택에 쓴 값)는 맞춤 시즌 행 기준이다.
+    retention·membership_agreement(소속 확률 최댓값 == 유형)는 배정된 전체 행(2026 포함) 기준이고,
+    k_table의 유지율과 gmm_agreement(최고 GMM 후보)·gmm_candidates(GMM vs K-means 비교)는 맞춤 시즌 행 기준이다.
     유형의 n은 배정된 전체 행 수, n_fit은 그중 맞춤 시즌 행 수. examples는 한글 이름(name_ko 열이 있으면) 3명."""
     first = bundles[GROUPS[0]]
     out = {"version": first.get("version", CLUSTER_VERSION), "fit_seasons": list(first["fit_seasons"])}
@@ -340,7 +348,7 @@ def quality(bundles: dict, assigned: dict, names_cfg: dict) -> dict:
                                       "retention": _num(r["retention"]), "score": _num(r["score"])}
                                      for r in b["k_table"]],
             "n_fit": int(in_fit.sum()), "n_all": len(a), "membership_method": b["membership_method"],
-            "gmm_agreement": _num(gmm_agreement(a)), "gmm_agreement_fit": _num(b["gmm_agreement"]),
+            "membership_agreement": _num(gmm_agreement(a)), "gmm_agreement": _num(b["gmm_agreement"]),
             "gmm_candidates": {c: _num(v) for c, v in b["gmm_candidates"].items()},
             "retention": _num(retention(a)), "types": types,
         }
@@ -393,8 +401,8 @@ def profile_table(obj: dict) -> str:
         in_fit = a["season"].isin(b["fit_seasons"])
         lines += [f"## {g} (K={b['k']}, n_fit={int(in_fit.sum())}, n_all={len(a)}, "
                   f"retention_all={retention(a):.3f})", "",
-                  f"membership: {b['membership_method']} — agreement fit={b['gmm_agreement']:.3f}, "
-                  f"all={gmm_agreement(a):.3f}; candidates "
+                  f"membership: {b['membership_method']} — agreement fit={b['membership_agreement']:.3f}, "
+                  f"all={gmm_agreement(a):.3f}; softmax_s2={b['softmax_s2']:.4f}; GMM candidates (fit) "
                   + ", ".join(f"{c}={v:.3f}" for c, v in b["gmm_candidates"].items()), "",
                   "| k | silhouette | retention | score |", "|---|---|---|---|"]
         lines += [f"| {r['k']} | {r['silhouette']:.4f} | {r['retention']:.4f} | {r['score']:.4f} |"
