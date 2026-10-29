@@ -157,12 +157,37 @@ def test_check_live_skip_vs_require_live():
 
 
 def test_required_notebooks_missing_fail(tmp_path, monkeypatch):
-    """노트북 02~04가 없으면 실패, 05는 없어도 건너뜀."""
+    """노트북 02~05가 하나라도 없으면 실패 (05도 필수)."""
+    assert cp.REQUIRED_NOTEBOOKS == ("02", "03", "04", "05")
     (tmp_path / "notebooks").mkdir()
     monkeypatch.chdir(tmp_path)
     t = cp.Table()
     cp.check_notebooks(t)
-    assert [r[-1] for r in t.rows] == ["다름", "다름", "다름", "없음 (건너뜀)"]
+    assert [r[-1] for r in t.rows] == ["다름", "다름", "다름", "다름"]
+    assert len(t.diffs) == 4 and "notebooks/05_*.ipynb" in t.diffs[3]
+
+
+def test_default_paths_are_repo_relative(tmp_path, monkeypatch):
+    """--repo 기본값과 build_rewind의 기본 경로는 작업 폴더가 아니라 저장소 루트 기준."""
+    from scripts import build_rewind
+
+    seen = {}
+    monkeypatch.chdir(tmp_path)                                               # 저장소 밖에서 실행해도
+    monkeypatch.setattr(cp, "run", lambda **kw: seen.update(cwd=Path.cwd(), **kw) or cp.Table())
+    monkeypatch.setattr(cp, "render", lambda table: 0)
+    assert cp.main(["--quick"]) == 0
+    assert seen["cwd"] == ROOT and seen["out"] == ROOT / "artifacts" / "parity"
+    for p in (build_rewind.OUT_DIR, build_rewind.REPORT_PKL, build_rewind.TEAM_PKL, build_rewind.CLUSTERS_DEFAULT):
+        assert p.is_absolute() and ROOT in p.parents
+
+
+def test_parity_helpers_live_in_package():
+    """check_parity의 비교 규칙은 kbo_predict.parity에서 온다 (노트북 03·04가 같은 함수를 쓴다)."""
+    from kbo_predict import parity
+
+    assert cp.first_diff is parity.first_diff and cp.REPORT_REL_TOL == parity.REPORT_REL_TOL == 1e-9
+    assert parity.same_predictions_close([0.5, 0.25], [0.5 + 1e-12, 0.25])
+    assert not parity.same_predictions_close([0.5], [0.5 + 1e-6]) and not parity.same_predictions_close([0.5], [0.5, 0.5])
 
 
 @pytest.mark.slow

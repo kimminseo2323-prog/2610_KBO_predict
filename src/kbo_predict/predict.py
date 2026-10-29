@@ -93,14 +93,29 @@ def _round(season: int, d: _date, game_id) -> str:
     return "regular" if is_regular(season, d, game_id) else "postseason"
 
 
+def _model_input(bundle: dict, f: dict) -> pd.DataFrame:
+    """game_features 결과 → 번들 피처 순서의 한 줄 DataFrame (predict_proba · explain 입력)."""
+    return pd.DataFrame([{n: f[n] for n in bundle["features"]}])
+
+
+def raw_prob(bundle: dict, game: dict, state: LeagueState, starters: dict | None = None, *,
+             features: dict | None = None) -> float:
+    """반올림 전 P(홈 승) — latest.json · 되감기의 home_win_prob(소수 4자리)가 되기 전 값. 확률은 이 함수 하나로만 낸다:
+    predict_game(공개 확률·요인), rewind(적중 판정 pick — 0.49997이 0.5000으로 반올림돼 뒤집히지 않게),
+    run_pipeline(시리즈 전망의 오늘 경기 확률, simulate.outlook_for의 today_probs).
+    features = 이미 계산한 game_features(game, state, starters) 결과가 있으면 넘겨 다시 계산하지 않는다."""
+    f = game_features(game, state, starters) if features is None else features
+    return float(predict_proba(bundle, _model_input(bundle, f))[0])
+
+
 def predict_game(bundle: dict, game: dict, state: LeagueState, starters: dict | None = None,
                  starter_types: dict[int, dict] | None = None) -> dict:
     """경기 하나 예측. starters = 예고 선발 행(raw_store.load_starters의 값) 또는 None(미발표).
     starter_types = 투수 player_id -> {"id", "name"} (직전 시즌 유형, run_pipeline이 clusters.pkl에서 만든다).
     없거나 그 투수가 없으면 선발 블록의 type은 None. 예측 확률·요인에는 영향이 없다 (표시용)."""
     f = game_features(game, state, starters)
-    X = pd.DataFrame([{n: f[n] for n in bundle["features"]}])
-    p = float(predict_proba(bundle, X)[0])
+    X = _model_input(bundle, f)
+    p = raw_prob(bundle, game, state, starters, features=f)
     announced = starters or {}
     season = int(game["season"])
     return {

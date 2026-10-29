@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from kbo_predict import raw_store
-from kbo_predict.features import FEATURE_NAMES, load_features
+from kbo_predict.features import FEATURE_NAMES, build_dataset
 from kbo_predict.rewind import STARTER_SOURCE, build_season, day_payload, state_before
 from kbo_predict.simulate import TEAM_CODES
 from kbo_predict.train_win import load_bundle, predict_proba
@@ -17,7 +17,6 @@ from scripts.run_pipeline import CLUSTERS_PKL, build_state, starter_types
 SEASON = 2026
 DAY = "2026-05-01"
 META = {"generated_at": "2026-10-29T12:00:00+09:00", "commit_sha": "abc123", "run_url": None}
-FEATURES_PARQUET = Path("data/processed/features.parquet")
 PUBLISHED_INDEX = Path("data/public/rewind/2026/index.json")
 MODEL_REPORT = Path("data/public/model_report.json")
 
@@ -91,11 +90,19 @@ def test_rewind_day_has_results_and_outlook(day):
                for t in o["teams"].values())
 
 
-@pytest.mark.skipif(not FEATURES_PARQUET.exists(), reason="data/processed/features.parquet 없음 (features CLI로 생성)")
-def test_rewind_matches_report_model(real_small, day):
-    """되감기 확률 == report-2026으로 학습 데이터셋(features.parquet)의 같은 경기 행을 예측한 값 (소수 4자리)."""
-    df = load_features(FEATURES_PARQUET)
-    rows = df[df["date"] == DAY].set_index("game_id")
+@pytest.fixture(scope="module")
+def training_rows():
+    """학습 데이터셋(features.build_dataset — features.parquet를 만드는 함수)의 DAY 경기 행.
+    2026 행은 직전 시즌(2025) 상태를 넘겨받으므로 2025 + 2026으로 만든다 (build_dataset은 시즌마다 start_season으로
+    직전 시즌만 넘긴다 — 되감기의 state_before와 같다). gitignore인 data/processed/features.parquet 없이 CI에서도 돈다."""
+    df = build_dataset([2025, 2026])
+    return df[df["date"] == DAY].set_index("game_id")
+
+
+def test_rewind_matches_report_model(real_small, day, training_rows):
+    """되감기 확률 == report-2026으로 학습 데이터셋의 같은 경기 행을 예측한 값 (소수 4자리)."""
+    rows = training_rows
+    assert len(rows) == 5
     p = predict_proba(real_small["bundle"], rows[FEATURE_NAMES])
     expected = {gid: round(float(v), 4) for gid, v in zip(rows.index, p)}
     got = {g["game_id"]: g["home_win_prob"] for g in day["games"] if g["result"]["winner"] != "DRAW"}

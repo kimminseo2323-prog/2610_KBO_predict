@@ -95,13 +95,15 @@ def _majority(c: Counter) -> str | None:
 
 def korean_names(seasons: list[int]) -> dict[int, str]:
     """선수 player_id -> 한글 이름. 박스스코어의 names_ko를 시즌별로 투표한다.
+    표는 정규시즌 FINAL 경기의 박스스코어(_season_boxes — 집계표와 같은 경기)에서만 센다. 포스트시즌·시범경기
+    박스스코어는 매일 작업이 계속 받아 쌓이므로, 그것까지 세면 얼린 시즌의 이름표(players.json)가 커밋 뒤에 바뀐다.
     규칙: 득표가 NAME_RECENT_MIN_VOTES(3) 이상인 시즌 중 가장 최근 시즌의 최빈 이름이 그 시즌 득표의 60% 이상이면 채택.
         (개명한 선수 — 예: 한동민 -> 한유섬 — 는 옛 이름 표가 많이 쌓여 전체 합으로는 60%를 못 넘으므로
         최근 시즌 이름을 쓴다.) 3표 이상인 시즌이 하나도 없으면 모든 시즌 표를 합쳐 같은 60% 규칙을 쓴다.
     동률은 가나다 순 첫 값. 60%를 못 넘으면 이름 없음(그 선수는 목록에서 빠진다)."""
     votes: dict[int, dict[int, Counter]] = {}
     for season in seasons:
-        for box in raw_store.load_boxscores(season).values():
+        for _, box in _season_boxes(season):
             for pid, name in (box.get("names_ko") or {}).items():
                 votes.setdefault(int(pid), {}).setdefault(season, Counter())[name] += 1
     out = {}

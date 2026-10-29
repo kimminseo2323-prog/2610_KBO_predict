@@ -774,6 +774,42 @@ def test_live_skip_if_same(tmp_path, monkeypatch, capsys):
         train_win.main(["report", "--force", "--skip-if-same"])
 
 
+def test_live_skip_if_same_requires_matching_fingerprint(tmp_path, monkeypatch, capsys):
+    """예측이 같아도 manifest의 live.features_fingerprint가 이번 parquet의 지문과 다르면(예: manifest를 옛 parquet로
+    남긴 채) 건너뛰지 않고 pkl과 manifest 항목을 다시 쓴다. 다시 쓴 뒤에는 건너뛴다."""
+    monkeypatch.chdir(tmp_path)
+    feats = _cli_parquet(tmp_path)
+    train_win.main(["report"])
+    train_win.main(["live"])
+    man = tmp_path / "models/manifest.json"
+    obj = json.loads(man.read_text(encoding="utf-8"))
+    obj["models"]["live"]["features_fingerprint"] = "stale"
+    man.write_text(json.dumps(obj), encoding="utf-8")
+    capsys.readouterr()
+    train_win.main(["live", "--skip-if-same"])
+    assert "unchanged" not in capsys.readouterr().out
+    assert json.loads(man.read_text(encoding="utf-8"))["models"]["live"]["features_fingerprint"] == \
+        parquet_fingerprint(feats)
+    train_win.main(["live", "--skip-if-same"])
+    assert "unchanged" in capsys.readouterr().out
+    # manifest가 없거나 live 항목이 없으면 건너뛰지 않는다
+    b = load_bundle(tmp_path / "models/win_model.pkl")
+    df = load_features(feats)
+    assert not train_win.live_unchanged(b, df, parquet_fingerprint(feats), manifest_path=tmp_path / "none.json")
+    assert train_win.live_unchanged(b, df, parquet_fingerprint(feats))
+
+
+def test_write_json_is_atomic_and_same_bytes(tmp_path):
+    """train_win._write_json = publish._write_json(indent 2, 키 정렬) — 예전 직접 쓰기와 같은 바이트, .tmp가 남지 않는다."""
+    obj = {"b": [1, 2.5, None], "a": {"한글": "값", "z": True}}
+    path = tmp_path / "sub" / "x.json"
+    train_win._write_json(path, obj)
+    old = tmp_path / "old.json"
+    old.write_text(json.dumps(obj, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    assert path.read_bytes() == old.read_bytes()
+    assert list(path.parent.iterdir()) == [path]
+
+
 def test_same_predictions_handles_missing_or_broken(tmp_path, data):
     b = _fit(data, "lr")
     assert not train_win.same_predictions(b, tmp_path / "none.pkl", data["test"])

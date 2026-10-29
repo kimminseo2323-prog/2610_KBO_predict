@@ -135,8 +135,9 @@ def test_standings_ignore_draw():
 # test_outlook_series_from_config의 결정적 출력 (conftest bundle, SEED 42, N_SIMS 10,000)
 PINNED_1029 = {
     "type": "series", "as_of": "2026-10-29", "name": "플레이오프", "best_of": 5, "teams": ["SS", "HT"],
-    "wins": [1, 1], "win_prob": [0.8135, 0.1865], "most_common_result": "3-1", "goes_distance_prob": 0.3709,
-    "games_remaining_max": 3, "next_game_date": "2026-10-29",
+    "head_start": [0, 0], "wins": [1, 1], "win_prob": [0.8135, 0.1865], "most_common_result": "3-1",
+    "goes_distance_prob": 0.3709, "games_remaining_max": 3, "today_game_prob_source": "team_model",
+    "next_game_date": "2026-10-29",
 }
 
 @pytest.fixture
@@ -144,7 +145,7 @@ def tmp_yaml(tmp_path):
     p = tmp_path / "postseason.yaml"
     p.write_text(
         "2026:\n"
-        "  - {name: 와일드카드, teams: [LG, OB], best_of: 1, start: 2026-10-14}\n"
+        "  - {name: 와일드카드, teams: [LG, OB], best_of: 3, head_start: [1, 0], start: 2026-10-14, homes: [LG, LG]}\n"
         "  - {name: 플레이오프, teams: [SS, HT], best_of: 5, start: 2026-10-25, homes: [SS, SS, HT, HT, SS]}\n"
         "  - {name: 한국시리즈, teams: [KT, null], best_of: 7, start: null, homes: [KT, KT, null, null, KT, null, KT]}\n",
         encoding="utf-8")
@@ -156,10 +157,26 @@ def test_load_postseason(tmp_yaml):
     assert [s["name"] for s in ps] == ["와일드카드", "플레이오프", "한국시리즈"]
     assert ps[1]["start"] == "2026-10-25" and ps[1]["homes"] == ["SS", "SS", "HT", "HT", "SS"]
     assert ps[2]["teams"] == ["KT", None] and ps[2]["start"] is None
+    assert ps[0]["head_start"] == [1, 0] and ps[1]["head_start"] == [0, 0]     # 없으면 [0, 0]
     assert load_postseason(2019, tmp_yaml) == []
-    # 저장소의 실제 설정 파일도 읽힌다
-    names = [s["name"] for s in load_postseason(2026)]
-    assert names == ["와일드카드", "준플레이오프", "플레이오프", "한국시리즈"]
+    # 저장소의 실제 설정 파일도 읽힌다 — 와일드카드 = 4위 LG 1승 안고 2선승제, 두 경기 모두 LG 홈
+    real = load_postseason(2026)
+    assert [s["name"] for s in real] == ["와일드카드", "준플레이오프", "플레이오프", "한국시리즈"]
+    wc = real[0]
+    assert (wc["teams"], wc["best_of"], wc["head_start"]) == (["LG", "OB"], 3, [1, 0])
+    assert simulate.homes(wc) == ["LG", "LG"] and simulate.max_games(wc) == 2
+
+
+def test_head_start_validation():
+    with pytest.raises(ValueError, match="head_start"):
+        simulate._normalise({"name": "x", "teams": ["LG", "OB"], "best_of": 3, "head_start": [2, 0]})
+    with pytest.raises(ValueError, match="head_start"):
+        simulate._normalise({"name": "x", "teams": ["LG", "OB"], "best_of": 3, "head_start": [1]})
+    # homes는 실제 경기 수(best_of − sum(head_start))만큼이어야 한다
+    s = simulate._normalise({"name": "x", "teams": ["LG", "OB"], "best_of": 3, "head_start": [1, 0],
+                             "homes": ["LG", "LG", "LG"]})
+    with pytest.raises(ValueError, match="best_of - sum"):
+        simulate.homes(s)
 
 
 def test_outlook_accepts_raw_yaml_dict(bundle):
@@ -196,6 +213,96 @@ def test_outlook_series_from_config(tmp_yaml, bundle):
     out = outlook_for(2026, "2026-10-29", games, state=state, team_bundle=bundle,
                       ps_config=load_postseason(2026, tmp_yaml))
     assert out == PINNED_1029
+
+
+def test_outlook_series_today_uses_win_model_prob(tmp_yaml, bundle):
+    """스펙 §8: 오늘(10-29) 경기는 승패 모델 확률(today_probs, 예고 선발 포함)로, 4·5차전은 팀 모델로 굴린다.
+    오늘 경기는 HT 홈 → P(홈 승) 0.9 = 팀0(SS) 0.1. 카드는 SS 승리 확률이 팀 모델만 쓸 때보다 내려간다."""
+    games = _postseason_games()
+    ps = load_postseason(2026, tmp_yaml)
+    s = simulate.active_series(2026, "2026-10-29", games, ps)
+    left, p_team, src = simulate.series_probs(s, "2026-10-29", games, LeagueState(), bundle)
+    assert left == ["HT", "HT", "SS"] and src == "team_model"
+    left2, p_win, src2 = simulate.series_probs(s, "2026-10-29", games, LeagueState(), bundle, {5: 0.9})
+    assert left2 == left and src2 == "win_model (starter-inclusive)"
+    assert p_win == [pytest.approx(0.1), *p_team[1:]]                        # 첫 칸만 바뀐다 (팀0 기준으로 뒤집어서)
+
+    base = outlook_for(2026, "2026-10-29", games, state=LeagueState(), team_bundle=bundle, ps_config=ps)
+    out = outlook_for(2026, "2026-10-29", games, state=LeagueState(), team_bundle=bundle, ps_config=ps,
+                      today_probs={5: 0.9})
+    assert base["today_game_prob_source"] == "team_model"
+    assert out["today_game_prob_source"] == "win_model (starter-inclusive)"
+    want = series(5, (1, 1), ["team1", "team1", "team0"], p_win)
+    assert out["win_prob"] == want["win_prob"] and out["most_common_result"] == want["most_common_result"]
+    assert out["win_prob"][0] < base["win_prob"][0] - 0.1                   # SS가 오늘 질 확률 0.9 → 시리즈 확률 크게 하락
+    assert {k: v for k, v in out.items() if k not in ("win_prob", "most_common_result", "goes_distance_prob",
+                                                     "today_game_prob_source")} == \
+        {k: v for k, v in base.items() if k not in ("win_prob", "most_common_result", "goes_distance_prob",
+                                                    "today_game_prob_source")}
+
+
+def test_outlook_series_today_prob_ignored_when_not_applicable(tmp_yaml, bundle):
+    """오늘 두 팀 경기가 today_probs에 없거나(다른 경기 id), 실제 홈이 대진표의 다음 칸 홈과 다르면 팀 모델 그대로."""
+    games = _postseason_games()
+    ps = load_postseason(2026, tmp_yaml)
+    base = outlook_for(2026, "2026-10-29", games, state=LeagueState(), team_bundle=bundle, ps_config=ps)
+    other = outlook_for(2026, "2026-10-29", games, state=LeagueState(), team_bundle=bundle, ps_config=ps,
+                        today_probs={999: 0.9})
+    assert other == base
+    flipped = [dict(x) for x in games]
+    flipped[8] |= {"home_code": "SS", "away_code": "HT"}                     # 10-29를 SS 홈으로 (대진표는 HT 홈)
+    out = outlook_for(2026, "2026-10-29", flipped, state=LeagueState(), team_bundle=bundle, ps_config=ps,
+                      today_probs={5: 0.9})
+    assert out["today_game_prob_source"] == "team_model" and out["win_prob"] == base["win_prob"]
+    # 휴식일(10-28): 오늘 경기가 없으니 팀 모델
+    off = outlook_for(2026, "2026-10-28", games, state=LeagueState(), team_bundle=bundle, ps_config=ps,
+                      today_probs={5: 0.9})
+    assert off["today_game_prob_source"] == "team_model"
+
+
+def _wild_card_games(game1=(4, 1), game2=None):
+    """와일드카드 LG(4위 · 1승 안고 시작, 홈)-OB. game1/game2 = (LG 점수, OB 점수), None이면 예정."""
+    rows = [g("2026-10-12", 1, "SS", "HT", 3, 2)]
+    for d, gid, score in (("2026-10-14", 10, game1), ("2026-10-15", 9, game2)):
+        rows.append(g(d, gid, "LG", "OB", *score) if score else g(d, gid, "LG", "OB", status="SCHEDULED"))
+    return rows + [g("2026-10-17", 11, "HT", "LG", status="SCHEDULED")]
+
+
+def test_wild_card_head_start(tmp_yaml, bundle, monkeypatch):
+    ps = load_postseason(2026, tmp_yaml)
+    wc = ps[0]
+    # 1차전 전: 전적 1-0 (LG의 1승 어드밴티지), 남은 경기 최대 2, 두 경기 모두 LG 홈
+    games = _wild_card_games(game1=None)
+    assert simulate.series_record(games, wc, "2026-10-14") == (1, 0, 0)
+    assert simulate.left_homes(wc, 1, 0, 0) == ["LG", "LG"]
+    # 경기마다 LG 승 확률 p = 0.5773 → LG 시리즈 승리 = 1 − (1 − p)² ≈ 0.821 (두산은 두 경기를 모두 이겨야 한다)
+    monkeypatch.setattr(simulate, "game_probs", lambda bundle, pairs, state: [0.5773] * len(pairs))
+    out = outlook_for(2026, "2026-10-14", games, state=LeagueState(), team_bundle=bundle, ps_config=ps)
+    assert out["type"] == "series" and out["name"] == "와일드카드" and out["best_of"] == 3
+    assert out["head_start"] == [1, 0] and out["wins"] == [1, 0] and out["games_remaining_max"] == 2
+    assert out["win_prob"][0] == pytest.approx(1 - (1 - 0.5773) ** 2, abs=0.01)
+    assert out["most_common_result"] == "2-0"
+
+
+def test_wild_card_fifth_seed_wins_game_one(tmp_yaml, bundle):
+    ps = load_postseason(2026, tmp_yaml)
+    # 5위 OB가 1차전 승 → 1-1, 시리즈는 끝나지 않았다 (단판이면 여기서 OB가 올라가 버린다)
+    games = _wild_card_games(game1=(1, 4))
+    out = outlook_for(2026, "2026-10-15", games, state=LeagueState(), team_bundle=bundle, ps_config=ps)
+    assert out["type"] == "series" and out["name"] == "와일드카드"
+    assert out["wins"] == [1, 1] and out["games_remaining_max"] == 1 and out["next_game_date"] == "2026-10-15"
+    assert simulate.left_homes(ps[0], 1, 1, 0) == ["LG"]                      # 2차전도 LG 홈
+    # 2차전 결과가 나오면(10-16 기준) 승부가 났다: LG 승 → 2-1, OB 승 → 1-2. 어느 쪽이든 진행 중 시리즈가 아니다
+    for score, rec in (((5, 2), (2, 1, 0)), ((0, 3), (1, 2, 0))):
+        done = _wild_card_games(game1=(1, 4), game2=score)
+        assert simulate.series_record(done, ps[0], "2026-10-16") == rec
+        assert simulate.active_series(2026, "2026-10-16", done, ps) is None
+        assert outlook_for(2026, "2026-10-16", done, state=LeagueState(), team_bundle=bundle,
+                           ps_config=ps)["type"] == "next_game"
+    # LG가 1차전을 이기면 2-0으로 바로 끝난다 (2차전 없음)
+    won = _wild_card_games(game1=(4, 1))
+    assert simulate.series_record(won, ps[0], "2026-10-15") == (2, 0, 0)
+    assert simulate.active_series(2026, "2026-10-15", won, ps) is None
 
 
 def test_outlook_series_ignores_final_on_same_day(tmp_yaml, bundle):

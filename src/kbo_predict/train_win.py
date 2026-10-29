@@ -577,14 +577,31 @@ def same_predictions(bundle: dict, old_path: Path, df: pd.DataFrame, atol: float
         return False
 
 
+def live_unchanged(bundle: dict, df: pd.DataFrame, features_fingerprint: str, *, old_path: Path | None = None,
+                   manifest_path: Path | None = None) -> bool:
+    """live --skip-if-same: 건너뛰어도 되는가 = (1) 기존 라이브 번들과 df 전 행의 예측이 같고(same_predictions) AND
+    (2) manifest의 live.features_fingerprint가 이번 학습 입력(features parquet)의 값 지문과 같다.
+    (2)가 다르면 예측이 같아도 manifest가 옛 parquet를 가리키므로 pkl과 manifest 항목을 다시 쓴다 — check_parity
+    (--require-live)는 그 지문이 다시 만든 parquet와 같아야 라이브를 비교한다. manifest가 없거나 깨졌으면 False."""
+    old_path = LIVE_PKL if old_path is None else Path(old_path)
+    manifest_path = MANIFEST if manifest_path is None else Path(manifest_path)
+    try:
+        recorded = json.loads(manifest_path.read_text(encoding="utf-8"))["models"]["live"]["features_fingerprint"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    return recorded == features_fingerprint and same_predictions(bundle, old_path, df)
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def _write_json(path: Path, obj) -> None:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    """model_report.json · manifest.json 형식(indent 2, 키 정렬, 끝 줄바꿈) — publish._write_json으로 원자적으로 쓴다
+    (쓰는 도중 실패해도 반쯤 쓴 파일이 남지 않는다). 바이트는 예전 직접 쓰기와 같다."""
+    from .publish import _write_json as atomic_write_json
+
+    atomic_write_json(path, obj, indent=2, sort_keys=True)
 
 
 def write_manifest(path: Path, *, name: str, bundle_path: Path, features_path: Path, meta: dict,
@@ -673,7 +690,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--reset-blocks", action="store_true",
                     help="report --force: 기존 보고서의 matchup_feature_ablation·cluster_quality를 null로 되돌려도 된다")
     ap.add_argument("--skip-if-same", action="store_true",
-                    help="live: 새 번들의 예측이 기존 win_model.pkl과 같으면(전 행, atol 1e-9) 아무것도 쓰지 않는다")
+                    help="live: 새 번들의 예측이 기존 win_model.pkl과 같고(전 행, atol 1e-9) manifest의 "
+                         "live.features_fingerprint도 이번 parquet와 같으면 아무것도 쓰지 않는다")
     args = ap.parse_args(argv)
     if args.skip_if_same and args.command != "live":
         ap.error("--skip-if-same is only for the live command")
@@ -737,10 +755,11 @@ def main(argv: list[str] | None = None) -> None:
         kind = report["selected"]
         bundle = train_live(df, kind=kind, calibration=report["models"][kind]["calibration"],
                             n_estimators=report["models"]["lgbm"]["best_iteration"], meta=meta)
-        if args.skip_if_same and same_predictions(bundle, LIVE_PKL, df):
-            # 주간 재학습: 새 경기가 없어 예측이 그대로면 pkl·manifest를 다시 쓰지 않는다 (trained_at만 바뀐 커밋 방지)
+        if args.skip_if_same and live_unchanged(bundle, df, meta["features_fingerprint"]):
+            # 주간 재학습: 새 경기가 없어 예측도, 학습 입력 지문도 그대로면 pkl·manifest를 다시 쓰지 않는다
+            # (trained_at만 바뀐 커밋 방지). 예측은 같아도 지문이 다르면 manifest가 다른 parquet를 가리키게 되므로 다시 쓴다.
             print(f"unchanged: {LIVE_PKL.as_posix()} predicts the same on all {len(df)} rows "
-                  f"(atol {SKIP_ATOL:g}); nothing written")
+                  f"(atol {SKIP_ATOL:g}) and manifest live.features_fingerprint matches; nothing written")
             print(f"done in {time.time() - t0:.1f}s")
             return
         save_bundle(bundle, LIVE_PKL)

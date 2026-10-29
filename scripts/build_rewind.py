@@ -27,9 +27,11 @@ from kbo_predict.simulate import load_postseason  # noqa: E402
 from kbo_predict.train_win import _commit_sha, load_bundle  # noqa: E402
 from scripts.run_pipeline import CLUSTERS_PKL, starter_types  # noqa: E402
 
-OUT_DIR = Path("data/public/rewind")
-REPORT_PKL = Path("models/report-2026.pkl")
-TEAM_PKL = Path("models/team-2026.pkl")
+# 기본 경로는 저장소 루트(ROOT) 기준 — 어느 폴더에서 실행해도 같은 파일을 읽고 쓴다 (데이터 폴더는 KBO_DATA_DIR, 기본 data/)
+OUT_DIR = ROOT / "data" / "public" / "rewind"
+REPORT_PKL = ROOT / "models" / "report-2026.pkl"
+TEAM_PKL = ROOT / "models" / "team-2026.pkl"
+CLUSTERS_DEFAULT = ROOT / CLUSTERS_PKL                   # run_pipeline.CLUSTERS_PKL(작업 폴더 기준)을 루트 기준으로
 
 
 def main(argv=None) -> dict:
@@ -39,7 +41,7 @@ def main(argv=None) -> dict:
     ap.add_argument("--out-dir", type=Path, default=OUT_DIR)
     ap.add_argument("--model", type=Path, default=REPORT_PKL)
     ap.add_argument("--team-model", type=Path, default=TEAM_PKL)
-    ap.add_argument("--clusters", type=Path, default=CLUSTERS_PKL, help="선발 유형 군집 파일 (없으면 유형 생략)")
+    ap.add_argument("--clusters", type=Path, default=CLUSTERS_DEFAULT, help="선발 유형 군집 파일 (없으면 유형 생략)")
     args = ap.parse_args(argv)
 
     t0 = time.perf_counter()

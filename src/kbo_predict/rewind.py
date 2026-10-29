@@ -28,15 +28,12 @@ from datetime import date as _date
 from itertools import groupby
 from pathlib import Path
 
-import pandas as pd
-
 from . import raw_store
-from .features import LeagueState, game_features, regular_finals, starter_ids
-from .predict import canceled_entry, predict_game
+from .features import LeagueState, regular_finals, starter_ids
+from .predict import canceled_entry, predict_game, raw_prob
 from .publish import _write_json
 from .seasons import is_regular
 from .simulate import outlook_for
-from .train_win import predict_proba
 
 MODE = "rewind"
 STARTER_SOURCE = "actual (boxscore pitching order 1)"
@@ -88,13 +85,6 @@ def day_rows(games: list[dict], season: int) -> list[dict]:
             and is_regular(season, _date.fromisoformat(g["date"]), g["game_id"])]
 
 
-def _raw_prob(bundle: dict, game: dict, state: LeagueState, starters: dict) -> float:
-    """반올림 전 P(홈 승) — predict_game과 같은 피처·모델. 적중 판정에만 쓴다.
-    home_win_prob(소수 4자리)로 판정하면 0.49997 같은 경기가 0.5000으로 반올림돼 '홈 승 예측'으로 뒤집힌다."""
-    f = game_features(game, state, starters)
-    return float(predict_proba(bundle, pd.DataFrame([{n: f[n] for n in bundle["features"]}]))[0])
-
-
 def _result(game: dict, p_raw: float) -> dict:
     """경기 결과와 예측 적중 여부. 예측 규칙은 학습 평가(train_win._correct)와 같다:
     반올림 전 P(홈 승) ≥ 0.5면 홈 승으로 예측 → pick = "HOME", 아니면 "AWAY".
@@ -131,7 +121,9 @@ def day_payload(season: int, on: str, *, games: list[dict], boxscores: dict[int,
         starters = starter_ids(boxscores.get(g["game_id"]))  # 실제 선발 — predict_game이 바라는 예고 선발 모양
         e = predict_game(bundle, g, state, starters, starter_types=starter_types)
         e["status_note"] = g.get("status_note")
-        e["result"] = _result(g, _raw_prob(bundle, g, state, starters))
+        # 적중 판정은 반올림 전 확률로 (predict.raw_prob — predict_game이 쓴 것과 같은 값). home_win_prob(소수 4자리)로
+        # 판정하면 0.49997 같은 경기가 0.5000으로 반올림돼 '홈 승 예측'으로 뒤집힌다.
+        e["result"] = _result(g, raw_prob(bundle, g, state, starters))
         entries.append(e)
     outlook = outlook_for(season, on, games, state=state, team_bundle=team_bundle, ps_config=ps_config)
     return {

@@ -1,7 +1,8 @@
 """parity 검사: 커밋된 산출물을 저장소의 원본 데이터와 코드만으로 다시 만들 수 있는지 확인한다. 네트워크 없음.
 
-    python -X utf8 scripts/check_parity.py            # 전체 (노트북 02~05 실행 포함)
-    python -X utf8 scripts/check_parity.py --quick    # 노트북 생략 (ci.yml · weekly_retrain.yml)
+    python -X utf8 scripts/check_parity.py                  # 전체 (노트북 02~05 실행 포함) — weekly_retrain.yml (--require-live)
+    python -X utf8 scripts/check_parity.py --quick          # 노트북 생략 — ci.yml (push · PR마다)
+    어느 폴더에서 실행해도 이 스크립트가 있는 저장소(--repo 기본값)를 검사한다.
 
 얼린 시즌: report-2026 · team-2026 · clusters-2026과 그 하류(players/teams.json · 되감기)는 2015~2026
 (kbo_predict.FROZEN_SEASONS)으로 얼려 둔 산출물이다. 그래서 (1)~(4)의 피처·상성 parquet와 군집은 정확히 그
@@ -28,7 +29,9 @@ data/processed/에 있으면 그 표와 다시 만든 표를 pandas assert_frame
     (3) players.json · teams.json 재생성(cluster publish와 같은 함수) vs 커밋본 (generated_at · commit_sha 제외)
     (4) 되감기 시즌 전체 재생성 vs data/public/rewind/2026/의 모든 날짜 파일 + index.json (파일 목록 동일,
         각 파일 generated_at · commit_sha 제외)
-    (5) 노트북 02~04 실행 (오류 출력 0, 없으면 실패), 05는 있으면 실행 — --quick이면 (5) 전체를 건너뛴다.
+    (5) 노트북 02~05 실행 (오류 출력 0, 하나라도 없으면 실패) — --quick이면 (5) 전체를 건너뛴다.
+        노트북 안의 동일성 assert도 이 스크립트와 같은 규칙(kbo_predict.parity: 값 지문 · 실수 상대 1e-9 · 예측 atol 1e-9)이라
+        다른 OS(Actions의 Linux)에서도 통과한다 — 파일 바이트 SHA256은 노트북에서도 정보로만 찍는다.
 
 입력 규칙: 군집이 들어가는 하류 산출물(상성 parquet · cluster_quality · players/teams.json · 되감기 선발 유형)은 커밋된
 models/clusters.pkl로 만든다 — 커밋된 pkl이 기준이고(다른 BLAS에서는 마지막 자리가 다를 수 있다), 군집을 다시 맞출 수
@@ -43,7 +46,6 @@ models/clusters.pkl로 만든다 — 커밋된 pkl이 기준이고(다른 BLAS�
 """
 import argparse
 import json
-import math
 import os
 import shutil
 import sys
@@ -56,14 +58,14 @@ for p in (ROOT / "src", ROOT):  # `python scripts/check_parity.py`로 실행해�
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+# 비교 규칙(first_diff · parity_compare · 허용 오차 · 무시할 키)은 kbo_predict.parity에 있다 — 노트북 03·04도 같은 것을 쓴다
+from kbo_predict.parity import (META_KEYS, PRED_ATOL, REPORT_META_KEYS, REPORT_REL_TOL,  # noqa: E402,F401
+                                first_diff, parity_compare, same_predictions_close, strip_keys)
+
 REWIND_SEASON = 2026
 NOTEBOOKS = ("02", "03", "04", "05")                # 실행할 노트북 번호 (01 수집 노트북은 네트워크라 제외)
-REQUIRED_NOTEBOOKS = ("02", "03", "04")             # 없으면 실패 (05는 생기기 전까지 선택)
-META_KEYS = ("generated_at", "commit_sha")          # 실행마다 달라지는 최상위 키 — 비교에서 뺀다
-REPORT_META_KEYS = META_KEYS + ("run_url", "features_sha256")   # features_sha256 = 파일 바이트 (플랫폼 의존)
+REQUIRED_NOTEBOOKS = ("02", "03", "04", "05")       # 모두 필수 — 없으면 실패 (05도 이제 있다)
 FRAME_RTOL = 1e-9                                   # 같은 바이트의 parquet가 있을 때 표 값 비교 (assert_frame_equal)
-PRED_ATOL = 1e-9                                    # 번들 예측 비교 허용 오차 (cluster compare · live --skip-if-same과 같다)
-REPORT_REL_TOL = 1e-9                               # 보고서 지표(실수) 비교 허용 오차 — first_diff 참조
 
 PUBLIC = Path("data/public")
 MANIFEST = Path("models/manifest.json")
@@ -71,71 +73,6 @@ CLUSTERS_PKL = Path("models/clusters.pkl")
 REPORT_PKL = Path("models/report-2026.pkl")
 TEAM_PKL = Path("models/team-2026.pkl")
 LIVE_PKL = Path("models/win_model.pkl")
-
-
-# ---------- JSON 비교 (저장소 없이도 테스트할 수 있게 순수 함수로) ----------
-
-def first_diff(a, b, path: str = "", *, rel_tol: float = 0.0) -> str | None:
-    """a와 b가 처음 다른 곳의 '키 경로: 커밋본 != 재생성' 설명, 같으면 None.
-    dict는 키 집합 → 키 이름 순으로, list는 길이 → 원소 순으로 내려간다. NaN끼리는 같다고 본다.
-    숫자는 기본으로 정확히 같아야 한다 (같은 코드·같은 입력·같은 기계면 같은 비트). rel_tol > 0이면 실수는
-    math.isclose(rel_tol=rel_tol, abs_tol=0)로 본다 (상대 오차만 — 0 근처 값을 절대 오차로 덮지 않는다) — BLAS 스레드 수·라이브러리가 다르면 로지스틱 회귀의
-    마지막 자리(1e-16 수준)가 달라지므로 보고서 지표 비교에만 쓴다 (REPORT_REL_TOL)."""
-    where = path or "(최상위)"
-    if isinstance(a, dict) and isinstance(b, dict):
-        only_a, only_b = sorted(set(a) - set(b), key=str), sorted(set(b) - set(a), key=str)
-        if only_a or only_b:
-            return f"{where}: 키가 다름 (커밋본에만 {only_a}, 재생성에만 {only_b})"
-        for k in sorted(a, key=str):
-            d = first_diff(a[k], b[k], f"{path}.{k}" if path else str(k), rel_tol=rel_tol)
-            if d:
-                return d
-        return None
-    if isinstance(a, list) and isinstance(b, list):
-        if len(a) != len(b):
-            return f"{where}: 길이 {len(a)} != {len(b)}"
-        for i, (x, y) in enumerate(zip(a, b)):
-            d = first_diff(x, y, f"{path}[{i}]", rel_tol=rel_tol)
-            if d:
-                return d
-        return None
-    if isinstance(a, float) and isinstance(b, float) and math.isnan(a) and math.isnan(b):
-        return None
-    if type(a) is not type(b) and not (isinstance(a, (int, float)) and isinstance(b, (int, float))
-                                       and not isinstance(a, bool) and not isinstance(b, bool)):
-        return f"{where}: {a!r} ({type(a).__name__}) != {b!r} ({type(b).__name__})"
-    if rel_tol and isinstance(a, float) and isinstance(b, float) and math.isclose(a, b, rel_tol=rel_tol, abs_tol=0.0):
-        return None
-    return None if a == b else f"{where}: {a!r} != {b!r}"
-
-
-def _strip(obj, ignore) -> object:
-    """최상위 dict에서 ignore 키를 뺀 사본 (실행 시각·커밋처럼 매번 달라지는 값)."""
-    return {k: v for k, v in obj.items() if k not in ignore} if isinstance(obj, dict) else obj
-
-
-def parity_compare(committed_dir, regen_dir, specs, *, rel_tol: float = 0.0) -> list[str]:
-    """JSON 파일 쌍을 비교해 다른 것마다 '파일: 키 경로: 커밋본 != 재생성' 한 줄씩 돌려준다 (같으면 빈 목록).
-    specs = [(커밋본 상대 경로, 재생성 상대 경로, 무시할 최상위 키들)] — 경로는 각각 committed_dir · regen_dir 기준.
-    파일이 없거나 JSON으로 읽을 수 없으면 그것도 한 줄로 적는다. rel_tol은 first_diff와 같다."""
-    committed_dir, regen_dir = Path(committed_dir), Path(regen_dir)
-    out = []
-    for c_rel, r_rel, ignore in specs:
-        name = Path(c_rel).as_posix()
-        try:
-            a = json.loads((committed_dir / c_rel).read_text(encoding="utf-8"))
-        except (OSError, ValueError) as e:
-            out.append(f"{name}: 커밋본을 읽을 수 없음 ({type(e).__name__}: {e})")
-            continue
-        try:
-            b = json.loads((regen_dir / r_rel).read_text(encoding="utf-8"))
-        except (OSError, ValueError) as e:
-            out.append(f"{name}: 재생성본을 읽을 수 없음 ({type(e).__name__}: {e})")
-            continue
-        d = first_diff(_strip(a, ignore), _strip(b, ignore), rel_tol=rel_tol)
-        if d:
-            out.append(f"{name}: {d}")
-    return out
 
 
 # ---------- 결과 표 ----------
@@ -288,7 +225,7 @@ def _same_preds(t: Table, item: str, bundle: dict, committed_pkl: Path, df) -> N
     old = load_bundle(committed_pkl)
     a, b = predict_proba(old, df), predict_proba(bundle, df)
     diff = float(np.max(np.abs(a - b))) if len(a) else 0.0
-    ok = old.get("features") == bundle["features"] and bool(np.allclose(a, b, rtol=0.0, atol=PRED_ATOL))
+    ok = old.get("features") == bundle["features"] and same_predictions_close(a, b)
     t.add(item, committed_pkl.as_posix(), f"{len(df)}행 max Δ {diff:.1e}", ok,
           [f"{committed_pkl.as_posix()}: predict_proba max |diff| {diff:.3e} > atol {PRED_ATOL:g} "
            f"(또는 피처 목록이 다름)"])
@@ -397,7 +334,7 @@ def check_rewind(t: Table, out: Path, models: dict) -> None:
 
 def check_notebooks(t: Table) -> None:
     """(5) 노트북 02~05를 tests/test_notebooks.py와 같은 방식(nbclient, 작업 폴더 notebooks/)으로 실행. 오류 출력 0.
-    02~04는 필수(없으면 실패), 05는 생기기 전까지 선택."""
+    REQUIRED_NOTEBOOKS(02~05 전부)는 없으면 실패."""
     import nbformat
 
     with warnings.catch_warnings():  # 윈도우에서 jupyter_client가 import 때 내는 경로 안내 경고 (노트북과 무관)
@@ -477,10 +414,13 @@ def main(argv=None) -> int:
     ap.add_argument("--quick", action="store_true", help="노트북 실행(5)을 건너뛴다")
     ap.add_argument("--require-live", action="store_true",
                     help="라이브 모델 비교를 건너뛰면 실패로 본다 (weekly_retrain: 방금 라이브를 다시 맞췄으므로)")
-    ap.add_argument("--repo", type=Path, default=Path("."), help="저장소 루트 (여기로 이동해 상대 경로로 읽는다)")
-    ap.add_argument("--out", type=Path, default=Path("artifacts/parity"), help="재생성 산출물 폴더 (gitignore)")
+    ap.add_argument("--repo", type=Path, default=ROOT,
+                    help="저장소 루트 (여기로 이동해 상대 경로로 읽는다). 기본: 이 스크립트가 있는 저장소 — 작업 폴더와 무관")
+    ap.add_argument("--out", type=Path, default=None,
+                    help="재생성 산출물 폴더 (gitignore). 기본: <repo>/artifacts/parity")
     args = ap.parse_args(argv)
-    out, repo = args.out.resolve(), args.repo.resolve()  # --repo로 이동하기 전 기준
+    repo = args.repo.resolve()
+    out = (repo / "artifacts" / "parity") if args.out is None else args.out.resolve()  # --repo로 이동하기 전 기준
     if protected_out(out, repo):
         ap.error(f"--out {out} is under data/public or models — parity must not overwrite committed artifacts")
     os.chdir(repo)

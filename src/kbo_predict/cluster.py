@@ -44,7 +44,9 @@ CLI:
            exit 0, 아니면 최대 중심 차이와 다른 라벨 수를 찍고 exit 1. 다른 기계(Linux OpenBLAS 등)에서 맞추면
            마지막 자리가 다를 수 있어 비트 비교 대신 허용 오차를 둔다.
            --types를 주면 그 CSV의 SHA256을 manifest의 clusters.types_sha256과 비교해 types_changed=0|1을 찍고
-           (GITHUB_OUTPUT이 있으면 Actions 출력으로도 남긴다), 0이면 "clusters unchanged" — 정식 fit·publish 불필요.
+           (GITHUB_OUTPUT이 있으면 Actions 출력으로도 남긴다), 0이면 "clusters unchanged". 1이면 얼린 군집의 입력
+           (2015~2026 박스스코어)이 바뀐 것 — 주간 재학습(weekly_retrain.yml)은 자동으로 다시 맞추지 않고 실패한다
+           ("frozen cluster inputs changed — refreeze by hand": 사람이 원인을 확인하고 fit · publish · report를 다시 얼린다).
 """
 import argparse
 import functools
@@ -521,8 +523,8 @@ def compare(against: dict, new: dict, atol: float = COMPARE_ATOL) -> dict:
 
 def types_changed(types_csv: Path, manifest: Path) -> bool:
     """새 유형 CSV의 SHA256이 manifest의 models.clusters.types_sha256과 다른가 (manifest·항목이 없으면 True).
-    주간 재학습은 compare를 통과해도 이 값이 False면 정식 fit·publish를 건너뛴다 — 비시즌 주에 시각·커밋 메타만
-    바뀐 manifest·players.json·teams.json 커밋이 생기지 않게 (live --skip-if-same과 같은 생각)."""
+    주간 재학습: False(같음)면 그대로 통과, True면 얼린 군집 입력이 바뀐 것이므로 실패한다 (자동 재동결 없음 —
+    clusters-2026은 report-2026 · 되감기 · players.json이 함께 기대는 얼린 산출물이라 사람이 확인하고 다시 얼린다)."""
     import json
 
     try:
@@ -563,7 +565,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--out", default=str(CLUSTERS_PKL), help="fit: 군집 묶음 pkl 경로")
     ap.add_argument("--types", help=f"fit: 선수-시즌 유형 csv 경로 (기본 {TYPES_CSV.as_posix()}) / compare: 새 묶음의 "
                                     "유형 CSV — SHA256이 --manifest의 clusters.types_sha256과 다르면 types_changed=1 "
-                                    "(같으면 0: 정식 fit·publish를 건너뛰어도 된다)")
+                                    "(같으면 0. 주간 재학습은 1이면 실패 — 얼린 입력이 바뀌었으니 손으로 다시 얼린다)")
     ap.add_argument("--manifest", default=str(MANIFEST), help="fit·compare: models/manifest.json 경로")
     ap.add_argument("--clusters", default=str(CLUSTERS_PKL), help="publish: 군집 묶음 pkl 경로")
     ap.add_argument("--report", default=str(REPORT_PKL), help="publish: 평가 모델 pkl (model_expected용)")

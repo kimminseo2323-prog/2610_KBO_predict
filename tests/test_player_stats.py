@@ -109,11 +109,24 @@ def test_korean_names_single_vote_accepted(monkeypatch):
     assert korean_names([S]) == {9: "홍길동"}
 
 
-def _install_seasons(monkeypatch, names_by_season):
-    """names_by_season = {season: [names_ko 딕셔너리, ...]} -> 시즌마다 박스스코어 한 경기씩 (이름 투표만 본다)."""
-    data = {s: {i + 1: {"game_id": i + 1, "names_ko": n} for i, n in enumerate(lst)}
-            for s, lst in names_by_season.items()}
+def _install_seasons(monkeypatch, names_by_season, *, postseason=None):
+    """names_by_season = {season: [names_ko 딕셔너리, ...]} -> 이름 하나마다 정규시즌(6월) FINAL 경기 + 박스스코어 한 개.
+    postseason = {season: [names_ko, ...]} -> 같은 모양의 11월(포스트시즌) FINAL 경기 (이름 투표에서 빠져야 한다)."""
+    games, data = {}, {}
+    for kind, month, src in (("reg", 6, names_by_season), ("post", 11, postseason or {})):
+        for s, lst in src.items():
+            for n in lst:
+                gid = len(data.setdefault(s, {})) + 1
+                games.setdefault(s, []).append({"game_id": gid, "date": f"{s}-{month:02d}-{gid:02d}", "status": "FINAL"})
+                data[s][gid] = {"game_id": gid, "names_ko": n}
+    monkeypatch.setattr(raw_store, "load_games", lambda season: games.get(season, []))
     monkeypatch.setattr(raw_store, "load_boxscores", lambda season: data.get(season, {}))
+
+
+def test_korean_names_ignore_postseason_boxscores(monkeypatch):
+    # 정규시즌 "가" 3표, 포스트시즌 박스스코어 "나" 5표 -> 정규시즌 표만 센다 ("가"). 포스트시즌에만 나온 선수는 이름 없음.
+    _install_seasons(monkeypatch, {2024: [{"8": "가"}] * 3}, postseason={2024: [{"8": "나", "99": "포"}] * 5})
+    assert korean_names([2024]) == {8: "가"}
 
 
 def test_korean_names_renamed_player_uses_latest_season(monkeypatch):

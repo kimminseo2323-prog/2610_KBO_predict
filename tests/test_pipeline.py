@@ -451,8 +451,19 @@ def tmp_data_dir_postseason(tmp_data_dir):
     return tmp_data_dir
 
 
-def test_latest_has_outlook_series(tmp_data_dir_postseason, bundle_path):
-    """2026-10-29 = 플레이오프(SS-HT) 진행 중, 10-26 · 10-27 한 판씩 → outlook series, wins [1, 1]. 선발 블록에 type."""
+def test_latest_has_outlook_series(tmp_data_dir_postseason, bundle_path, monkeypatch):
+    """2026-10-29 = 플레이오프(SS-HT) 진행 중, 10-26 · 10-27 한 판씩 → outlook series, wins [1, 1]. 선발 블록에 type.
+    시리즈 시뮬레이션의 첫 남은 경기(= 오늘 14050, HT 홈)는 승패 모델의 확률(latest.json의 home_win_prob)을 쓴다 (스펙 §8)."""
+    from kbo_predict import simulate
+
+    seen = {}
+    real_series = simulate.series
+
+    def spy(best_of, wins, remaining_homes, p, **kw):
+        seen.update(homes=list(remaining_homes), p=list(p))
+        return real_series(best_of, wins, remaining_homes, p, **kw)
+
+    monkeypatch.setattr(simulate, "series", spy)
     d = tmp_data_dir_postseason
     out = run(date(2026, 10, 29), data_dir=d, model_path=bundle_path, meta=META, fetch=False,
               team_path=REAL_TEAM_PKL, clusters_path=REAL_CLUSTERS_PKL)
@@ -466,6 +477,11 @@ def test_latest_has_outlook_series(tmp_data_dir_postseason, bundle_path):
     g = latest["games"][0]
     assert g["game_id"] == 14050 and g["round"] == "postseason"
     assert "type" in g["home"]["starter"] and "type" in g["away"]["starter"]
+    # 오늘 경기: 팀0(SS)은 원정 → 첫 칸 P(SS 승) = 1 − P(HT 홈 승) (반올림 전 값이라 소수 4자리 안에서 같다)
+    assert o["today_game_prob_source"] == "win_model (starter-inclusive)" and o["head_start"] == [0, 0]
+    assert seen["homes"] == ["team1", "team1", "team0"] and len(seen["p"]) == o["games_remaining_max"] == 3
+    assert seen["p"][0] == pytest.approx(1 - g["home_win_prob"], abs=5e-5)
+    assert seen["p"][1] != pytest.approx(seen["p"][0], abs=1e-6)           # 4차전은 팀 모델 (다른 값)
     status = _status(d)
     assert status["mode"] == "live" and status["collect_errors"] == []  # 팀 모델이 있으면 전망 경고 없음
 
@@ -524,8 +540,10 @@ def test_status_mode_ignores_canceled_games(tmp_data_dir, bundle_path):
 
 def test_no_fetch_starters_when_no_games(monkeypatch, tmp_data_dir, bundle_path, fixture_html, fake_fetch_starters,
                                          fake_missing_boxscores):
-    """오늘(10-28) 예정 경기가 없으면 fetch_starters를 부르지 않는다. 빠진 박스스코어 재수집은 그래도 돈다."""
+    """오늘(10-28) 예정 경기가 없으면 fetch_starters를 부르지 않는다. 빠진 박스스코어 재수집은 그래도 돈다
+    (얼리지 않은 시즌일 때 — 2026은 얼린 시즌이라 여기서는 FROZEN_SEASONS를 비워 둔다)."""
     _seed(fixture_html)
+    monkeypatch.setattr(rp, "FROZEN_SEASONS", [])
     monkeypatch.setattr(rp, "collect_range", _no_collect)
     run(date(2026, 10, 28), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
     assert fake_fetch_starters == []
@@ -536,8 +554,9 @@ def test_no_fetch_starters_when_no_games(monkeypatch, tmp_data_dir, bundle_path,
 
 def test_missing_boxscore_errors_join_collect_errors(monkeypatch, tmp_data_dir, bundle_path, fixture_html):
     """collect_missing_boxscores는 collect_range · fetch_starters 다음에 현재 시즌, before = 수집 창 시작(오늘 −7일)으로
-    불리고, 그 오류는 collect_errors에 붙는다. --no-fetch면 부르지 않는다."""
+    불리고, 그 오류는 collect_errors에 붙는다. --no-fetch면 부르지 않는다. (얼리지 않은 시즌으로 보도록 FROZEN_SEASONS를 비운다)"""
     _seed(fixture_html)
+    monkeypatch.setattr(rp, "FROZEN_SEASONS", [])
     order = []
     real_starters = rp.fetch_starters  # autouse 가짜(14050 예고 선발)
     monkeypatch.setattr(rp, "collect_range", lambda *a, **k: order.append("range") or _no_collect())
@@ -555,6 +574,7 @@ def test_missing_boxscore_errors_join_collect_errors(monkeypatch, tmp_data_dir, 
 def test_missing_boxscore_crash_is_isolated(monkeypatch, tmp_data_dir, bundle_path, fixture_html):
     """빠진 박스스코어 재수집이 예외를 내도 예고 선발은 이미 저장됐고, 예외는 collect_errors에 남고 발행은 계속된다."""
     _seed(fixture_html)
+    monkeypatch.setattr(rp, "FROZEN_SEASONS", [])
     monkeypatch.setattr(rp, "collect_range", _no_collect)
 
     def boom(season, **kw):
@@ -564,3 +584,28 @@ def test_missing_boxscore_crash_is_isolated(monkeypatch, tmp_data_dir, bundle_pa
     out = run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
     assert out["games_today"] == 1 and set(load_starters(2026)) == {14050}
     assert _errors(_status(tmp_data_dir)) == ["missing boxscores: RuntimeError('box down')"]
+
+
+def test_missing_boxscores_skipped_for_frozen_season(monkeypatch, tmp_data_dir, bundle_path, fixture_html,
+                                                    fake_missing_boxscores):
+    """얼린 시즌(FROZEN_SEASONS, 2026 포함)은 매일 작업이 빠진 박스스코어를 다시 받지 않는다 — 얼린 산출물의 parity를
+    지키기 위해. 수집 창(collect_range)과 예고 선발은 그대로 돈다."""
+    from kbo_predict import FROZEN_SEASONS
+
+    assert 2026 in FROZEN_SEASONS and rp.FROZEN_SEASONS is FROZEN_SEASONS
+    _seed(fixture_html)
+    calls = []
+    monkeypatch.setattr(rp, "collect_range", lambda *a, **k: calls.append("range") or _no_collect())
+    run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
+    assert calls == ["range"] and fake_missing_boxscores == []
+
+
+def test_missing_boxscores_skipped_when_collect_failed(monkeypatch, tmp_data_dir, bundle_path, fixture_html,
+                                                       fake_missing_boxscores):
+    """collect_range가 예외로 멈췄으면(사이트 다운 등) 빠진 박스스코어 재수집도 하지 않는다 (20경기 × 5초를 더 기다리지 않게)."""
+    _seed(fixture_html)
+    monkeypatch.setattr(rp, "FROZEN_SEASONS", [])
+    monkeypatch.setattr(rp, "collect_range", _boom)
+    run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
+    assert fake_missing_boxscores == []
+    assert _errors(_status(tmp_data_dir)) == [repr(requests.ConnectionError("down"))]

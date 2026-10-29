@@ -13,11 +13,11 @@ import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from kbo_predict import KST, raw_store, seasons
+from kbo_predict import FROZEN_SEASONS, KST, raw_store, seasons
 from kbo_predict.cluster import load_bundle as load_clusters
 from kbo_predict.cluster import load_labels, require_names, types_map
 from kbo_predict.collect import collect_missing_boxscores, collect_range, fetch_starters
-from kbo_predict.predict import canceled_entry, predict_game
+from kbo_predict.predict import canceled_entry, predict_game, raw_prob
 from kbo_predict.publish import settle_history, upsert_history, write_latest, write_status
 from kbo_predict.rewind import state_before
 from kbo_predict.simulate import load_postseason, next_game_card, outlook_for
@@ -61,8 +61,11 @@ def status_mode(games: list[dict], on: date) -> str:
     return "live" if any(lo <= g["date"] <= hi and g["status"] != "CANCELED" for g in games) else "rewind"
 
 
-def latest_outlook(team_path: Path, season: int, on: str, games: list[dict], state, collect_errors: list[str]) -> dict:
+def latest_outlook(team_path: Path, season: int, on: str, games: list[dict], state, collect_errors: list[str],
+                   today_probs: dict[int, float] | None = None) -> dict:
     """latest.json의 outlook 카드 (simulate.outlook_for: series / playoff_race / next_game — 모두 그날 경기 전 기준).
+    today_probs = {game_id: 반올림 전 P(홈 승)} — 오늘 경기의 승패 모델(예고 선발 포함) 확률. 시리즈 카드는 오늘 경기에
+    이 확률을 쓴다 (스펙 §8 — latest.json 경기 항목의 home_win_prob와 같은 예측).
     팀 모델(team_path)이 없거나, 불러오기·시뮬레이션이 실패하면 {"type": "next_game", ...}로 대신하고
     collect_errors와 stderr에 경고를 남긴다 (starter_types와 같은 방식 — 전망 때문에 예측 발행이 멈추지 않게)."""
     team_path = Path(team_path)
@@ -70,7 +73,7 @@ def latest_outlook(team_path: Path, season: int, on: str, games: list[dict], sta
         if not team_path.exists():
             raise FileNotFoundError(f"{team_path} not found")
         return outlook_for(season, on, games, state=state, team_bundle=load_bundle(team_path),
-                           ps_config=load_postseason(season))
+                           ps_config=load_postseason(season), today_probs=today_probs)
     except Exception as e:  # 깨진 pkl, 대진표 오류 등
         collect_errors.append(f"outlook unavailable ({team_path}): {e!r}")
         print(f"[pipeline] outlook unavailable, using next_game: {e!r}", file=sys.stderr)
@@ -88,6 +91,7 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     collect_errors: list[str] = []
     if fetch:
         window_start = target - timedelta(days=7)
+        collect_ok = False
         try:
             out = collect_range(window_start, target + timedelta(days=14))
             collect_errors += [f"{e['path']}: {e['error']}" for e in out["errors"]]
@@ -96,6 +100,7 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
                 st = fetch_starters(today, fetched_at=meta["generated_at"])
                 raw_store.upsert_starters(season, list(st["starters"].values()))
                 collect_errors += [f"{e['path']}: {e['error']}" for e in st["errors"]]
+            collect_ok = True
         except Exception as e:  # 네트워크 오류뿐 아니라 파서/예기치 않은 예외도 status.json은 남긴다
             collect_errors.append(repr(e))
             print(f"[pipeline] collect failed, continuing with existing data: {e!r}", file=sys.stderr)
@@ -103,12 +108,17 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
                 raise
         # 수집 창(−7일) 밖의 FINAL인데 박스스코어가 없는 경기 (최근 순 최대 20경기, 5초 간격).
         # 예고 선발 뒤에 따로 돌린다 — 여기서 실패해도 오늘 예측에 필요한 수집은 이미 끝났다.
-        try:
-            miss = collect_missing_boxscores(season, before=window_start.isoformat())
-            collect_errors += [f"{e['path']}: {e['error']}" for e in miss["errors"]]
-        except Exception as e:
-            collect_errors.append(f"missing boxscores: {e!r}")
-            print(f"[pipeline] missing-boxscore refetch failed: {e!r}", file=sys.stderr)
+        # 건너뛰는 경우 둘: (1) 위 수집이 예외로 멈췄으면 (사이트가 내려가 있을 때 20경기 × 5초를 더 기다리지 않게),
+        # (2) 얼린 시즌(FROZEN_SEASONS, 2015~2026)이면 — 얼린 산출물(report-2026 · team-2026 · clusters-2026 · 되감기)은
+        # 지금 있는 박스스코어로 만들어졌고 check_parity가 그대로 다시 만드는지 본다. 매일 작업이 그 시즌의 옛 박스스코어를
+        # 새로 받으면 parity가 깨지므로, 얼린 시즌은 매일 작업이 다시 받지 않는다 (필요하면 사람이 받고 다시 얼린다).
+        if collect_ok and season not in FROZEN_SEASONS:
+            try:
+                miss = collect_missing_boxscores(season, before=window_start.isoformat())
+                collect_errors += [f"{e['path']}: {e['error']}" for e in miss["errors"]]
+            except Exception as e:
+                collect_errors.append(f"missing boxscores: {e!r}")
+                print(f"[pipeline] missing-boxscore refetch failed: {e!r}", file=sys.stderr)
     if season not in seasons.REGULAR_SEASON:
         collect_errors.append(f"season {season} not registered in REGULAR_SEASON; using 03-01..10-31 fallback")
     games = raw_store.load_games(season)
@@ -140,10 +150,13 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
             e["status_note"] = g.get("status_note")
             entries.append(e)
     preds = [e for e in entries if e["status"] != "CANCELED"]
+    # 시리즈 전망의 오늘 경기 확률: 위 예측과 같은 승패 모델·같은 입력의 반올림 전 값 (스펙 §8)
+    today_probs = {g["game_id"]: raw_prob(bundle, g, state, starters.get(g["game_id"]))
+                   for g in day if g["status"] != "CANCELED"}
 
     # ⑤ 전망 + 발행 (경기 행이 아예 없으면 latest 유지 — 전망 시뮬레이션도 돌리지 않는다)
     if entries:
-        outlook = latest_outlook(team_path, season, iso, games, state, collect_errors)
+        outlook = latest_outlook(team_path, season, iso, games, state, collect_errors, today_probs)
         write_latest(pub / "latest.json", date=iso, games=entries, meta=meta, outlook=outlook)
         # history의 model_version = 실제로 예측한 번들의 버전 (패키지 상수가 아니라)
         upsert_history(pub / "history.csv", preds, predicted_at=meta["generated_at"],

@@ -6,7 +6,9 @@
 - 그 밖(시범경기 · 등록 안 된 대진 · 경기 없는 날) → next_game: 다음 경기 날짜만.
 
 경기 하나의 홈 승률은 선발 없는 팀 모델(models/team-2026.pkl, 팀 피처 19개)로 낸다. 남은 경기들은 선발을 모르므로
-이 모델이 맞다. 상태(state)는 '그날 경기 직전' 리그 상태 하나로 고정한다 — 시뮬레이션 안에서 결과에 따라
+이 모델이 맞다. 예외 하나(스펙 §8): 시리즈 카드에서 **오늘 경기**는 예고 선발을 아는 승패 모델의 확률(today_probs —
+run_pipeline이 latest.json의 그 경기 예측과 같은 반올림 전 값을 넘긴다)을 쓴다. 카드의 today_game_prob_source가
+어느 쪽인지 적는다. 상태(state)는 '그날 경기 직전' 리그 상태 하나로 고정한다 — 시뮬레이션 안에서 결과에 따라
 승률을 다시 계산하지 않는다(단순화). 그래서 미래 경기의 결과가 피처에 새지 않는다.
 
 결정성: numpy.random.default_rng(seed)로 같은 입력이면 항상 같은 결과. 난수는 한 번에 행렬로 뽑는다(벡터화).
@@ -111,6 +113,7 @@ def series(best_of: int, wins: tuple[int, int], remaining_homes: list[str], p_ho
     """best_of판 (best_of//2+1)선승 시리즈를 지금 전적 wins = (팀0 승, 팀1 승)에서 n_sims번 끝까지 굴린다.
     remaining_homes[i]: 남은 i번째 경기의 홈 ("team0"/"team1"), p_home_for_team0[i]: 그 경기에서 팀0이 이길 확률.
     두 목록의 길이는 '남을 수 있는 최대 경기 수' = best_of - w0 - w1 이어야 한다 (아니면 ValueError).
+    wins에는 head_start(와일드카드 4위의 1승)를 이미 더해 넘긴다 — best_of 3, wins (1, 0)이면 남은 경기 최대 2.
     반환: {"win_prob": [팀0, 팀1], "most_common_result": 가장 흔한 최종 전적 "w0-w1"(팀0 기준),
            "goes_distance_prob": 남은 경기를 전부 치르는 비율, "games_remaining_max": 최대 남은 경기 수}.
     이미 한 팀이 과반을 이겼으면 확률 1/0, 남은 경기 0, 최종 전적은 지금 전적."""
@@ -155,13 +158,20 @@ def _iso(v) -> str | None:
 
 def _normalise(entry: dict) -> dict:
     """YAML 시리즈 한 줄 → {"name", "teams": [코드|None, 코드|None], "best_of", "start": 'YYYY-MM-DD'|None,
-    "homes": [...]|None}. 날짜 객체는 문자열로 바꾼다. 이미 정리된 줄을 다시 넣어도 그대로 나온다."""
+    "homes": [...]|None, "head_start": [팀0, 팀1]}. 날짜 객체는 문자열로 바꾼다. 이미 정리된 줄을 다시 넣어도 그대로 나온다.
+    head_start(선택, 기본 [0, 0]) = 시리즈를 시작할 때 안고 들어가는 승수 — 와일드카드의 4위 팀 1승 어드밴티지.
+    전적(series_record)에 더해지고, 실제로 치르는 경기는 최대 best_of − sum(head_start)개다 (homes도 그 길이)."""
+    name, best_of = entry["name"], int(entry["best_of"])
+    head = [int(x) for x in (entry.get("head_start") or [0, 0])]
+    if len(head) != 2 or min(head) < 0 or max(head) >= best_of // 2 + 1:
+        raise ValueError(f"{name}: head_start {head} must be two non-negative win counts below {best_of // 2 + 1}")
     return {
-        "name": entry["name"],
+        "name": name,
         "teams": list(entry.get("teams") or [None, None]),
-        "best_of": int(entry["best_of"]),
+        "best_of": best_of,
         "start": _iso(entry.get("start")),
         "homes": list(entry["homes"]) if entry.get("homes") else None,
+        "head_start": head,
     }
 
 
@@ -188,23 +198,34 @@ def _series_list(season: int, ps_config) -> list[dict]:
     return [_normalise(e) for e in entries]
 
 
-def _homes(s: dict) -> list[str]:
-    """시리즈 경기별 홈 팀 코드 (best_of 개). homes가 없으면 모두 팀0 홈.
+def _head_start(s: dict) -> tuple[int, int]:
+    h = s.get("head_start") or [0, 0]
+    return int(h[0]), int(h[1])
+
+
+def max_games(s: dict) -> int:
+    """실제로 치를 수 있는 최대 경기 수 = best_of − sum(head_start) (와일드카드: 3 − 1 = 2)."""
+    return s["best_of"] - sum(_head_start(s))
+
+
+def homes(s: dict) -> list[str]:
+    """시리즈 경기별 홈 팀 코드 — 실제 경기 max_games(s)개 (head_start 승수는 경기가 아니다). homes가 없으면 모두 팀0 홈.
     homes의 null 칸 = 대진이 정해지기 전 '미정 팀'의 홈 → 두 팀 중 homes에 이름이 안 나오는 팀으로 채운다."""
     t0, t1 = s["teams"]
-    homes = list(s.get("homes") or [t0] * s["best_of"])
-    if len(homes) != s["best_of"]:
-        raise ValueError(f"{s['name']}: homes has {len(homes)} entries, best_of is {s['best_of']}")
-    named = {h for h in homes if h is not None}
+    n = max_games(s)
+    out = list(s.get("homes") or [t0] * n)
+    if len(out) != n:
+        raise ValueError(f"{s['name']}: homes has {len(out)} entries, expected best_of - sum(head_start) = {n}")
+    named = {h for h in out if h is not None}
     if not named <= {t0, t1}:
-        raise ValueError(f"{s['name']}: homes {homes} name a team outside {s['teams']}")
-    if None in homes:
+        raise ValueError(f"{s['name']}: homes {out} name a team outside {s['teams']}")
+    if None in out:
         missing = {t0, t1} - named
         if len(missing) != 1:
-            raise ValueError(f"{s['name']}: cannot fill null homes {homes} for teams {s['teams']}")
+            raise ValueError(f"{s['name']}: cannot fill null homes {out} for teams {s['teams']}")
         fill = missing.pop()
-        homes = [fill if h is None else h for h in homes]
-    return homes
+        out = [fill if h is None else h for h in out]
+    return out
 
 
 # ---------- outlook ----------
@@ -244,12 +265,14 @@ def _pair_games(games: list[dict], s: dict) -> list[dict]:
                   key=lambda g: (g["date"], g["game_id"]))
 
 
-def _series_record(games: list[dict], s: dict, on: str) -> tuple[int, int, int]:
-    """시리즈 전적: start ≤ 날짜 < on인 두 팀 맞대결 FINAL의 (팀0 승, 팀1 승, 무승부).
+def series_record(games: list[dict], s: dict, on: str) -> tuple[int, int, int]:
+    """시리즈 전적: head_start + (start ≤ 날짜 < on인 두 팀 맞대결 FINAL)의 (팀0 승, 팀1 승, 무승부).
     on 당일 경기는 이미 FINAL이어도 세지 않는다 — 전망은 '그날 경기 전' 카드다 (playoff_race와 같은 기준,
-    리와인드에서 그날 결과가 그날 전망에 새지 않게). 점수 없는 FINAL은 세지 않는다."""
+    리와인드에서 그날 결과가 그날 전망에 새지 않게). 점수 없는 FINAL은 세지 않는다.
+    head_start(와일드카드 4위의 1승)는 시작 전부터 승수에 들어 있다 → 와일드카드 1차전 전 전적은 (1, 0, 0)."""
     t0 = s["teams"][0]
-    w0 = w1 = draws = 0
+    w0, w1 = _head_start(s)
+    draws = 0
     for g in _pair_games(games, s):
         if g["status"] != "FINAL" or g["date"] >= on:
             continue
@@ -271,7 +294,35 @@ def _decided(s: dict, w0: int, w1: int) -> bool:
     return w0 >= need or w1 >= need
 
 
-def _active_series(season: int, on: str, games: list[dict], ps_config) -> dict | None:
+def left_homes(s: dict, w0: int, w1: int, draws: int) -> list[str]:
+    """전적 (w0, w1, draws)(series_record — head_start 포함)에서 남을 수 있는 경기 각각의 홈 팀 코드
+    (best_of − w0 − w1개, 승부가 났으면 빈 목록). 이미 치른 실제 경기 = (w0 + w1 − sum(head_start)) + 무승부만큼
+    homes(s)의 앞을 건너뛴다. 무승부로 경기가 늘어 homes가 모자라면 마지막 경기의 홈(최종전 홈)이 이어서 맡는다고 본다."""
+    if _decided(s, w0, w1):
+        return []
+    n_left = s["best_of"] - w0 - w1
+    all_homes = homes(s)
+    played = w0 + w1 - sum(_head_start(s)) + draws
+    return (all_homes[played:] + [all_homes[-1]] * n_left)[:n_left]
+
+
+def today_slot_prob(s: dict, on: str, games: list[dict], left: list[str],
+                    today_probs: dict[int, float] | None) -> float | None:
+    """오늘(on) 시리즈 경기의 승패 모델 P(홈 승)(today_probs[game_id], 예고 선발 포함)을 팀0 기준으로 바꾼 값.
+    쓸 수 없으면 None (→ 첫 남은 경기도 팀 모델): today_probs가 없거나, 오늘 두 팀의 취소 아닌 경기가 today_probs에
+    없거나, 그 경기의 실제 홈이 첫 남은 칸의 홈(left[0])과 다를 때 (대진표 homes가 실제 일정과 어긋난 것 —
+    다른 칸에 끼워 넣지 않는다). 같은 날 두 경기면 game_id가 빠른 것."""
+    if not today_probs or not left:
+        return None
+    today = [g for g in _pair_games(games, s)
+             if g["date"] == on and g["status"] != "CANCELED" and g["game_id"] in today_probs]
+    if not today or today[0]["home_code"] != left[0]:
+        return None
+    p = float(today_probs[today[0]["game_id"]])
+    return p if today[0]["home_code"] == s["teams"][0] else 1.0 - p
+
+
+def active_series(season: int, on: str, games: list[dict], ps_config) -> dict | None:
     """on 시점에 진행 중인 등록 시리즈: 두 팀이 정해졌고 start ≤ on이며 on 전날까지 아직 승부가 안 난 것.
     그날 경기가 없어도(이동일·휴식일) 진행 중이면 고른다. 여럿이면 가장 늦게 시작한 것."""
     found = None
@@ -279,7 +330,7 @@ def _active_series(season: int, on: str, games: list[dict], ps_config) -> dict |
         t0, t1 = s["teams"]
         if t0 is None or t1 is None or s["start"] is None or s["start"] > on:
             continue
-        w0, w1, _ = _series_record(games, s, on)
+        w0, w1, _ = series_record(games, s, on)
         if _decided(s, w0, w1):
             continue
         if found is None or s["start"] >= found["start"]:
@@ -287,41 +338,57 @@ def _active_series(season: int, on: str, games: list[dict], ps_config) -> dict |
     return found
 
 
-def _series_outlook(s: dict, on: str, games: list[dict], state, team_bundle, n_sims: int, seed: int) -> dict:
+TODAY_SOURCE_WIN = "win_model (starter-inclusive)"   # 첫 남은 경기 = 오늘 경기의 승패 모델 확률 (예고 선발 포함)
+TODAY_SOURCE_TEAM = "team_model"                     # 남은 경기 전부 = 선발 없는 팀 모델
+
+
+def series_probs(s: dict, on: str, games: list[dict], state, team_bundle: dict,
+                 today_probs: dict[int, float] | None = None) -> tuple[list[str], list[float], str]:
+    """남은 경기의 (홈 팀 코드 목록 left_homes, P(팀0 승) 목록, 오늘 경기 확률 출처). 시리즈 카드와 노트북 05가 같이 쓴다.
+    남은 경기마다 팀 모델의 P(홈 승)을 팀0 기준으로 뒤집는다 (날짜는 모두 on — 상태도 on에 고정).
+    첫 칸이 오늘 경기이고 today_slot_prob가 값을 주면 그 칸만 승패 모델 확률로 바꾼다 (스펙 §8)."""
     t0, t1 = s["teams"]
-    w0, w1, draws = _series_record(games, s, on)
-    n_left = 0 if _decided(s, w0, w1) else s["best_of"] - w0 - w1
-    # 홈 순서: 이미 치른 경기(승패 + 무승부) 수만큼 앞을 건너뛴다. 무승부로 경기가 늘어 homes가 모자라면
-    # 마지막 경기의 홈(최종전 홈)이 이어서 홈을 맡는다고 본다.
-    all_homes = _homes(s)
-    left_homes = (all_homes[w0 + w1 + draws:] + [all_homes[-1]] * n_left)[:n_left]
-    # 남은 경기 각각의 P(팀0 승): 홈팀 기준 모델 확률을 팀0 기준으로 뒤집는다. 날짜는 모두 오늘(on)로 둔다.
-    pairs = [{"home_code": h, "away_code": t1 if h == t0 else t0, "date": on} for h in left_homes]
-    p_home = game_probs(team_bundle, pairs, state)
-    p_t0 = [p if h == t0 else 1.0 - p for h, p in zip(left_homes, p_home)]
-    res = series(s["best_of"], (w0, w1), ["team0" if h == t0 else "team1" for h in left_homes], p_t0,
+    left = left_homes(s, *series_record(games, s, on))
+    pairs = [{"home_code": h, "away_code": t1 if h == t0 else t0, "date": on} for h in left]
+    p_t0 = [p if h == t0 else 1.0 - p for h, p in zip(left, game_probs(team_bundle, pairs, state))]
+    today = today_slot_prob(s, on, games, left, today_probs)
+    if today is None:
+        return left, p_t0, TODAY_SOURCE_TEAM
+    return left, [today, *p_t0[1:]], TODAY_SOURCE_WIN
+
+
+def _series_outlook(s: dict, on: str, games: list[dict], state, team_bundle, n_sims: int, seed: int,
+                    today_probs: dict[int, float] | None = None) -> dict:
+    t0, t1 = s["teams"]
+    w0, w1, _ = series_record(games, s, on)
+    left, p_t0, source = series_probs(s, on, games, state, team_bundle, today_probs)
+    res = series(s["best_of"], (w0, w1), ["team0" if h == t0 else "team1" for h in left], p_t0,
                  n_sims=n_sims, seed=seed)
     upcoming = [g["date"] for g in _pair_games(games, s) if g["date"] >= on and g["status"] != "CANCELED"]
     return {"type": "series", "as_of": on, "name": s["name"], "best_of": s["best_of"], "teams": [t0, t1],
-            "wins": [w0, w1], "win_prob": res["win_prob"], "most_common_result": res["most_common_result"],
-            "goes_distance_prob": res["goes_distance_prob"], "games_remaining_max": res["games_remaining_max"],
+            "head_start": list(_head_start(s)), "wins": [w0, w1], "win_prob": res["win_prob"],
+            "most_common_result": res["most_common_result"], "goes_distance_prob": res["goes_distance_prob"],
+            "games_remaining_max": res["games_remaining_max"], "today_game_prob_source": source,
             "next_game_date": upcoming[0] if upcoming else None}
 
 
 def outlook_for(season: int, on: str, games: list[dict], *, state, team_bundle: dict, ps_config,
-                n_sims: int = N_SIMS, seed: int = SEED) -> dict:
+                n_sims: int = N_SIMS, seed: int = SEED, today_probs: dict[int, float] | None = None) -> dict:
     """on('YYYY-MM-DD') 날짜의 전망 카드 데이터 — 모든 종류가 '그날 경기 전' 기준이다.
     games = 그 시즌 경기 전부(raw_store.load_games(season)).
     state = on 경기 직전 리그 상태(run_pipeline.build_state(season, on)), team_bundle = 선발 없는 팀 모델 번들,
     ps_config = load_postseason(season) 결과, 시즌 → 목록 dict(yaml.safe_load 그대로), 또는 None.
+    today_probs = {game_id: 반올림 전 P(홈 승)} — on 당일 경기의 승패 모델(예고 선발 포함) 확률(run_pipeline이 넘긴다).
+    시리즈 카드의 첫 남은 경기(= 오늘 경기)에만 쓴다 (series_probs). 없으면 남은 경기 전부를 팀 모델로.
     남은 경기의 확률은 정규시즌·시리즈 모두 on에 고정한 상태로, 경기 날짜도 on으로 바꿔 낸다
     (미래 날짜를 넣으면 휴식일 같은 피처가 날짜만으로 커진다).
     - 정규시즌 날짜: {"type": "playoff_race", "as_of", "teams": {code: {"playoff_prob", "rank_now", "exp_wins",
       "wins", "losses"}}} — 10팀 전부 (사이트가 오늘 경기 팀을 고른다). playoff_prob·exp_wins는 소수 4자리
       (그래서 10팀 playoff_prob의 합은 5에서 반올림 오차만큼 벗어날 수 있다).
     - 진행 중인(아직 승부 안 난) 등록 시리즈가 있으면 — 그날 경기가 없어도: {"type": "series", "as_of", "name",
-      "best_of", "teams", "wins", "win_prob", "most_common_result", "goes_distance_prob", "games_remaining_max",
-      "next_game_date"}.
+      "best_of", "teams", "head_start", "wins"(head_start 포함), "win_prob", "most_common_result",
+      "goes_distance_prob", "games_remaining_max", "today_game_prob_source", "next_game_date"}.
+      today_game_prob_source = "win_model (starter-inclusive)"(오늘 경기를 승패 모델 확률로) 또는 "team_model".
     - 그 밖: {"type": "next_game", "as_of", "next_game_date": on 다음 경기 날짜(취소 제외) 또는 None}."""
     if is_regular(season, _date.fromisoformat(on)):
         standings = _standings(games, season, on)
@@ -334,9 +401,9 @@ def outlook_for(season: int, on: str, games: list[dict], *, state, team_bundle: 
                 "teams": {c: {**race[c], "playoff_prob": round(race[c]["playoff_prob"], OUTLOOK_DIGITS),
                               "exp_wins": round(race[c]["exp_wins"], OUTLOOK_DIGITS),
                               "wins": standings[c][0], "losses": standings[c][1]} for c in standings}}
-    s = _active_series(season, on, games, ps_config)
+    s = active_series(season, on, games, ps_config)
     if s is not None:
-        return _series_outlook(s, on, games, state, team_bundle, n_sims, seed)
+        return _series_outlook(s, on, games, state, team_bundle, n_sims, seed, today_probs)
     return next_game_card(on, games)
 
 

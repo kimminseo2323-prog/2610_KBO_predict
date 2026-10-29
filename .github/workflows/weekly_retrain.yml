@@ -41,20 +41,20 @@ jobs:
             echo "parity_failed=1" >> "$GITHUB_OUTPUT"
             rm -f models/clusters.new.pkl
           fi
-      - name: Clusters (official fit + publish)
-        if: steps.clusters.outputs.parity_failed != '1' && steps.clusters.outputs.types_changed == '1'
+      - name: Clusters (frozen inputs must not change)
+        if: steps.clusters.outputs.parity_failed != '1'
         run: |
-          # 유형 정의가 같고(compare 통과) 유형표가 바뀌었을 때만: 정식 fit(clusters.pkl + manifest) → 사이트 JSON 재발행
-          mv models/clusters.new.pkl models/clusters.pkl
-          python -m kbo_predict.cluster fit
-          python -m kbo_predict.cluster publish
-      - name: Clusters unchanged
-        if: steps.clusters.outputs.parity_failed != '1' && steps.clusters.outputs.types_changed != '1'
-        run: |
-          echo "clusters unchanged — skipping official fit and publish"
+          # clusters-2026은 얼린 산출물(2015~2026 박스스코어 → 유형표 → report-2026 · players.json · 되감기)이다.
+          # 유형표가 바뀌었으면(types_changed=1) 얼린 입력이 바뀐 것 — 자동으로 다시 맞춰 커밋하지 않고 실패한다.
+          # 사람이 원인(박스스코어 재수집·파서 변경 등)을 확인하고 cluster fit · publish · train_win report를 손으로 다시 얼린다.
           rm -f models/clusters.new.pkl
-      - name: Parity (quick)
-        run: python scripts/check_parity.py --quick --require-live   # 방금 라이브를 맞췄으니 라이브 비교도 필수
+          if [ "${{ steps.clusters.outputs.types_changed }}" = "1" ]; then
+            echo "::error::frozen cluster inputs changed — refreeze by hand (cluster fit + publish + train_win report)"
+            exit 1
+          fi
+          echo "clusters unchanged"
+      - name: Parity (full, notebooks included)
+        run: python scripts/check_parity.py --require-live   # 노트북 02~05까지. 방금 라이브를 맞췄으니 라이브 비교도 필수
       - name: Commit results
         if: github.ref == 'refs/heads/main'   # 다른 브랜치에서 수동 실행하면 커밋하지 않는다
         run: |
