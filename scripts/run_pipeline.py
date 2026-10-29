@@ -9,7 +9,7 @@ from kbo_predict import KST, raw_store, seasons
 from kbo_predict.cluster import load_bundle as load_clusters
 from kbo_predict.cluster import load_labels, require_names, types_map
 from kbo_predict.collect import collect_range, fetch_starters
-from kbo_predict.predict import predict_game
+from kbo_predict.predict import canceled_entry, predict_game
 from kbo_predict.publish import settle_history, upsert_history, write_latest, write_status
 from kbo_predict.rewind import state_before
 from kbo_predict.train_win import load_bundle
@@ -90,12 +90,7 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     entries = []
     for g in day:
         if g["status"] == "CANCELED":
-            entries.append({
-                "game_id": g["game_id"], "date": g["date"], "time": g.get("time_kst"),
-                "stadium": g.get("stadium"), "status": "CANCELED", "status_note": g.get("status_note"),
-                "home_win_prob": None, "factors": [],
-                "home": {"code": g["home_code"]}, "away": {"code": g["away_code"]},
-            })
+            entries.append(canceled_entry(g))
         else:
             e = predict_game(bundle, g, state, starters.get(g["game_id"]), starter_types=sp_types)
             e["status_note"] = g.get("status_note")

@@ -83,7 +83,9 @@ def test_rewind_day_has_results_and_outlook(day):
     o = day["outlook"]
     assert o["type"] == "playoff_race" and o["as_of"] == DAY
     assert set(o["teams"]) == set(TEAM_CODES) and len(o["teams"]) == 10
-    assert sum(t["playoff_prob"] for t in o["teams"].values()) == pytest.approx(5.0, abs=1e-6)
+    assert sum(t["playoff_prob"] for t in o["teams"].values()) == pytest.approx(5.0, abs=1e-3)  # 소수 4자리 반올림
+    assert all(t["playoff_prob"] == round(t["playoff_prob"], 4) and t["exp_wins"] == round(t["exp_wins"], 4)
+               for t in o["teams"].values())
 
 
 @pytest.mark.skipif(not FEATURES_PARQUET.exists(), reason="data/processed/features.parquet 없음 (features CLI로 생성)")
@@ -143,8 +145,23 @@ def test_partial_rebuild_keeps_other_index_dates(tmp_path, real_small):
     idx = build_season(SEASON, dates=["2026-04-16"], **kw)
     assert [d["date"] for d in idx["dates"]] == ["2026-04-15", "2026-04-16"]
     assert idx["n_decided"] == sum(d["decided"] for d in idx["dates"])
-    with pytest.raises(ValueError, match="2026-08-06"):  # 경기가 모두 취소된 날
-        build_season(SEASON, dates=["2026-08-06"], **kw)
+    with pytest.raises(ValueError, match="2026-12-25"):  # 정규시즌 경기가 없는 날
+        build_season(SEASON, dates=["2026-12-25"], **kw)
+
+
+def test_canceled_games_are_listed(tmp_path, real_small):
+    """취소 경기도 latest.json처럼 담긴다 (예측·결과 없음). 경기가 모두 취소된 날(08-06)도 파일과 전망이 있다."""
+    idx = build_season(SEASON, out_dir=tmp_path, bundle=real_small["bundle"], team_bundle=real_small["team_bundle"],
+                       meta=META, dates=["2026-08-06"], starter_types=real_small["starter_types"])
+    day = json.loads((tmp_path / "2026" / "2026-08-06.json").read_text(encoding="utf-8"))
+    assert day["games"] and all(g["status"] == "CANCELED" for g in day["games"])
+    for g in day["games"]:
+        assert g["home_win_prob"] is None and g["factors"] == [] and g["result"] is None and "status_note" in g
+    assert day["outlook"]["type"] == "playoff_race" and len(day["outlook"]["teams"]) == 10
+    assert idx["dates"] == [{"date": "2026-08-06", "games": len(day["games"]), "correct": 0, "decided": 0}]
+    assert idx["accuracy"] is None and idx["n_decided"] == 0 and "train_win._correct" in idx["note"]
+    # 같은 날짜를 state_before로 만든 것과도 같다 (취소 경기는 상태에 안 들어간다)
+    assert day == json.loads(json.dumps(_payload(real_small, "2026-08-06")))
 
 
 @pytest.mark.skipif(not PUBLISHED_INDEX.exists(), reason="data/public/rewind/2026 아직 생성 전")
@@ -157,4 +174,4 @@ def test_published_rewind_accuracy_equals_report():
     assert idx["accuracy"] == round(test["accuracy"], 4)
     assert np.isclose(sum(d["correct"] for d in idx["dates"]) / idx["n_decided"], test["accuracy"])
     files = sorted(p.stem for p in PUBLISHED_INDEX.parent.glob("2026-*.json"))
-    assert files == [d["date"] for d in idx["dates"]]
+    assert files == [d["date"] for d in idx["dates"]] and len(files) == 165  # 정규시즌 경기(FINAL·취소)가 있는 날 전부

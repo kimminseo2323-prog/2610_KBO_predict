@@ -1,11 +1,19 @@
 """되감기(rewind): 지난 정규시즌을 하루씩 다시 돌려 보는 사이트 모드의 데이터.
 
 하루치 파일(data/public/rewind/{season}/{YYYY-MM-DD}.json) = "이 날 모델은 이렇게 예측했고, 결과는 이랬다".
-- games[]: latest.json의 경기 항목(predict.predict_game)과 같은 모양 + result {home_score, away_score, winner, correct}.
+- games[]: 그날 정규시즌 FINAL·CANCELED 경기 (game_id 순). 중단된 채 남은 LIVE 등은 결과가 없으니 뺀다.
+  FINAL = latest.json의 경기 항목(predict.predict_game)과 같은 모양 + result {home_score, away_score, winner, correct}.
+  CANCELED = latest.json의 취소 항목(predict.canceled_entry: home_win_prob null, factors []) + result null.
+  그래서 경기가 모두 취소된 날도 파일이 있다 (전망 카드는 그대로 보인다).
   예측 모델은 평가용 고정 모델 report-2026(2015~2024 학습)이다 — 2026은 학습에 안 쓴 시험 시즌이라
   되감기 정확도가 model_report.json의 시험 정확도와 같아야 한다.
 - 선발은 박스스코어의 실제 선발(투구 순서 1번)을 쓴다. 학습 피처(features.build_training_frame)도 같은 선발을 쓴다.
 - outlook: 그날 경기 전 기준 가을야구 확률 카드(simulate.outlook_for — 팀 모델 team-2026).
+
+적중(correct) 판정: 반올림 전 P(홈 승) ≥ 0.5면 홈 승 예측 — 학습 평가(train_win._correct)와 같은 규칙.
+공개 칸 home_win_prob(소수 4자리)로 판정하지 않는다: 0.49997(원정 예측)이 0.5000으로 보이는 경기가 있다(13572).
+무승부·점수 없는 경기는 correct = None. 시즌 정확도(index.json) = correct 합 / 승패 난 경기 수
+= model_report.json의 lr 시험 정확도 (같은 702경기).
 
 누수 방지: 그날의 상태(LeagueState)에는 그날 **전날까지** 끝난 정규시즌 경기만 들어간다. 그날·그 뒤 경기의 결과는
 result 칸에만 쓰이고, 예측 확률·전망에는 들어가지 않는다 (tests/test_rewind.py가 결과를 바꿔 넣어 확인한다).
@@ -15,6 +23,7 @@ result 칸에만 쓰이고, 예측 확률·전망에는 들어가지 않는다 (
 하루만 필요하면 state_before(season, on)로 그날 직전 상태를 바로 만든다. 두 방식의 결과는 같다 (테스트).
 """
 import json
+from datetime import date as _date
 from itertools import groupby
 from pathlib import Path
 
@@ -22,13 +31,16 @@ import pandas as pd
 
 from . import raw_store
 from .features import LeagueState, game_features, regular_finals, starter_ids
-from .predict import predict_game
+from .predict import canceled_entry, predict_game
 from .publish import _write_json
+from .seasons import is_regular
 from .simulate import outlook_for
 from .train_win import predict_proba
 
 MODE = "rewind"
 STARTER_SOURCE = "actual (boxscore pitching order 1)"
+INDEX_NOTE = ("correct = (unrounded P(home win) >= 0.5) == home won, same rule as train_win._correct; "
+              "draws and canceled games are not decided")
 
 
 # ---------- 상태 ----------
@@ -67,6 +79,14 @@ def state_before(season: int, on: str, *, games: list[dict] | None = None,
 
 # ---------- 하루치 ----------
 
+def day_rows(games: list[dict], season: int) -> list[dict]:
+    """되감기 파일에 넣을 경기: 정규시즌 FINAL·CANCELED, (date, game_id) 순.
+    FINAL 쪽은 features.regular_finals와 같은 경기들이다 (상태에 넣는 경기와 같은 필터)."""
+    return [g for g in sorted(games, key=lambda g: (g["date"], g["game_id"]))
+            if g["status"] in ("FINAL", "CANCELED")
+            and is_regular(season, _date.fromisoformat(g["date"]), g["game_id"])]
+
+
 def _raw_prob(bundle: dict, game: dict, state: LeagueState, starters: dict) -> float:
     """반올림 전 P(홈 승) — predict_game과 같은 피처·모델. 적중 판정에만 쓴다.
     home_win_prob(소수 4자리)로 판정하면 0.49997 같은 경기가 0.5000으로 반올림돼 '홈 승 예측'으로 뒤집힌다."""
@@ -96,11 +116,14 @@ def day_payload(season: int, on: str, *, games: list[dict], boxscores: dict[int,
     starter_types = 투수 id -> 직전 시즌 유형 {"id", "name"} (표시용, 없으면 None).
     meta = {"generated_at", "commit_sha", "run_url"(선택)}.
     state = on 경기 직전 상태. 없으면 state_before(season, on, games=games, boxscores=boxscores)로 만든다.
-    정규시즌 FINAL 경기만 game_id 순으로 담는다 (취소·중단 경기는 결과가 없으니 뺀다)."""
+    정규시즌 FINAL·CANCELED 경기를 game_id 순으로 담는다 (day_rows). 취소 경기는 result = None."""
     if state is None:
         state = state_before(season, on, games=games, boxscores=boxscores)
     entries = []
-    for g in sorted((g for g in regular_finals(games, season) if g["date"] == on), key=lambda g: g["game_id"]):
+    for g in sorted((g for g in day_rows(games, season) if g["date"] == on), key=lambda g: g["game_id"]):
+        if g["status"] == "CANCELED":
+            entries.append({**canceled_entry(g), "result": None})
+            continue
         starters = starter_ids(boxscores.get(g["game_id"]))  # 실제 선발 — predict_game이 바라는 예고 선발 모양
         e = predict_game(bundle, g, state, starters, starter_types=starter_types)
         e["status_note"] = g.get("status_note")
@@ -122,15 +145,16 @@ def day_payload(season: int, on: str, *, games: list[dict], boxscores: dict[int,
 
 
 def _index_entry(payload: dict) -> dict:
-    results = [g["result"]["correct"] for g in payload["games"]]
-    decided = [c for c in results if c is not None]
-    return {"date": payload["date"], "games": len(results), "correct": sum(decided), "decided": len(decided)}
+    """index.json의 날짜 칸: games = 파일의 경기 수(취소 포함), decided = 적중을 따질 수 있는 경기 수."""
+    decided = [g["result"]["correct"] for g in payload["games"]
+               if g["result"] is not None and g["result"]["correct"] is not None]
+    return {"date": payload["date"], "games": len(payload["games"]), "correct": sum(decided), "decided": len(decided)}
 
 
 # ---------- 시즌 전체 ----------
 
 def write_day(path: Path, payload: dict) -> None:
-    """하루치 파일: 165개쯤 되므로 공백 없는 compact JSON, 키 정렬(같은 입력 → 같은 바이트)."""
+    """하루치 파일: 한 시즌 165개쯤 되므로 공백 없는 compact JSON, 키 정렬(같은 입력 → 같은 바이트)."""
     _write_json(path, payload, indent=None, sort_keys=True, separators=(",", ":"))
 
 
@@ -138,18 +162,18 @@ def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict, meta:
                  dates: list[str] | None = None, starter_types: dict[int, dict] | None = None,
                  ps_config=None) -> dict:
     """season의 되감기 파일을 out_dir/{season}/{date}.json으로 쓰고 out_dir/{season}/index.json을 돌려준다.
-    대상 날짜 = 정규시즌 FINAL 경기가 하나라도 있는 날 전부 (dates를 주면 그중 그 날짜만).
+    대상 날짜 = 정규시즌 FINAL·CANCELED 경기가 하나라도 있는 날 전부 (dates를 주면 그중 그 날짜만).
     상태는 개막 직전 상태 하나를 날짜순으로 이어 쌓는다: 그날 피처·전망을 모두 계산한 뒤 그날 경기를 반영.
     dates를 주면 기존 index.json의 나머지 날짜는 그대로 두고 그 날짜 칸만 바꾼다 (일부만 다시 만들 때).
     index.json = {"season", "model_version", "generated_at", "commit_sha",
-                  "dates": [{"date", "games", "correct", "decided"}], "accuracy", "n_decided"}."""
+                  "dates": [{"date", "games", "correct", "decided"}], "accuracy", "n_decided", "note"}."""
     season_dir = Path(out_dir) / str(season)
     games = raw_store.load_games(season)
     boxes = raw_store.load_boxscores(season)
     wanted = None if dates is None else set(dates)
     state = _opening_state(season)
     entries: dict[str, dict] = {}
-    for on, grp in groupby(regular_finals(games, season), key=lambda g: g["date"]):
+    for on, grp in groupby(day_rows(games, season), key=lambda g: g["date"]):
         day_games = list(grp)
         if wanted is None or on in wanted:
             payload = day_payload(season, on, games=games, boxscores=boxes, bundle=bundle, team_bundle=team_bundle,
@@ -159,11 +183,12 @@ def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict, meta:
             if wanted is not None and wanted <= entries.keys():
                 break  # 요청한 날짜를 다 만들었으면 나머지 시즌은 쌓지 않는다
         for g in day_games:
-            state.update(g, boxes.get(g["game_id"]))
+            if g["status"] == "FINAL":  # 취소 경기는 상태에 넣지 않는다 (= regular_finals만 쌓는 state_before와 같다)
+                state.update(g, boxes.get(g["game_id"]))
     if wanted is not None:
         missing = sorted(wanted - entries.keys())
         if missing:
-            raise ValueError(f"no regular-season FINAL games on {missing} in season {season}")
+            raise ValueError(f"no regular-season FINAL/CANCELED games on {missing} in season {season}")
         index_path = season_dir / "index.json"
         if index_path.exists():
             old = json.loads(index_path.read_text(encoding="utf-8"))
@@ -179,6 +204,7 @@ def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict, meta:
         "dates": rows,
         "accuracy": round(n_correct / n_decided, 4) if n_decided else None,
         "n_decided": n_decided,
+        "note": INDEX_NOTE,
     }
     _write_json(season_dir / "index.json", index, indent=1)
     return index

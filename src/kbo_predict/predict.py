@@ -107,3 +107,13 @@ def predict_game(bundle: dict, game: dict, state: LeagueState, starters: dict | 
         "factors": _factors(bundle, X, p),
         "starter_known": bool(f["starter_known"]),
     }
+
+
+def canceled_entry(game: dict) -> dict:
+    """취소(CANCELED) 경기의 표시용 항목 — 예측 없이 경기 정보만 (latest.json · 되감기 파일이 같은 모양을 쓴다)."""
+    return {
+        "game_id": game["game_id"], "date": game["date"], "time": game.get("time_kst"),
+        "stadium": game.get("stadium"), "status": "CANCELED", "status_note": game.get("status_note"),
+        "home_win_prob": None, "factors": [],
+        "home": {"code": game["home_code"]}, "away": {"code": game["away_code"]},
+    }

@@ -28,6 +28,7 @@ from .seasons import is_regular
 N_SIMS = 10_000      # 시뮬레이션 횟수
 SEED = 42            # 난수 시드 (같은 날 같은 입력 → 같은 확률)
 PLAYOFF_SPOTS = 5    # 가을야구에 나가는 정규시즌 순위 (1~5위)
+OUTLOOK_DIGITS = 4   # outlook_for가 내보내는 playoff_prob · exp_wins의 소수 자리 (JSON 크기·가독성)
 
 POSTSEASON_YAML = Path(__file__).resolve().parents[2] / "config" / "postseason.yaml"   # 어디서 실행해도 같은 파일
 
@@ -316,7 +317,8 @@ def outlook_for(season: int, on: str, games: list[dict], *, state, team_bundle: 
     남은 경기의 확률은 정규시즌·시리즈 모두 on에 고정한 상태로, 경기 날짜도 on으로 바꿔 낸다
     (미래 날짜를 넣으면 휴식일 같은 피처가 날짜만으로 커진다).
     - 정규시즌 날짜: {"type": "playoff_race", "as_of", "teams": {code: {"playoff_prob", "rank_now", "exp_wins",
-      "wins", "losses"}}} — 10팀 전부 (사이트가 오늘 경기 팀을 고른다).
+      "wins", "losses"}}} — 10팀 전부 (사이트가 오늘 경기 팀을 고른다). playoff_prob·exp_wins는 소수 4자리
+      (그래서 10팀 playoff_prob의 합은 5에서 반올림 오차만큼 벗어날 수 있다).
     - 진행 중인(아직 승부 안 난) 등록 시리즈가 있으면 — 그날 경기가 없어도: {"type": "series", "as_of", "name",
       "best_of", "teams", "wins", "win_prob", "most_common_result", "goes_distance_prob", "games_remaining_max",
       "next_game_date"}.
@@ -327,8 +329,11 @@ def outlook_for(season: int, on: str, games: list[dict], *, state, team_bundle: 
         probs = game_probs(team_bundle, [{**g, "date": on} for g in left], state)
         race = playoff_race(standings, [(g["home_code"], g["away_code"], p) for g, p in zip(left, probs)],
                             n_sims=n_sims, seed=seed)
+        # 발행 경계에서만 소수 4자리로 줄인다 (playoff_race 자체는 반올림하지 않는다 — 합 5 검증 등)
         return {"type": "playoff_race", "as_of": on,
-                "teams": {c: {**race[c], "wins": standings[c][0], "losses": standings[c][1]} for c in standings}}
+                "teams": {c: {**race[c], "playoff_prob": round(race[c]["playoff_prob"], OUTLOOK_DIGITS),
+                              "exp_wins": round(race[c]["exp_wins"], OUTLOOK_DIGITS),
+                              "wins": standings[c][0], "losses": standings[c][1]} for c in standings}}
     s = _active_series(season, on, games, ps_config)
     if s is not None:
         return _series_outlook(s, on, games, state, team_bundle, n_sims, seed)
