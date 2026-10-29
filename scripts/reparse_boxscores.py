@@ -6,6 +6,7 @@
     python -X utf8 scripts/reparse_boxscores.py --cache data/cache/html --seasons 2015-2026 [--dry-run]
 """
 import argparse
+import json
 import sys
 from collections import Counter
 from pathlib import Path
@@ -64,10 +65,14 @@ def _unmatched_hangul(rec: dict):
             yield name, ("pit" if label == "HR off" else "bat")
 
 
-def infer_aliases(recs, min_games: int = 3) -> dict[tuple[str, str], int]:
+ALIASES_PATH = "name_aliases.json"  # data/raw/ 아래. 있으면 그대로 읽고, 없으면 추론해서 쓴다
+
+
+def infer_aliases(recs, ko_map: dict[int, str], min_games: int = 5) -> dict[str, dict]:
     """기록표 한글 이름과 행 이름이 영영 안 맞는 선수(개명 등)를 찾는다.
     같은 (이름, 종류)가 못 붙은 모든 경기에서, 그 경기에 이미 다른 한글 이름이 붙은 선수를 뺀 후보를 교집합해
-    정확히 한 명이 남으면(그리고 3경기 이상) 그 선수의 별칭으로 본다."""
+    정확히 한 명이 남고, 5경기 이상이며, 그 한글 이름이 다른 선수의 다수결 이름이 아니면 그 선수의 별칭으로 본다.
+    같은 이름이 타자·투수 양쪽에서 서로 다른 선수로 나오면 버린다."""
     cand: dict[tuple[str, str], set[int]] = {}
     games: Counter = Counter()
     for r in recs:
@@ -76,7 +81,19 @@ def infer_aliases(recs, min_games: int = 3) -> dict[tuple[str, str], int]:
             ids = {x["player_id"] for t in ("away", "home") for x in rows[t] if str(x["player_id"]) not in r["names_ko"]}
             cand[key] = ids if key not in cand else cand[key] & ids
             games[key] += 1
-    return {k: next(iter(v)) for k, v in cand.items() if len(v) == 1 and games[k] >= min_games}
+    voted = Counter(ko_map.values())
+    out: dict[str, dict] = {}
+    dropped = set()
+    for (name, kind), ids in cand.items():
+        if len(ids) != 1 or games[(name, kind)] < min_games:
+            continue
+        pid = next(iter(ids))
+        if any(v == name and k != pid for k, v in ko_map.items()):
+            continue
+        if name in out and out[name]["player_id"] != pid:
+            dropped.add(name)
+        out[name] = {"player_id": pid, "games": games[(name, kind)]}
+    return {k: out[k] for k in sorted(out) if k not in dropped}
 
 
 def parse_seasons(text: str) -> list[int]:
@@ -125,7 +142,13 @@ def main(argv=None) -> int:
     # 두 번째 패스: 다른 경기에서 알아낸 한글 이름으로, 아직 못 붙인 항목이 있는 경기만 다시 파싱한다
     before = label_counts(r for season in parse_seasons(args.seasons) for r in raw_store.load_boxscores(season).values())
     ko_map = vote_ko_names(r for new in new_by_season.values() for r in new.values())
-    aliases = infer_aliases(r for new in new_by_season.values() for r in new.values())
+    alias_file = raw_store.data_dir() / "raw" / ALIASES_PATH
+    if alias_file.exists():
+        aliases = json.loads(alias_file.read_text(encoding="utf-8"))
+    else:
+        aliases = infer_aliases([r for new in new_by_season.values() for r in new.values()], ko_map)
+        if not args.dry_run and not mismatches:
+            alias_file.write_text(json.dumps(aliases, ensure_ascii=False, sort_keys=True, indent=1) + chr(10), encoding="utf-8")
     print(f"ko name votes: {len(ko_map)} players, aliases: {len(aliases)}", flush=True)
     for season, new in new_by_season.items():
         old = raw_store.load_boxscores(season)
@@ -135,9 +158,9 @@ def main(argv=None) -> int:
             files = sorted(cache.glob(f"games_{gid}-*.html"))
             ids = {r["player_id"] for side in ("batting", "pitching") for t in ("away", "home") for r in rec[side][t]}
             ko = {p: ko_map[p] for p in ids if p in ko_map}
-            for name, kind in set(_unmatched_hangul(rec)):
-                if aliases.get((name, kind)) in ids:
-                    ko[aliases[(name, kind)]] = name
+            for name, _kind in set(_unmatched_hangul(rec)):
+                if name in aliases and aliases[name]["player_id"] in ids:
+                    ko[aliases[name]["player_id"]] = name
             fresh = parse_game(files[0].read_text(encoding="utf-8"), ko)
             if strip_new(fresh) != strip_new(old[gid]):
                 mismatches.append(gid)
