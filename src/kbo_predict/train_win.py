@@ -3,7 +3,8 @@
 모델 하나는 "번들"(dict) 하나로 다닌다. 번들 키:
     kind          "lr" 또는 "lgbm"
     model         학습된 sklearn 호환 추정기 (LR은 Pipeline, LightGBM은 LGBMClassifier)
-    features      입력 피처 이름 목록 (features.FEATURE_NAMES, 26개, 순서 고정)
+    features      입력 피처 이름 목록 (기본 features.FEATURE_NAMES 26개, 순서 고정.
+                  선발 없는 변형(ablation)은 features.TEAM_FEATURES 19개) — 예측·요인 분해는 이 목록의 열만 쓴다
     calibration   "none" / "platt" / "isotonic"
     calibrator    캘리브레이션 객체 (없으면 None)
     version       모델 버전 문자열 (예: MODEL_VERSION)
@@ -19,8 +20,11 @@ explain은 캘리브레이션 전 로짓(log-odds)을 피처별 기여 + 기본�
 그 위에 평가(정확도·로그 손실·브라이어, 베이스라인 3종, 캘리브레이션 표, McNemar 검정, 피처 중요도)와
 학습 CLI를 얹는다:
     python -m kbo_predict.train_win report  → data/public/model_report.json + models/report-2026.pkl
-        2015~2024 학습 / 2025 검증(트리 수·캘리브레이션·알고리즘 선택) / 2026 홀드아웃 평가
+        2015~2024 학습 / 2025 검증(트리 수·캘리브레이션·알고리즘·유의성 비교 대상 선택) / 2026 홀드아웃 평가
         캘리브레이터는 train 시즌 leave-one-out 예측으로 맞추고, 방법 선택만 2025로 한다.
+        선발 가정: 학습·평가 행의 선발 피처는 박스스코어의 '실제' 선발(투수 순서 1)로 만든다 — 지표는
+        "경기 전에 선발을 안다"는 가정 위의 값이다 (라이브는 예고 선발). 그래서 선발 피처를 뺀
+        팀 피처 19개 모델(ablation.no_starter)도 같은 절차로 학습해 함께 적는다.
     python -m kbo_predict.train_win live    → models/win_model.pkl (v0.2, 2015~2026 전체 학습)
         보고서가 고른 알고리즘·캘리브레이션·트리 수를 그대로 쓴다 → report를 먼저 돌린다.
 두 명령 모두 models/manifest.json(피처·모델 파일 SHA256)을 갱신한다.
@@ -46,7 +50,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from . import KST, MODEL_VERSION, REPORT_VERSION
-from .features import FACTOR_LABELS, FEATURE_NAMES, load_features
+from .features import FACTOR_LABELS, FEATURE_NAMES, TEAM_FEATURES, load_features
 
 SEED = 42
 # 결정성: deterministic + 단일 스레드 + 고정 seed, 배깅(행 샘플링) 없음 → 같은 데이터면 같은 비트.
@@ -74,7 +78,7 @@ def _matrix(features: list[str], X: pd.DataFrame) -> pd.DataFrame:
 def _new_estimator(kind: str, n_estimators: int):
     if kind == "lr":
         # 결측은 학습 데이터 중앙값으로 채운 뒤 표준화 → 계수가 "표준편차 1만큼 차이날 때의 로짓 변화"가 된다.
-        # keep_empty_features=True: 학습 구간에 값이 하나도 없는 피처도 버리지 않아 계수가 항상 26개로 정렬된다.
+        # keep_empty_features=True: 학습 구간에 값이 하나도 없는 피처도 버리지 않아 계수가 항상 피처 수만큼 정렬된다.
         return Pipeline([
             ("imputer", SimpleImputer(strategy="median", keep_empty_features=True)),
             ("scaler", StandardScaler()),
@@ -87,9 +91,11 @@ def _new_estimator(kind: str, n_estimators: int):
 
 
 def fit_model(df: pd.DataFrame, *, kind: str, n_estimators: int = 300, calibration: str = "none",
-              calib_df: pd.DataFrame | None = None, version: str, seasons: list[int]) -> dict:
-    """df(피처 26개 + y)로 모델을 학습해 번들을 돌려준다.
+              calib_df: pd.DataFrame | None = None, version: str, seasons: list[int],
+              features: list[str] | None = None) -> dict:
+    """df(피처 + y)로 모델을 학습해 번들을 돌려준다. features: 쓸 피처 목록 (기본 FEATURE_NAMES 26개).
     calibration이 "none"이 아니면 calib_df(학습에 안 쓴 구간)의 예측으로 캘리브레이터를 따로 맞춘다."""
+    features = list(FEATURE_NAMES if features is None else features)
     if calibration not in CALIBRATIONS:
         raise ValueError(f"unknown calibration: {calibration!r} (expected one of {CALIBRATIONS})")
     if calibration != "none" and calib_df is None:
@@ -100,11 +106,11 @@ def fit_model(df: pd.DataFrame, *, kind: str, n_estimators: int = 300, calibrati
         raise ValueError("no training rows")
 
     model = _new_estimator(kind, n_estimators)
-    model.fit(_matrix(FEATURE_NAMES, df), df["y"].to_numpy())
+    model.fit(_matrix(features, df), df["y"].to_numpy())
     bundle = {
         "kind": kind,
         "model": model,
-        "features": list(FEATURE_NAMES),
+        "features": features,
         "calibration": calibration,
         "calibrator": None,
         "version": version,
@@ -252,9 +258,11 @@ def feature_importance(bundle: dict) -> list[dict]:
              "importance": float(share[i])} for i in order]
 
 
-def oof_predictions(df: pd.DataFrame, *, kind: str, n_estimators: int) -> np.ndarray:
+def oof_predictions(df: pd.DataFrame, *, kind: str, n_estimators: int,
+                    features: list[str] | None = None) -> np.ndarray:
     """시즌 leave-one-out 예측: 시즌 s의 행은 's를 뺀 나머지 시즌'으로 학습한 모델이 예측한 확률(캘리브레이션 전).
-    모든 행이 '학습에 안 쓴 데이터' 예측이 되므로, 전체 학습 모델의 캘리브레이터를 맞추는 데 쓴다. 행 순서 유지."""
+    모든 행이 '학습에 안 쓴 데이터' 예측이 되므로, 전체 학습 모델의 캘리브레이터를 맞추는 데 쓴다. 행 순서 유지.
+    features는 fit_model과 같다 (기본 FEATURE_NAMES) — 캘리브레이터를 붙일 모델과 같은 피처로 맞춰야 한다."""
     seasons = sorted(int(s) for s in df["season"].unique())
     if len(seasons) < 2:
         raise ValueError(f"leave-one-season-out needs >= 2 seasons, got {seasons}")
@@ -263,18 +271,22 @@ def oof_predictions(df: pd.DataFrame, *, kind: str, n_estimators: int) -> np.nda
     for s in seasons:
         held = season_col == s
         rest = [x for x in seasons if x != s]
-        m = fit_model(df[~held], kind=kind, n_estimators=n_estimators, version="oof", seasons=rest)
+        m = fit_model(df[~held], kind=kind, n_estimators=n_estimators, version="oof", seasons=rest,
+                      features=features)
         out[held] = predict_raw(m, df[held])
     return out
 
 
 # ---------- 보고서(report-2026) · 라이브(v0.2) 학습 ----------
 
-def _early_stopping_rounds(train: pd.DataFrame, val: pd.DataFrame, max_rounds: int = 2000) -> int:
-    """LightGBM 트리 개수 결정: val 로그 손실이 50라운드 연속 나아지지 않으면 멈추고, 가장 좋았던 라운드를 쓴다."""
+def _early_stopping_rounds(train: pd.DataFrame, val: pd.DataFrame, max_rounds: int = 2000,
+                           features: list[str] | None = None) -> int:
+    """LightGBM 트리 개수 결정: val 로그 손실이 50라운드 연속 나아지지 않으면 멈추고, 가장 좋았던 라운드를 쓴다.
+    features: 쓸 피처 목록 (기본 FEATURE_NAMES)."""
+    features = list(FEATURE_NAMES if features is None else features)
     m = _new_estimator("lgbm", max_rounds)
-    m.fit(_matrix(FEATURE_NAMES, train), train["y"].to_numpy(),
-          eval_X=(_matrix(FEATURE_NAMES, val),), eval_y=(val["y"].to_numpy(),), eval_metric="binary_logloss",
+    m.fit(_matrix(features, train), train["y"].to_numpy(),
+          eval_X=(_matrix(features, val),), eval_y=(val["y"].to_numpy(),), eval_metric="binary_logloss",
           callbacks=[lgb.early_stopping(50, verbose=False)])
     return int(m.best_iteration_ or max_rounds)
 
@@ -289,7 +301,8 @@ def _choose_calibration(bundle: dict, train: pd.DataFrame, val: pd.DataFrame) ->
     val은 캘리브레이터 학습에 한 번도 쓰지 않는다 — val에서 맞추고 val에서 재면 자유도가 큰
     isotonic이 늘 이겨 버린다(낙관 편향). 라이브 모델(train_live)도 같은 방식(OOF)으로 맞춘다.
     반환: (선택된 캘리브레이터를 붙인 번들, {방법: val 로그 손실})."""
-    oof = oof_predictions(train, kind=bundle["kind"], n_estimators=bundle["n_estimators"] or 300)
+    oof = oof_predictions(train, kind=bundle["kind"], n_estimators=bundle["n_estimators"] or 300,
+                          features=bundle["features"])
     raw_val, y_val = predict_raw(bundle, val), val["y"].to_numpy()
     losses, calibrators = {}, {}
     for method in CALIBRATIONS:
@@ -299,10 +312,50 @@ def _choose_calibration(bundle: dict, train: pd.DataFrame, val: pd.DataFrame) ->
     return {**bundle, "calibration": best, "calibrator": calibrators[best]}, losses
 
 
+# 학습·평가와 라이브가 선발 정보를 어디서 가져오는가 (보고서에 그대로 적는다)
+STARTER_SOURCE = {"train_test": "actual (boxscore pitching order 1)", "live": "announced (schedule page)"}
+BASELINE_ORDER = ("home_always", "better_win_pct", "lower_starter_era")  # _baseline_preds 순서 = 동률 순서
+
+
+def _no_starter_ablation(kind: str, calibration: str, train: pd.DataFrame, val: pd.DataFrame,
+                         test: pd.DataFrame, train_seasons: list[int]) -> dict:
+    """선발 없는 변형: 선택된 알고리즘(kind)을 팀 피처 19개(TEAM_FEATURES)만으로 같은 절차로 다시 학습한다.
+    - 트리 수: lgbm이면 19개 피처로 val early stopping을 다시 돌린다 (lr은 해당 없음 → None).
+    - 캘리브레이션: selected와 같은 방법을, train 시즌 LOSO OOF 예측으로 맞춘다 (R7과 같음, val로 맞추지 않음).
+    학습·평가의 선발은 '실제' 선발이므로, 이 변형과의 차이가 '선발을 안다'는 가정이 지표에 얼마나 보태는지 보여 준다."""
+    best_iteration = _early_stopping_rounds(train, val, features=TEAM_FEATURES) if kind == "lgbm" else None
+    n_est = best_iteration or 300
+    b = fit_model(train, kind=kind, n_estimators=n_est, version=REPORT_VERSION, seasons=train_seasons,
+                  features=TEAM_FEATURES)
+    if calibration != "none":
+        oof = oof_predictions(train, kind=kind, n_estimators=n_est, features=TEAM_FEATURES)
+        b.update(calibration=calibration, calibrator=fit_calibrator(calibration, oof, train["y"].to_numpy()))
+    return {"kind": kind, "calibration": calibration, "best_iteration": best_iteration,
+            "features": list(TEAM_FEATURES), "n_features": len(TEAM_FEATURES),
+            "val": evaluate(b, val), "test": evaluate(b, test)}
+
+
+def _significance(bundle: dict, val: pd.DataFrame, test: pd.DataFrame) -> dict:
+    """유의성: 선택 모델 vs 베이스라인, test 경기들 위의 McNemar 검정.
+    비교 대상(vs)은 val 정확도가 가장 높은 베이스라인으로 '미리' 정한다 — test에서 가장 잘한 것을 고르면
+    비교 대상 선택 자체가 test를 본 셈이 된다. 동률이면 BASELINE_ORDER의 앞. 세 베이스라인 모두 all에 적는다."""
+    base_val = baselines(val)
+    vs = next(name for name in BASELINE_ORDER if base_val[name] == max(base_val.values()))
+    y_test = test["y"].to_numpy()
+    model_ok = _correct(predict_proba(bundle, test), y_test)
+    preds = _baseline_preds(test)
+    every = {}
+    for name in BASELINE_ORDER:
+        base_ok = preds[name] == y_test
+        every[name] = {"mcnemar_p": mcnemar_p(model_ok, base_ok), "model_correct": int(model_ok.sum()),
+                       "baseline_correct": int(base_ok.sum())}
+    return {"vs": vs, "selected_on": "val", **every[vs], "all": every}
+
+
 def train_report(df: pd.DataFrame, *, train_seasons=range(2015, 2025), val_season: int = 2025,
                  test_season: int = 2026, meta: dict) -> tuple[dict, dict]:
     """보고서용 모델: train 시즌으로 학습(캘리브레이터는 train OOF로) → val 시즌으로 트리 수·캘리브레이션 방법·
-    알고리즘 선택 → test 시즌은 마지막에 한 번만 평가.
+    알고리즘·유의성 비교 대상 선택 → test 시즌은 마지막에 한 번만 평가. 선발 없는 변형(ablation.no_starter)도 함께.
     반환: (model_report.json 내용, 선택된 번들 version=REPORT_VERSION)."""
     train_seasons = [int(s) for s in train_seasons]
     parts = {"train": df[df["season"].isin(train_seasons)], "val": df[df["season"] == val_season],
@@ -328,12 +381,8 @@ def train_report(df: pd.DataFrame, *, train_seasons=range(2015, 2025), val_seaso
     if meta.get("generated_at"):
         bundle["trained_at"] = meta["generated_at"]
 
-    # 유의성: 선택 모델 vs test에서 가장 잘한 베이스라인, 같은 경기들 위의 McNemar 검정
     y_test = test["y"].to_numpy()
     p_test = predict_proba(bundle, test)
-    base_test = baselines(test)
-    vs = max(base_test, key=base_test.get)  # 동률이면 앞의 것
-    model_ok, base_ok = _correct(p_test, y_test), _baseline_preds(test)[vs] == y_test
 
     report = {
         "model_version": REPORT_VERSION,
@@ -347,11 +396,13 @@ def train_report(df: pd.DataFrame, *, train_seasons=range(2015, 2025), val_seaso
         "n": {name: int(len(part)) for name, part in parts.items()},
         "models": models,
         "selected": selected,
-        "baselines": {"val": baselines(val), "test": base_test},
-        "significance": {"vs": vs, "mcnemar_p": mcnemar_p(model_ok, base_ok),
-                         "model_correct": int(model_ok.sum()), "baseline_correct": int(base_ok.sum())},
+        "starter_source": dict(STARTER_SOURCE),
+        "baselines": {"val": baselines(val), "test": baselines(test)},
+        "significance": _significance(bundle, val, test),
         "calibration_bins": calibration_table(p_test, y_test),
         "feature_importance": feature_importance(bundle),
+        "ablation": {"no_starter": _no_starter_ablation(selected, bundle["calibration"], train, val, test,
+                                                        train_seasons)},
         "matchup_feature_ablation": None,  # 3단계(맞대결 피처) 자리
         "cluster_quality": None,           # 3단계(선수 유형 군집) 자리
     }
@@ -418,7 +469,12 @@ def main(argv: list[str] | None = None) -> None:
               f"best_iteration={report['models']['lgbm']['best_iteration']})")
         print(f"test {report['test_season']}: acc={sel['test']['accuracy']:.4f} "
               f"log_loss={sel['test']['log_loss']:.4f} brier={sel['test']['brier']:.4f}")
-        print(f"vs {report['significance']['vs']}: McNemar p={report['significance']['mcnemar_p']:.4f}")
+        ns = report["ablation"]["no_starter"]
+        print(f"no_starter (team 19): acc={ns['test']['accuracy']:.4f} log_loss={ns['test']['log_loss']:.4f} "
+              f"brier={ns['test']['brier']:.4f}")
+        sig = report["significance"]
+        print(f"vs {sig['vs']} (chosen on {sig['selected_on']}): McNemar p={sig['mcnemar_p']:.4f}  "
+              + "  ".join(f"{k}={v['mcnemar_p']:.4f}" for k, v in sig["all"].items()))
     else:
         if not REPORT_JSON.exists():
             raise SystemExit(f"{REPORT_JSON} not found — run `python -m kbo_predict.train_win report` first")

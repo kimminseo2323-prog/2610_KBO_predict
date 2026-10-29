@@ -151,6 +151,19 @@ def test_build_state_matches_training_features(tmp_data_dir, fixture_html):
     assert st.pitcher_line(HOME_SP)["season"]["starts"] == 1
 
 
+def test_build_state_uses_shared_regular_finals(tmp_data_dir, fixture_html, monkeypatch):
+    """build_state는 features.regular_finals(학습과 같은 필터)를 쓰고, upto 컷만 따로 적용한다."""
+    from kbo_predict import features
+
+    _seed_two_seasons(fixture_html)
+    calls = []
+    real = features.regular_finals
+    monkeypatch.setattr(rp, "regular_finals", lambda games, season: calls.append(season) or real(games, season))
+    st = build_state(2026, "2026-10-29")
+    assert calls == [2025, 2026]
+    assert st.team_line("HT", "2026-10-29")["games"] == 2
+
+
 def test_build_state_without_previous_season(tmp_data_dir, fixture_html):
     """직전 시즌 데이터가 없으면(2015처럼) 이전 시즌 값 없이 당해 시즌만으로 동작."""
     _seed(fixture_html, _row(9202, "2026-09-01", hs=4, as_=2))

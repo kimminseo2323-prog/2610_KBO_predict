@@ -9,8 +9,13 @@ predict_game이 돌려주는 항목(latest.json의 games[] 한 칸):
     starter_known     두 선발 모두 기록이 있어 선발 피처를 쓸 수 있었는가 (피처 starter_known과 같은 값)
 
 요인(pp) 계산: train_win.explain이 캘리브레이션 전 로짓을 '피처 26개 기여 + 기본값(bias)'으로 정확히 나눈다.
-로짓 1만큼의 변화는 최종 확률 p 근처에서 약 p(1−p)만큼의 확률 변화이므로 pp = 기여 × p(1−p) × 100 (퍼센트포인트).
+platt 캘리브레이션은 최종 로짓 = a · (캘리브레이션 전 로짓) + b 이므로, 캘리브레이션 전 로짓 1만큼의 변화는
+최종 로짓 a만큼의 변화다. 최종 로짓 1만큼의 변화는 최종 확률 p 근처에서 약 p(1−p)만큼의 확률 변화이므로
+    pp = 기여 × a × p(1−p) × 100 (퍼센트포인트)   — platt
+    pp = 기여 × p(1−p) × 100                      — isotonic·none (기울기 보정 없음)
 bias(평균적인 경기의 홈 어드밴티지)도 후보에 넣고 27개 중 |pp| 상위 5개를 고른다.
+주의: 요인 pp는 캘리브레이션 후 확률에 대한 **1차 근사**다. 그래서 27개 pp의 합이 `home_win_prob − 0.5`와
+정확히 같지 않을 수 있다 (platt 절편 b와 시그모이드의 곡률은 요인으로 나누지 않는다).
 """
 from datetime import date as _date
 
@@ -56,13 +61,20 @@ def _side(full_name: str, code: str, line: dict, starter: dict | None) -> dict:
     }
 
 
-def _factors(bundle: dict, X: pd.DataFrame, p: float) -> list[dict]:
-    """요인 27개(피처 26 + bias)를 pp로 바꿔 |pp| 상위 TOP_FACTORS개. 순서는 반올림 전 |pp| 기준 (동률은 피처 순서)."""
+def factor_pp(bundle: dict, X: pd.DataFrame, p: float) -> list[tuple[str, float]]:
+    """X 첫 행의 요인 전부(피처 순서 + 마지막에 bias)를 (이름, pp)로. 반올림·자르기 전 값.
+    p = 최종(캘리브레이션 후) P(홈 승). platt이면 기울기 a(calibrator.coef_[0][0])를 곱한다 (모듈 docstring)."""
     contrib, base = explain(bundle, X)
-    slope = p * (1 - p) * 100
+    a = float(bundle["calibrator"].coef_[0][0]) if bundle["calibration"] == "platt" else 1.0
+    slope = a * p * (1 - p) * 100
     items = [(FACTOR_LABELS[n], float(c) * slope) for n, c in zip(bundle["features"], contrib[0])]
     items.append((FACTOR_LABELS["bias"], float(base[0]) * slope))
-    items.sort(key=lambda kv: -abs(kv[1]))
+    return items
+
+
+def _factors(bundle: dict, X: pd.DataFrame, p: float) -> list[dict]:
+    """요인 27개(피처 26 + bias)를 pp로 바꿔 |pp| 상위 TOP_FACTORS개. 순서는 반올림 전 |pp| 기준 (동률은 피처 순서)."""
+    items = sorted(factor_pp(bundle, X, p), key=lambda kv: -abs(kv[1]))
     # + 0.0: 반올림 결과가 -0.0이면 0.0으로 (JSON에 "-0.0"이 나오지 않게)
     return [{"name": name, "contribution_pp": round(v, 1) + 0.0} for name, v in items[:TOP_FACTORS]]
 

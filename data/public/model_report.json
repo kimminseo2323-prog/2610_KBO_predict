@@ -1,4 +1,45 @@
 {
+  "ablation": {
+    "no_starter": {
+      "best_iteration": null,
+      "calibration": "platt",
+      "features": [
+        "win_pct_diff",
+        "last10_diff",
+        "run_diff_diff",
+        "pyth_diff",
+        "prev_season_diff",
+        "obp_diff",
+        "hr_rate_diff",
+        "k_rate_diff",
+        "bb_rate_diff",
+        "era_diff",
+        "fip_diff",
+        "k9_diff",
+        "bb9_diff",
+        "rest_diff",
+        "bullpen3_diff",
+        "home_venue_pct",
+        "away_venue_pct",
+        "h2h_home_pct",
+        "season_progress"
+      ],
+      "kind": "lr",
+      "n_features": 19,
+      "test": {
+        "accuracy": 0.5470085470085471,
+        "brier": 0.24713564811891783,
+        "log_loss": 0.6873995204418918,
+        "n": 702
+      },
+      "val": {
+        "accuracy": 0.5429799426934098,
+        "brier": 0.24906155983867018,
+        "log_loss": 0.6913631275323529,
+        "n": 698
+      }
+    }
+  },
   "baselines": {
     "test": {
       "better_win_pct": 0.5541310541310541,
@@ -218,7 +259,7 @@
     }
   ],
   "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
-  "generated_at": "2026-10-29T12:45:37+09:00",
+  "generated_at": "2026-10-29T13:09:22+09:00",
   "matchup_feature_ablation": null,
   "model_version": "report-2026",
   "models": {
@@ -274,10 +315,32 @@
   "run_url": null,
   "selected": "lr",
   "significance": {
+    "all": {
+      "better_win_pct": {
+        "baseline_correct": 389,
+        "mcnemar_p": 0.07860297621737812,
+        "model_correct": 417
+      },
+      "home_always": {
+        "baseline_correct": 361,
+        "mcnemar_p": 0.0003641105071832032,
+        "model_correct": 417
+      },
+      "lower_starter_era": {
+        "baseline_correct": 398,
+        "mcnemar_p": 0.21518592344658005,
+        "model_correct": 417
+      }
+    },
     "baseline_correct": 398,
     "mcnemar_p": 0.21518592344658005,
     "model_correct": 417,
+    "selected_on": "val",
     "vs": "lower_starter_era"
+  },
+  "starter_source": {
+    "live": "announced (schedule page)",
+    "train_test": "actual (boxscore pitching order 1)"
   },
   "test_season": 2026,
   "train_seasons": [

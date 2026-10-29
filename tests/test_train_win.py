@@ -10,10 +10,12 @@ from scipy.stats import rankdata
 from sklearn.metrics import log_loss
 
 from kbo_predict import MODEL_VERSION, REPORT_VERSION, train_win
-from kbo_predict.features import FACTOR_LABELS, FEATURE_NAMES, load_features, save_features
+from kbo_predict.features import FACTOR_LABELS, FEATURE_NAMES, TEAM_FEATURES, load_features, save_features
 from kbo_predict.train_win import (
     LGBM_PARAMS,
     SEED,
+    _baseline_preds,
+    _correct,
     apply_calibrator,
     baselines,
     calibration_table,
@@ -228,6 +230,28 @@ def test_feature_importance_normalized_sorted_labeled(data, kind):
     assert imp[0]["name"] == "win_pct_diff"  # 가장 강한 진짜 신호
 
 
+@pytest.mark.parametrize("kind", ["lr", "lgbm"])
+def test_fit_model_with_feature_subset(data, kind):
+    """features=TEAM_FEATURES(19개)로 학습하면 번들·예측·요인 분해·OOF 모두 그 19개 열만 쓴다 (선발 피처 무시)."""
+    bundle = _fit(data, kind, n_estimators=60, features=TEAM_FEATURES)
+    assert bundle["features"] == TEAM_FEATURES and len(bundle["features"]) == 19
+    test = data["test"]
+    shuffled = test.copy()
+    starter_cols = [c for c in FEATURE_NAMES if c not in TEAM_FEATURES]
+    shuffled[starter_cols] = shuffled[starter_cols].to_numpy()[::-1]  # 선발 열을 섞어도 예측이 같아야 함
+    np.testing.assert_array_equal(predict_raw(bundle, test), predict_raw(bundle, shuffled))
+    contrib, base = explain(bundle, test)
+    assert contrib.shape == (len(test), 19)
+    np.testing.assert_allclose(contrib.sum(axis=1) + base, _logit(predict_raw(bundle, test)), rtol=0, atol=1e-6)
+    assert _fit(data, kind, n_estimators=60)["features"] == FEATURE_NAMES  # 기본값은 26개 그대로
+    df = data["train"][data["train"]["season"].isin([2023, 2024])]  # 합성 시즌 2개
+    oof = oof_predictions(df, kind=kind, n_estimators=60, features=TEAM_FEATURES)
+    m = fit_model(df[df["season"] == 2024], kind=kind, n_estimators=60, version="x", seasons=[2024],
+                  features=TEAM_FEATURES)
+    mask = (df["season"] == 2023).to_numpy()
+    np.testing.assert_array_equal(oof[mask], predict_raw(m, df[mask]))
+
+
 def test_oof_predictions_leave_one_season_out(data):
     df = data["train"][data["train"]["season"].isin([2023, 2024])]  # 합성 시즌 2개
     df = df.sample(frac=1, random_state=1).reset_index(drop=True)  # 두 시즌이 섞인 행 순서도 지켜야 함
@@ -247,7 +271,9 @@ META = {"generated_at": "2026-10-29T12:00:00+09:00", "commit_sha": "abc123", "ru
         "features_sha256": "f" * 64}
 REPORT_KEYS = {"model_version", "generated_at", "commit_sha", "run_url", "features_sha256", "train_seasons",
                "val_season", "test_season", "n", "models", "selected", "baselines", "significance",
-               "calibration_bins", "feature_importance", "matchup_feature_ablation", "cluster_quality"}
+               "calibration_bins", "feature_importance", "matchup_feature_ablation", "cluster_quality",
+               "starter_source", "ablation"}
+BASELINE_ORDER = ["home_always", "better_win_pct", "lower_starter_era"]
 SPLIT = dict(train_seasons=range(2023, 2025), val_season=2025, test_season=2026)
 
 
@@ -287,8 +313,19 @@ def test_train_report_keys_and_selection(report):
     assert set(rep["baselines"]) == {"val", "test"}
     assert set(rep["baselines"]["test"]) == {"home_always", "better_win_pct", "lower_starter_era"}
     sig = rep["significance"]
-    assert set(sig) == {"vs", "mcnemar_p", "model_correct", "baseline_correct"}
-    assert rep["baselines"]["test"][sig["vs"]] == max(rep["baselines"]["test"].values())
+    assert set(sig) == {"vs", "selected_on", "mcnemar_p", "model_correct", "baseline_correct", "all"}
+    # 비교 대상은 val(2025) 정확도가 가장 높은 베이스라인 — test 결과로 고르지 않는다 (동률이면 앞의 것)
+    assert sig["selected_on"] == "val"
+    base_val = rep["baselines"]["val"]
+    assert sig["vs"] == next(b for b in BASELINE_ORDER if base_val[b] == max(base_val.values()))
+    assert list(sig["all"]) == BASELINE_ORDER
+    for name, s in sig["all"].items():
+        assert set(s) == {"mcnemar_p", "model_correct", "baseline_correct"} and 0 <= s["mcnemar_p"] <= 1
+        assert s["baseline_correct"] == round(rep["baselines"]["test"][name] * 500)
+        assert s["model_correct"] == sig["model_correct"]
+    assert sig["all"][sig["vs"]] == {k: sig[k] for k in ("mcnemar_p", "model_correct", "baseline_correct")}
+    assert rep["starter_source"] == {"train_test": "actual (boxscore pitching order 1)",
+                                     "live": "announced (schedule page)"}
     assert sig["model_correct"] == round(rep["models"][rep["selected"]]["test"]["accuracy"] * 500)
     assert sig["baseline_correct"] == round(rep["baselines"]["test"][sig["vs"]] * 500)
     assert 0 <= sig["mcnemar_p"] <= 1
@@ -322,6 +359,53 @@ def test_train_report_calibrators_fit_on_train_oof_not_val(report, season_df, me
         cal = fit_calibrator(method, oof_predictions(train, kind=kind, n_estimators=n_est), train["y"].to_numpy())
         want = log_loss(val["y"], apply_calibrator(cal, predict_raw(raw, val)), labels=[0, 1])
         assert rep["models"][kind]["calibration_val_logloss"][method] == pytest.approx(want, abs=1e-12)
+
+
+def test_train_report_no_starter_ablation(report, season_df):
+    """ablation.no_starter: 선택된 알고리즘을 팀 피처 19개만으로 같은 절차(트리 수는 val early stopping,
+    캘리브레이션은 selected와 같은 방법을 train LOSO OOF로)로 다시 학습한 val·test 지표."""
+    rep, _ = report
+    ab = rep["ablation"]
+    assert set(ab) == {"no_starter"}
+    ns = ab["no_starter"]
+    assert set(ns) == {"kind", "calibration", "best_iteration", "features", "n_features", "val", "test"}
+    assert ns["kind"] == rep["selected"] and ns["calibration"] == rep["models"][rep["selected"]]["calibration"]
+    assert ns["n_features"] == 19 and ns["features"] == TEAM_FEATURES
+    for part, n in (("val", 500), ("test", 500)):
+        assert set(ns[part]) == {"n", "accuracy", "log_loss", "brier"} and ns[part]["n"] == n
+    if ns["kind"] == "lgbm":
+        assert 1 <= ns["best_iteration"] < 2000
+    else:
+        assert ns["best_iteration"] is None
+    # 같은 절차를 손으로 재현하면 test 지표가 똑같다
+    train = season_df[season_df["season"].isin([2023, 2024])]
+    test = season_df[season_df["season"] == 2026]
+    n_est = ns["best_iteration"] or 300
+    b = fit_model(train, kind=ns["kind"], n_estimators=n_est, version="x", seasons=[2023, 2024],
+                  features=TEAM_FEATURES)
+    if ns["calibration"] != "none":
+        oof = oof_predictions(train, kind=ns["kind"], n_estimators=n_est, features=TEAM_FEATURES)
+        b["calibrator"] = fit_calibrator(ns["calibration"], oof, train["y"].to_numpy())
+    assert evaluate(b, test) == ns["test"]
+
+
+def test_significance_comparator_chosen_on_val_not_test(season_df):
+    """test 시즌에서만 '선발 ERA 낮은 팀'이 완벽한 규칙이 되게 바꿔도 비교 대상은 val 최고 베이스라인이다."""
+    df = season_df.copy()
+    rng = np.random.default_rng(7)
+    t = (df["season"] == 2026).to_numpy()
+    df.loc[t, "starter_era_diff"] = (1 - 2 * df.loc[t, "y"].to_numpy()) * (0.1 + rng.random(t.sum()))
+    rep, bundle = train_report(df, **SPLIT, meta=META)
+    sig, base = rep["significance"], rep["baselines"]
+    assert max(base["test"], key=base["test"].get) == "lower_starter_era"  # 전제: test 최고는 선발 ERA
+    val_best = next(b for b in BASELINE_ORDER if base["val"][b] == max(base["val"].values()))
+    assert val_best != "lower_starter_era"  # 전제: val 최고는 다른 규칙
+    assert sig["vs"] == val_best and sig["selected_on"] == "val"
+    test = df[t]
+    y = test["y"].to_numpy()
+    model_ok = _correct(predict_proba(bundle, test), y)
+    for name, pred in _baseline_preds(test).items():
+        assert sig["all"][name]["mcnemar_p"] == mcnemar_p(model_ok, pred == y)
 
 
 def test_train_report_rejects_missing_season(season_df):

@@ -7,19 +7,17 @@ from pathlib import Path
 
 from kbo_predict import KST, raw_store, seasons
 from kbo_predict.collect import collect_range, fetch_starters
-from kbo_predict.features import LeagueState
+from kbo_predict.features import LeagueState, regular_finals
 from kbo_predict.predict import predict_game
 from kbo_predict.publish import settle_history, upsert_history, write_latest, write_status
 from kbo_predict.train_win import load_bundle
 
 
 def _regular_finals(games: list[dict], season: int, before: str | None = None) -> list[dict]:
-    """상태에 넣을 경기: 정규시즌 FINAL, (date, game_id) 순. before가 있으면 그 날짜 전 경기만.
-    features.build_training_frame과 같은 필터·순서 — 라이브 피처가 학습 피처와 같은 방식으로 만들어지게.
+    """상태에 넣을 경기: features.regular_finals(학습과 같은 필터·순서 — 정규시즌 FINAL, (date, game_id) 순)에
+    before 컷만 더한다. before가 있으면 그 날짜 전 경기만 (당일 경기 결과가 당일 예측에 새지 않게).
     점수가 없거나 무승부인 경기는 LeagueState.update가 알아서 처리한다 (학습 때와 동일)."""
-    return [g for g in sorted(games, key=lambda g: (g["date"], g["game_id"]))
-            if g["status"] == "FINAL" and (before is None or g["date"] < before)
-            and seasons.is_regular(season, date.fromisoformat(g["date"]), g["game_id"])]
+    return [g for g in regular_finals(games, season) if before is None or g["date"] < before]
 
 
 def build_state(season: int, upto: str) -> LeagueState:

@@ -315,6 +315,14 @@ def game_features(game: dict, state: LeagueState, starters: dict | None = None) 
     }
 
 
+def regular_finals(games: list[dict], season: int) -> list[dict]:
+    """상태에 넣을 경기: 정규시즌 FINAL만, (date, game_id) 순.
+    학습(build_training_frame)과 라이브(scripts/run_pipeline.build_state)가 같은 필터·순서를 쓰도록 한 곳에 둔다.
+    무승부·점수 없는 FINAL도 남긴다 — 행을 만들지 말지는 build_training_frame이, 상태 반영은 LeagueState.update가 정한다."""
+    return [g for g in sorted(games, key=lambda g: (g["date"], g["game_id"]))
+            if g["status"] == "FINAL" and is_regular(season, _date.fromisoformat(g["date"]), g["game_id"])]
+
+
 def build_training_frame(
     games: list[dict], boxscores: dict[int, dict], *, season: int, state: LeagueState | None = None
 ) -> pd.DataFrame:
@@ -323,13 +331,9 @@ def build_training_frame(
     선발은 박스스코어의 실제 선발(order==1)을 쓴다. 무승부는 행을 만들지 않지만 상태에는 반영한다.
     state를 넘기면 그 상태에 이어서 누적한다 (시즌 연결은 호출하는 쪽에서 start_season으로)."""
     state = state if state is not None else LeagueState()
-    ordered = sorted(games, key=lambda g: (g["date"], g["game_id"]))
     rows = []
-    for _, grp in groupby(ordered, key=lambda g: g["date"]):
-        day_games = [
-            g for g in grp
-            if g["status"] == "FINAL" and is_regular(season, _date.fromisoformat(g["date"]), g["game_id"])
-        ]
+    for _, grp in groupby(regular_finals(games, season), key=lambda g: g["date"]):
+        day_games = list(grp)
         for g in day_games:
             if g["home_score"] is None or g["away_score"] is None or g["home_score"] == g["away_score"]:
                 continue

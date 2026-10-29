@@ -12,6 +12,7 @@ from kbo_predict.features import (
     LeagueState,
     build_training_frame,
     game_features,
+    regular_finals,
     starter_ids,
 )
 from kbo_predict.mykbo_parse import parse_week
@@ -394,6 +395,32 @@ def test_training_frame_excludes_draws_and_non_regular():
     assert df.loc[df.game_id == 3, "season_progress"].item() == pytest.approx(1 / 144)
     assert df.loc[df.game_id == 5, "win_pct_diff"].item() == pytest.approx(1.0)
     assert df.season.tolist() == [2026, 2026] and df.home_code.tolist() == ["LG", "LG"]
+
+
+def test_regular_finals_filters_and_orders():
+    """정규시즌 FINAL만, (date, game_id) 순. 무승부·점수 없는 FINAL은 남긴다 (상태 갱신 쪽에서 처리)."""
+    games = [
+        mk("2026-04-02", 7, hs=3, as_=1),
+        mk("2026-03-21", 1, hs=5, as_=1),       # 시범경기
+        mk("2026-04-02", 3, hs=1, as_=1),       # 같은 날 → game_id 순, 무승부도 남김
+        mk("2026-04-01", 9, hs=2, as_=0),
+        mk("2026-04-03", 4, status="CANCELED"),
+        mk("2026-04-04", 5, status="SCHEDULED"),
+        mk("2026-10-20", 6, hs=1, as_=0),       # 포스트시즌
+    ]
+    assert [g["game_id"] for g in regular_finals(games, 2026)] == [9, 3, 7]
+    assert regular_finals([], 2026) == []
+
+
+def test_training_frame_uses_regular_finals(monkeypatch):
+    """build_training_frame과 라이브 build_state가 같은 필터(features.regular_finals)를 쓴다."""
+    import kbo_predict.features as F
+
+    calls = []
+    real = F.regular_finals
+    monkeypatch.setattr(F, "regular_finals", lambda games, season: calls.append(season) or real(games, season))
+    df = build_training_frame([mk("2026-04-02", 2, hs=1, as_=0), mk("2026-03-21", 1, hs=5, as_=1)], {}, season=2026)
+    assert calls == [2026] and df.game_id.tolist() == [2]
 
 
 def test_training_frame_continues_given_state():

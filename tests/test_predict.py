@@ -4,10 +4,11 @@ import math
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from kbo_predict.features import FACTOR_LABELS, FEATURE_NAMES, LeagueState, game_features
 from kbo_predict.mykbo_parse import parse_week
-from kbo_predict.predict import predict_game
+from kbo_predict.predict import factor_pp, predict_game
 from kbo_predict.train_win import explain, predict_proba, predict_raw
 
 HOME_SP, AWAY_SP = 2730, 1096  # 14050 예고 선발: 홈 Shirakawa Keisho, 원정 Choi Won-tae
@@ -113,12 +114,40 @@ def test_empty_state_does_not_crash_and_emits_none(bundle, fixture_html):
     assert 0 < out["home_win_prob"] < 1 and out["starter_known"] is False
 
 
+def _platt_a(bundle):
+    """platt 번들이면 캘리브레이터 기울기 a, 아니면 1 (isotonic·none은 기울기 보정 없음)."""
+    return float(bundle["calibrator"].coef_[0][0]) if bundle["calibration"] == "platt" else 1.0
+
+
 def _all_pp(bundle, X, p):
-    """요인 27개(피처 26 + bias)의 pp를 반올림 없이 계산."""
+    """요인 27개(피처 26 + bias)의 pp를 반올림 없이 계산: 기여 × a × p(1−p) × 100."""
     contrib, base = explain(bundle, X)
     names = [FACTOR_LABELS[n] for n in bundle["features"]] + [FACTOR_LABELS["bias"]]
     vals = list(contrib[0]) + [base[0]]
-    return {n: v * p * (1 - p) * 100 for n, v in zip(names, vals)}
+    return {n: v * _platt_a(bundle) * p * (1 - p) * 100 for n, v in zip(names, vals)}
+
+
+def test_factor_pp_applies_platt_slope_exactly(bundle, fixture_html):
+    """platt 번들: 27개 pp 합(상위 5 자르기 전) == a · logit(p_raw) · p(1−p) · 100 (1차 근사의 기울기까지 반영)."""
+    assert bundle["calibration"] == "platt"
+    a = float(bundle["calibrator"].coef_[0][0])
+    assert abs(a - 1) > 1e-3  # 기울기가 1이면 보정 여부를 구분할 수 없다
+    game = _game(fixture_html)
+    for st, starters in ((_played_state(), STARTERS), (LeagueState(), None)):
+        X = _x(game, st, starters)
+        p = float(predict_proba(bundle, X)[0])
+        p_raw = float(predict_raw(bundle, X)[0])
+        items = factor_pp(bundle, X, p)
+        assert len(items) == len(FEATURE_NAMES) + 1
+        want = a * math.log(p_raw / (1 - p_raw)) * p * (1 - p) * 100
+        assert abs(sum(v for _, v in items) - want) < 1e-6
+    # isotonic·none은 기울기 보정 없이 기여 × p(1−p) × 100 그대로
+    X = _x(game, _played_state(), STARTERS)
+    contrib, base = explain(bundle, X)
+    for cal in ("none", "isotonic"):
+        items = factor_pp({**bundle, "calibration": cal}, X, 0.4)
+        assert items[0][1] == pytest.approx(float(contrib[0][0]) * 0.4 * 0.6 * 100, abs=1e-12)
+        assert items[-1][1] == pytest.approx(float(base[0]) * 0.4 * 0.6 * 100, abs=1e-12)
 
 
 def test_factors_top5_by_abs_pp(bundle, fixture_html):
