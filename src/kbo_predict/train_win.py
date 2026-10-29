@@ -37,6 +37,9 @@ explain은 캘리브레이션 전 로짓(log-odds)을 피처별 기여 + 기본�
     python -m kbo_predict.train_win live    → models/win_model.pkl (v0.2, 2015~2026 전체 학습)
         보고서에서 selected·캘리브레이션 방법·LightGBM 트리 수만 읽는다 → report를 먼저 돌린다.
         parquet가 보고서 때와 달라도(새 경기가 쌓여도) 다시 학습할 수 있다 (해시 일치를 요구하지 않음).
+    python -m kbo_predict.train_win live --skip-if-same   ← 주간 재학습(weekly_retrain.yml)
+        위와 같이 학습한 뒤, 새 번들의 예측이 parquet 전 행에서 기존 win_model.pkl과 같으면(atol 1e-9)
+        "unchanged"만 찍고 pkl·manifest를 쓰지 않는다 (새 경기가 없는 주에 trained_at만 바뀐 커밋이 생기지 않게).
 models/manifest.json에는 모델별로 (파일 SHA256, 버전, 그 모델을 만든 parquet SHA256)을 적는다.
 각 명령은 자기 모델 항목만 갱신하고 다른 항목은 기존 manifest 그대로 둔다.
 """
@@ -555,6 +558,24 @@ def train_live(df: pd.DataFrame, *, kind: str, calibration: str, n_estimators: i
     return bundle
 
 
+SKIP_ATOL = 1e-9  # live --skip-if-same: 이 차이 안이면 '같은 모델'로 본다
+
+
+def same_predictions(bundle: dict, old_path: Path, df: pd.DataFrame, atol: float = SKIP_ATOL) -> bool:
+    """bundle과 old_path의 번들이 df 전 행에서 같은 최종 확률(predict_proba)을 내는가 (np.allclose, rtol 0, atol).
+    old_path가 없거나, 읽을 수 없거나, 피처가 달라 예측할 수 없으면 False (= 새 번들을 써야 한다)."""
+    old_path = Path(old_path)
+    if not old_path.exists():
+        return False
+    try:
+        old = load_bundle(old_path)
+        if old.get("features") != bundle["features"]:
+            return False
+        return bool(np.allclose(predict_proba(bundle, df), predict_proba(old, df), rtol=0.0, atol=atol))
+    except Exception:  # 깨진 pkl, 예전 형식 번들 등 → 새로 쓴다
+        return False
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -644,7 +665,11 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--clusters", help="report: 군집 묶음 pkl (models/clusters.pkl) → cluster_quality")
     ap.add_argument("--reset-blocks", action="store_true",
                     help="report --force: 기존 보고서의 matchup_feature_ablation·cluster_quality를 null로 되돌려도 된다")
+    ap.add_argument("--skip-if-same", action="store_true",
+                    help="live: 새 번들의 예측이 기존 win_model.pkl과 같으면(전 행, atol 1e-9) 아무것도 쓰지 않는다")
     args = ap.parse_args(argv)
+    if args.skip_if_same and args.command != "live":
+        ap.error("--skip-if-same is only for the live command")
     if args.command == "report" and REPORT_JSON.exists():
         if not args.force:
             raise SystemExit(f"{REPORT_JSON.name} exists; use --force to overwrite the frozen report")
@@ -705,6 +730,12 @@ def main(argv: list[str] | None = None) -> None:
         kind = report["selected"]
         bundle = train_live(df, kind=kind, calibration=report["models"][kind]["calibration"],
                             n_estimators=report["models"]["lgbm"]["best_iteration"], meta=meta)
+        if args.skip_if_same and same_predictions(bundle, LIVE_PKL, df):
+            # 주간 재학습: 새 경기가 없어 예측이 그대로면 pkl·manifest를 다시 쓰지 않는다 (trained_at만 바뀐 커밋 방지)
+            print(f"unchanged: {LIVE_PKL.as_posix()} predicts the same on all {len(df)} rows "
+                  f"(atol {SKIP_ATOL:g}); nothing written")
+            print(f"done in {time.time() - t0:.1f}s")
+            return
         save_bundle(bundle, LIVE_PKL)
         print(f"live {bundle['version']}: {kind} calibration={bundle['calibration']} "
               f"seasons={bundle['seasons'][0]}~{bundle['seasons'][-1]} n={bundle['n_games']}")

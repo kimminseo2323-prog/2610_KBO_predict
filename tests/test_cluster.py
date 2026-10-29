@@ -398,3 +398,43 @@ def test_cli_writes_bundle_csv_and_manifest(tmp_path, monkeypatch, obj):
 def test_load_labels_default_is_cwd_independent(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # 저장소 밖에서 불러도 진짜 이름표를 읽어야 한다
     assert load_labels()["batter"][0]["name"] == "파워형"
+
+
+def test_cluster_compare_same_and_different(obj, tmp_path, capsys):
+    """compare: 같은 묶음 → same(CLI exit 0). 중심 하나 +1e-6 → 다름(exit 1, 최대 차이 출력). 라벨 하나 바뀜 → 다름."""
+    import copy
+
+    res = cluster.compare(obj, obj)
+    assert res["same"] and all(r["max_center_diff"] == 0.0 and r["label_diff"] == 0 for r in res["groups"].values())
+    a, b = tmp_path / "a.pkl", tmp_path / "b.pkl"
+    cluster.save_bundle(obj, a)
+    cluster.save_bundle(obj, b)
+    cluster.main(["compare", "--against", str(a), "--new", str(b)])  # 같으면 그냥 끝난다 (exit 0)
+    assert capsys.readouterr().out.strip().endswith("same")
+
+    moved = copy.deepcopy(obj)
+    moved["pitcher"]["bundle"]["kmeans"].cluster_centers_[1, 0] += 1e-6
+    res = cluster.compare(obj, moved)
+    assert not res["same"] and res["groups"]["batter"]["same"] and not res["groups"]["pitcher"]["same"]
+    assert res["groups"]["pitcher"]["max_center_diff"] == pytest.approx(1e-6, rel=1e-6)
+    cluster.save_bundle(moved, b)
+    with pytest.raises(SystemExit) as e:
+        cluster.main(["compare", "--against", str(a), "--new", str(b)])
+    assert e.value.code == 1
+    out = capsys.readouterr().out
+    assert "pitcher" in out and "1.000e-06" in out and out.strip().endswith("different")
+
+    relabeled = copy.deepcopy(obj)
+    fit_rows = relabeled["batter"]["assigned"].index[relabeled["batter"]["assigned"]["season"] == 2020]
+    t0 = relabeled["batter"]["assigned"].loc[fit_rows[0], "type"]
+    relabeled["batter"]["assigned"].loc[fit_rows[0], "type"] = (t0 + 1) % relabeled["batter"]["bundle"]["k"]
+    res = cluster.compare(obj, relabeled)
+    assert not res["same"] and res["groups"]["batter"]["label_diff"] == 1
+    assert res["groups"]["batter"]["max_center_diff"] == 0.0
+
+    later = copy.deepcopy(obj)                                       # 맞춤 시즌 밖(2026) 라벨은 보지 않는다
+    rows26 = later["batter"]["assigned"].index[later["batter"]["assigned"]["season"] == 2026]
+    k = later["batter"]["bundle"]["k"]
+    assert len(rows26) > 0
+    later["batter"]["assigned"].loc[rows26, "type"] = (later["batter"]["assigned"].loc[rows26, "type"] + 1) % k
+    assert cluster.compare(obj, later)["same"]

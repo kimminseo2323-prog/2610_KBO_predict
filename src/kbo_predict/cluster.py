@@ -37,6 +37,11 @@ CLI:
     python -m kbo_predict.cluster publish [--clusters models/clusters.pkl] [--report models/report-2026.pkl]
                                           [--features data/processed/features.parquet] [--out-dir data/public]
         -> data/public/players.json, data/public/teams.json (사이트 데이터, site_data 모듈 참조)
+    python -m kbo_predict.cluster compare --against models/clusters.pkl [--new models/clusters.new.pkl]
+        -> 새로 맞춘 묶음이 기준 묶음과 '같은 유형 정의'인지 검사한다 (주간 재학습이 새 묶음을 받아들일지 정한다):
+           두 그룹 모두 표준화 중심이 np.allclose(atol=1e-9)이고 맞춤 시즌(fit_seasons) 행의 유형 라벨이 모두 같으면
+           exit 0, 아니면 최대 중심 차이와 다른 라벨 수를 찍고 exit 1. 다른 기계(Linux OpenBLAS 등)에서 맞추면
+           마지막 자리가 다를 수 있어 비트 비교 대신 허용 오차를 둔다.
 """
 import argparse
 import functools
@@ -75,6 +80,7 @@ AGREEMENT_FLOOR = 0.95                      # GMM 최고 일치도가 이보다 
 EXAMPLE_SEASON = 2025                       # 유형 예시 선수를 고르는 시즌 (없으면 그 유형의 최근 시즌)
 
 CLUSTERS_PKL = Path("models/clusters.pkl")
+NEW_CLUSTERS_PKL = Path("models/clusters.new.pkl")     # 주간 재학습이 compare 전에 맞춰 두는 후보 (커밋하지 않는다)
 TYPES_CSV = Path("data/processed/player_types.csv")
 MANIFEST = Path("models/manifest.json")
 LABELS_YAML = Path(__file__).resolve().parents[2] / "config" / "cluster_labels.yaml"   # 어디서 실행해도 같은 파일
@@ -83,7 +89,8 @@ FEATURES_PARQUET = Path("data/processed/features.parquet")
 PUBLIC_DIR = Path("data/public")
 
 __all__ = ["rates", "qualify", "fit_group", "assign", "similar_players", "retention", "argmax_agreement",
-           "quality", "load_labels", "require_names", "build", "build_from", "types_map", "save_bundle", "load_bundle"]
+           "quality", "load_labels", "require_names", "build", "build_from", "types_map", "write_types_csv", "compare",
+           "save_bundle", "load_bundle"]
 
 
 def _single_thread(fn):
@@ -438,6 +445,14 @@ def types_table(obj: dict) -> pd.DataFrame:
     return pd.concat(frames).sort_values(["group", "season", "player_id"], kind="stable").reset_index(drop=True)
 
 
+def write_types_csv(obj: dict, path: Path) -> None:
+    """player_types.csv를 쓴다 (types_table, 소수 6자리, LF 줄바꿈 → 같은 묶음이면 같은 바이트 = types_sha256).
+    fit CLI와 scripts/check_parity.py가 함께 쓴다."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    types_table(obj).to_csv(path, index=False, float_format="%.6f", lineterminator="\n")
+
+
 def profile_table(obj: dict) -> str:
     """유형 이름 붙이기(Task 4b)용 마크다운 표: K 표, 유형별 인원·원 단위 중심, 예시 선수 5명."""
     lines = []
@@ -468,6 +483,38 @@ def profile_table(obj: dict) -> str:
     return "\n".join(lines)
 
 
+# ---------- 비교 (compare) ----------
+
+COMPARE_ATOL = 1e-9
+
+
+def compare(against: dict, new: dict, atol: float = COMPARE_ATOL) -> dict:
+    """두 군집 묶음(build 결과)의 유형 정의가 같은지. 그룹마다
+    max_center_diff = 표준화 중심(kmeans.cluster_centers_)의 최대 절댓값 차이 (K가 다르면 inf),
+    label_diff = 기준 묶음의 맞춤 시즌 행 중 유형이 다르거나 새 묶음에 없는 (season, player_id) 수 (+ 새 묶음에만 있는 행),
+    n_fit_rows = 기준 묶음의 맞춤 시즌 행 수. same = 모든 그룹에서 중심 allclose(atol) + label_diff 0."""
+    out = {"same": True, "groups": {}}
+    for g in GROUPS:
+        a_b, n_b = against[g]["bundle"], new[g]["bundle"]
+        ca, cn = np.asarray(a_b["kmeans"].cluster_centers_), np.asarray(n_b["kmeans"].cluster_centers_)
+        if ca.shape != cn.shape:
+            diff, close = float("inf"), False
+        else:
+            diff = float(np.max(np.abs(ca - cn))) if ca.size else 0.0
+            close = bool(np.allclose(ca, cn, rtol=0.0, atol=atol))
+        fit = [int(s) for s in a_b["fit_seasons"]]
+        key = ["season", "player_id"]
+        ta = against[g]["assigned"].loc[lambda d: d["season"].isin(fit), key + ["type"]]
+        tn = new[g]["assigned"].loc[lambda d: d["season"].isin(fit), key + ["type"]]
+        m = ta.merge(tn, on=key, how="outer", suffixes=("_a", "_n"))
+        label_diff = int((m["type_a"] != m["type_n"]).sum())   # 한쪽에만 있는 행(NaN)도 다름으로 센다
+        same = close and label_diff == 0
+        out["groups"][g] = {"k": (int(a_b["k"]), int(n_b["k"])), "max_center_diff": diff,
+                            "label_diff": label_diff, "n_fit_rows": int(len(ta)), "same": same}
+        out["same"] = out["same"] and same
+    return out
+
+
 # ---------- CLI ----------
 
 def publish_site(clusters_path: Path, report_path: Path, features_path: Path, out_dir: Path,
@@ -492,9 +539,10 @@ def publish_site(clusters_path: Path, report_path: Path, features_path: Path, ou
 
 
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(description="선수 유형 군집: fit = 2015~2025 맞춤·2015~2026 배정, "
-                                             "publish = 사이트 데이터 players.json·teams.json 발행")
-    ap.add_argument("command", choices=["fit", "publish"])
+    ap = argparse.ArgumentParser(description="선수 유형 군집: fit = 2015~2025 맞춤·2015~2026 배정 · "
+                                             "publish = 사이트 데이터 players.json·teams.json 발행 · "
+                                             "compare = 새 묶음이 기준 묶음과 같은 유형 정의인지 검사")
+    ap.add_argument("command", choices=["fit", "publish", "compare"])
     ap.add_argument("--out", default=str(CLUSTERS_PKL), help="fit: 군집 묶음 pkl 경로")
     ap.add_argument("--types", default=str(TYPES_CSV), help="fit: 선수-시즌 유형 csv 경로")
     ap.add_argument("--manifest", default=str(MANIFEST), help="fit: models/manifest.json 경로")
@@ -502,8 +550,20 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--report", default=str(REPORT_PKL), help="publish: 평가 모델 pkl (model_expected용)")
     ap.add_argument("--features", default=str(FEATURES_PARQUET), help="publish: 피처 parquet (model_expected용)")
     ap.add_argument("--out-dir", default=str(PUBLIC_DIR), help="publish: players.json·teams.json을 쓸 폴더")
+    ap.add_argument("--against", default=str(CLUSTERS_PKL), help="compare: 기준 묶음 pkl (커밋본)")
+    ap.add_argument("--new", default=str(NEW_CLUSTERS_PKL), help="compare: 새로 맞춘 묶음 pkl")
     args = ap.parse_args(argv)
     t0 = time.time()
+    if args.command == "compare":
+        res = compare(load_bundle(Path(args.against)), load_bundle(Path(args.new)))
+        for g, r in res["groups"].items():
+            print(f"{g}: k {r['k'][0]} vs {r['k'][1]}, max |center diff| = {r['max_center_diff']:.3e} "
+                  f"(atol {COMPARE_ATOL:g}), labels differ {r['label_diff']}/{r['n_fit_rows']} fit rows "
+                  f"-> {'same' if r['same'] else 'DIFFERENT'}")
+        print("same" if res["same"] else "different")
+        if not res["same"]:
+            raise SystemExit(1)
+        return
     if args.command == "publish":
         out = publish_site(Path(args.clusters), Path(args.report), Path(args.features), Path(args.out_dir))
         n_teams = len(out["teams"]["teams"])
@@ -515,8 +575,7 @@ def main(argv: list[str] | None = None) -> None:
     obj = build(ALL_SEASONS)
     out, types_csv = Path(args.out), Path(args.types)
     save_bundle(obj, out)
-    types_csv.parent.mkdir(parents=True, exist_ok=True)
-    types_table(obj).to_csv(types_csv, index=False, float_format="%.6f", lineterminator="\n")
+    write_types_csv(obj, types_csv)
     meta = {"generated_at": datetime.now(KST).isoformat(timespec="seconds"), "commit_sha": _commit_sha()}
     update_manifest(Path(args.manifest), name="clusters", meta=meta, entry={
         "path": out.as_posix(), "sha256": _sha256(out), "version": CLUSTER_VERSION,

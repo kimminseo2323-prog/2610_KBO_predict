@@ -742,3 +742,37 @@ def test_team_cli_writes_manifest_entry_only(tmp_path, monkeypatch):
     assert after["team"] == {"path": "models/team-2026.pkl", "sha256": hashlib.sha256(pkl.read_bytes()).hexdigest(),
                              "version": TEAM_VERSION,
                              "features_sha256": hashlib.sha256(feats.read_bytes()).hexdigest()}
+
+
+def test_live_skip_if_same(tmp_path, monkeypatch, capsys):
+    """live --skip-if-same: 같은 parquet로 다시 학습하면 예측이 같으므로 "unchanged"만 찍고 pkl·manifest를 쓰지 않는다
+    (mtime·바이트 불변). parquet에 경기가 늘면 평소처럼 쓴다. live 밖에서 쓰면 거부."""
+    monkeypatch.chdir(tmp_path)
+    _cli_parquet(tmp_path)
+    train_win.main(["report"])
+    train_win.main(["live"])
+    pkl, man = tmp_path / "models/win_model.pkl", tmp_path / "models/manifest.json"
+    before = {p: (p.stat().st_mtime_ns, p.read_bytes()) for p in (pkl, man)}
+    capsys.readouterr()
+    train_win.main(["live", "--skip-if-same"])
+    assert "unchanged" in capsys.readouterr().out
+    assert {p: (p.stat().st_mtime_ns, p.read_bytes()) for p in (pkl, man)} == before
+
+    feats = _cli_parquet(tmp_path, extra_rows=30)                    # 새 경기 → 예측이 달라진다 → 쓴다
+    train_win.main(["live", "--skip-if-same"])
+    assert "unchanged" not in capsys.readouterr().out
+    assert pkl.read_bytes() != before[pkl][1] and load_bundle(pkl)["n_games"] == 12 * 120 + 30
+    live_entry = json.loads(man.read_text(encoding="utf-8"))["models"]["live"]
+    assert live_entry["features_sha256"] == hashlib.sha256(feats.read_bytes()).hexdigest()
+    with pytest.raises(SystemExit):
+        train_win.main(["report", "--force", "--skip-if-same"])
+
+
+def test_same_predictions_handles_missing_or_broken(tmp_path, data):
+    b = _fit(data, "lr")
+    assert not train_win.same_predictions(b, tmp_path / "none.pkl", data["test"])
+    (tmp_path / "bad.pkl").write_bytes(b"not a pickle")
+    assert not train_win.same_predictions(b, tmp_path / "bad.pkl", data["test"])
+    save_bundle(b, tmp_path / "b.pkl")
+    assert train_win.same_predictions(b, tmp_path / "b.pkl", data["test"])
+    assert not train_win.same_predictions(_fit(data, "lgbm"), tmp_path / "b.pkl", data["test"])
