@@ -78,13 +78,14 @@ def _features_df():
 
 def test_players_payload_shape(synthetic_obj, labels):
     p = players_payload(synthetic_obj, labels, meta=META)
-    assert set(p) == {"generated_at", "commit_sha", "model_version", "fit_seasons", "types", "players"}
+    assert set(p) == {"generated_at", "commit_sha", "model_version", "fit_seasons", "note", "types", "players"}
+    assert "player_id" in p["note"] and "같은 group" in p["note"]
     assert p["model_version"] == "clusters-2026" and p["fit_seasons"] == cluster.FIT_SEASONS
     assert p["types"]["batter"][0] == {"id": 0, "name": "유형 0", "blurb": ""} and len(p["types"]["pitcher"]) == 4
     first = p["players"][0]
     assert set(first) == PLAYER_KEYS
     assert len(first["similar"]) == 5 and all(s["player_id"] != first["player_id"] for s in first["similar"])
-    assert set(first["similar"][0]) == {"player_id", "name", "name_ko", "season", "team", "similarity"}
+    assert all(set(s) == {"player_id", "season", "similarity"} for s in first["similar"])
     assert abs(sum(first["membership"]) - 1) < 0.01
     assert first["type"]["id"] == int(np.argmax(first["membership"])) and first["prob"] == max(first["membership"])
     n = len(synthetic_obj["batter"]["assigned"]) + len(synthetic_obj["pitcher"]["assigned"])
@@ -120,10 +121,9 @@ def test_player_stats_formulas_and_names(synthetic_obj, labels):
     assert set(q["stats"]) == {"games", "starts", "ip", "era", "k_pct", "bb_pct", "hr_pct", "babip"}
     assert q["stats"]["ip"] == round(pit["ip_outs"] / 3, 1)
     assert q["stats"]["era"] == round(pit["er"] / pit["ip_outs"] * 27, 2)
-    # 비슷한 선수 칸의 이름·팀은 그 선수-시즌 행에서
-    s = q["similar"][0]
-    other = by_key[("pitcher", s["season"], s["player_id"])]
-    assert (s["name"], s["name_ko"], s["team"]) == (other["name"], other["name_ko"], other["team"])
+    # 비슷한 선수는 이름 없이 (season, player_id)만 — 같은 파일·같은 group에 그 칸이 반드시 있다 (note)
+    for x in players:
+        assert all((x["group"], s["season"], s["player_id"]) in by_key for s in x["similar"])
 
 
 # ---------- teams.json ----------
@@ -189,11 +189,14 @@ def test_cli_publish_writes_sorted_deterministic_json(synthetic_obj, seeded, bun
     args = ["publish", "--clusters", str(cpk), "--report", str(rpk), "--features", str(fpq), "--out-dir", str(out_dir)]
     cluster.main(args)
     texts = {n: (out_dir / n).read_text(encoding="utf-8") for n in ("players.json", "teams.json")}
+    fmt = {"players.json": {"indent": None, "separators": (",", ":")}, "teams.json": {"indent": 1}}
     for n, text in texts.items():
         obj = json.loads(text)
-        # _write_json(indent=1, sort_keys=True): 같은 내용을 그 설정으로 다시 쓰면 같은 글자
-        assert text == json.dumps(obj, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+        # players.json은 compact(한 줄, 공백 없는 구분자), teams.json은 indent=1 — 둘 다 sort_keys.
+        # 같은 내용을 그 설정으로 다시 쓰면 같은 글자여야 한다
+        assert text == json.dumps(obj, ensure_ascii=False, sort_keys=True, **fmt[n]) + "\n"
         assert obj["generated_at"] and "commit_sha" in obj
+    assert texts["players.json"].count("\n") == 1 and texts["players.json"].startswith('{"commit_sha":')
     assert len(json.loads(texts["teams.json"])["teams"]) == 4
     cluster.main(args)                                                    # 다시 돌려도 generated_at 말고는 같다
     for n, text in texts.items():

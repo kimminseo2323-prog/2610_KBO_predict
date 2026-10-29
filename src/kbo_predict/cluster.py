@@ -457,7 +457,7 @@ def publish_site(clusters_path: Path, report_path: Path, features_path: Path, ou
     players = site_data.players_payload(obj, labels, meta)
     teams = site_data.teams_payload(seasons, obj=obj, labels=labels, features_df=load_features(features_path),
                                     report_bundle=load_bundle(report_path), meta=meta)
-    _write_json(out_dir / "players.json", players, indent=1, sort_keys=True)
+    _write_json(out_dir / "players.json", players, indent=None, sort_keys=True, separators=(",", ":"))  # compact
     _write_json(out_dir / "teams.json", teams, indent=1, sort_keys=True)
     return {"players": players, "teams": teams}
 

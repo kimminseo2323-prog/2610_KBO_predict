@@ -2,6 +2,9 @@
 
 players.json  선수-시즌 한 칸씩(타자·투수 따로). 유형(이름·소속 확률), 2D 지도 좌표, 주요 기록, 비슷한 선수 5명.
               입력은 models/clusters.pkl(cluster.build 결과)과 유형 이름표(config/cluster_labels.yaml).
+              첫 화면 로딩을 가볍게 하려고 들여쓰기 없이(compact) 쓰고, 비슷한 선수 칸은 {player_id, season,
+              similarity}만 둔다 — 이름·한글 이름·팀은 사이트가 같은 파일의 (group, season, player_id) 칸에서 찾는다
+              (PLAYERS_NOTE). 비슷한 선수는 항상 같은 그룹(타자는 타자, 투수는 투수) 안에서 찾은 것이다.
 teams.json    팀-시즌 한 칸씩. 정규시즌 FINAL 경기(features.regular_finals)로 센 승·패·무, 승률, 피타고리안 승률,
               홈/원정 승률, 상대 팀별 승률, 그 시즌 로스터의 유형 비중, 그리고 2026(홀드아웃)만 모델 기대 승률.
 
@@ -13,6 +16,7 @@ teams.json    팀-시즌 한 칸씩. 정규시즌 FINAL 경기(features.regular_
     similar  cluster.similar_players가 정한 순서 그대로 (유사도 내림차순, 동률은 (season, player_id) 순)
     teams    season 내림차순 → 승률 내림차순(반올림 전 값) → 팀 코드 오름차순 (승률이 없는 팀은 그 시즌 맨 뒤)
     dict 키는 파일에 쓸 때 정렬한다 (publish._write_json(sort_keys=True)).
+파일 형식: players.json은 indent 없이 separators (",", ":"), teams.json은 indent=1 (둘 다 sort_keys).
 
 용어:
     피타고리안 승률  득점^e / (득점^e + 실점^e), e = features.PYTH_EXP(1.83). 득실점으로 본 '실력만큼의' 승률.
@@ -36,6 +40,8 @@ from .train_win import REPORT_VERSION, predict_proba
 
 HOLDOUT_SEASON = 2026          # model_expected를 채우는 유일한 시즌 (report 모델이 보지 않은 평가 시즌)
 N_SIMILAR = 5
+PLAYERS_NOTE = ("similar 항목은 {player_id, season, similarity}만 담는다. 이름·한글 이름·팀은 이 파일 players에서 "
+                "같은 group·season·player_id 칸을 찾아 쓴다 (비슷한 선수는 항상 같은 group 안에서 고른다).")
 TEAMS_NOTE = ("model_expected는 2026(홀드아웃)만; 2015~2025는 학습·검증 시즌이라 null"
               " (2026은 승패가 갈린 경기 기준, 무승부 제외)")
 WEIGHT_COL = {"batter": "pa", "pitcher": "ip_outs"}   # 로스터 유형 비중의 가중치
@@ -95,16 +101,14 @@ def players_payload(obj: dict, labels: dict, meta: dict) -> dict:
     for g in GROUPS:
         b, a = obj[g]["bundle"], obj[g]["assigned"]
         types[g] = [{"id": t, "name": labels[g][t]["name"], "blurb": labels[g][t]["blurb"]} for t in range(b["k"])]
-        # 비슷한 선수 칸에 이름·팀을 붙이려고 (season, player_id) -> 행 사전을 만든다
         rows = {(int(r.season), int(r.player_id)): r for r in a.itertuples(index=False)}
         stats_fn = _batter_stats if g == "batter" else _pitcher_stats
         for key, r in rows.items():
             t = int(r.type)
-            similar = []
-            for s in obj[g]["similar"].get(key, [])[:N_SIMILAR]:
-                o = rows[(s["season"], s["player_id"])]
-                similar.append({"player_id": int(o.player_id), "name": o.name, "name_ko": _str_or_none(o.name_ko),
-                                "season": int(o.season), "team": o.team, "similarity": _r(s["similarity"])})
+            # 이름·팀은 싣지 않는다 (PLAYERS_NOTE) — 같은 파일에 그 선수-시즌 칸이 반드시 있다
+            similar = [{"player_id": int(s["player_id"]), "season": int(s["season"]),
+                        "similarity": _r(s["similarity"])}
+                       for s in obj[g]["similar"].get(key, [])[:N_SIMILAR]]
             players.append({
                 "player_id": int(r.player_id), "name": r.name, "name_ko": _str_or_none(r.name_ko),
                 "group": g, "season": int(r.season), "team": r.team,
@@ -121,7 +125,7 @@ def players_payload(obj: dict, labels: dict, meta: dict) -> dict:
         "generated_at": meta.get("generated_at"), "commit_sha": meta.get("commit_sha"),
         "model_version": obj.get("version", CLUSTER_VERSION),
         "fit_seasons": [int(s) for s in obj["fit_seasons"]],
-        "types": types, "players": players,
+        "note": PLAYERS_NOTE, "types": types, "players": players,
     }
 
 
