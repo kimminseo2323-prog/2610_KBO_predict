@@ -1,7 +1,26 @@
 {
-  "commit_sha": "f5e08b93203df079bbd1b2664516cb87574c8ace",
-  "generated_at": "2026-10-29T14:03:05+09:00",
+  "commit_sha": "304f93f1dd68095e129abb70db5918412d8aacb8",
+  "generated_at": "2026-10-29T18:13:14+09:00",
   "models": {
+    "clusters": {
+      "fit_seasons": [
+        2015,
+        2016,
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+        2025
+      ],
+      "path": "models/clusters.pkl",
+      "sha256": "66cdfa36b0aeb5bade5f38523ef2cd8e31e2ca434354afc0a1c13877e61e6ad7",
+      "types_sha256": "448bbace5c92a5b8cde9ebc905f4d07780f77a1fbce7b40adbb3a3bfea7cc4ff",
+      "version": "clusters-2026"
+    },
     "live": {
       "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
       "path": "models/win_model.pkl",
