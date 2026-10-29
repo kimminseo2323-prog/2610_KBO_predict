@@ -1,0 +1,18 @@
+{
+  "commit_sha": null,
+  "features_path": "data/processed/features.parquet",
+  "features_sha256": "75c5470ddd17e872227c8ecbeb60cb395688e9e0fb387b2a71da6f9302f8f1f3",
+  "generated_at": "2026-10-29T12:25:10+09:00",
+  "models": {
+    "live": {
+      "path": "models/win_model.pkl",
+      "sha256": "8e92f46b77337cc31ba6e3ae5955e28fa37596752f94a244917fb4d19d1db0b6",
+      "version": "v0.2"
+    },
+    "report": {
+      "path": "models/report-2026.pkl",
+      "sha256": "f79827050fbc216a9cb83219baef7bb37f19302307a8154a879ea31a027773b1",
+      "version": "report-2026"
+    }
+  }
+}

@@ -1,0 +1,284 @@
+{
+  "baselines": {
+    "test": {
+      "better_win_pct": 0.5541310541310541,
+      "home_always": 0.5142450142450142,
+      "lower_starter_era": 0.5669515669515669
+    },
+    "val": {
+      "better_win_pct": 0.5472779369627507,
+      "home_always": 0.5128939828080229,
+      "lower_starter_era": 0.5530085959885387
+    }
+  },
+  "calibration_bins": [
+    {
+      "actual_rate": 0.2,
+      "hi": 0.1,
+      "lo": 0.0,
+      "n": 5,
+      "pred_mean": 0.01
+    },
+    {
+      "actual_rate": 0.0,
+      "hi": 0.2,
+      "lo": 0.1,
+      "n": 1,
+      "pred_mean": 0.13059372726785173
+    },
+    {
+      "actual_rate": 0.25,
+      "hi": 0.3,
+      "lo": 0.2,
+      "n": 4,
+      "pred_mean": 0.2
+    },
+    {
+      "actual_rate": 0.5,
+      "hi": 0.4,
+      "lo": 0.3,
+      "n": 12,
+      "pred_mean": 0.3453891905630571
+    },
+    {
+      "actual_rate": 0.43646408839779005,
+      "hi": 0.5,
+      "lo": 0.4,
+      "n": 362,
+      "pred_mean": 0.4660964626640919
+    },
+    {
+      "actual_rate": 0.6061946902654868,
+      "hi": 0.6,
+      "lo": 0.5,
+      "n": 226,
+      "pred_mean": 0.5624046184704549
+    },
+    {
+      "actual_rate": 0.6222222222222222,
+      "hi": 0.7,
+      "lo": 0.6,
+      "n": 90,
+      "pred_mean": 0.637949164312719
+    },
+    {
+      "actual_rate": 1.0,
+      "hi": 0.8,
+      "lo": 0.7,
+      "n": 1,
+      "pred_mean": 0.7687943642320545
+    },
+    {
+      "actual_rate": 1.0,
+      "hi": 0.9,
+      "lo": 0.8,
+      "n": 1,
+      "pred_mean": 0.8043994744076266
+    },
+    {
+      "actual_rate": null,
+      "hi": 1.0,
+      "lo": 0.9,
+      "n": 0,
+      "pred_mean": null
+    }
+  ],
+  "cluster_quality": null,
+  "commit_sha": null,
+  "feature_importance": [
+    {
+      "importance": 0.20005420790439404,
+      "label": "선발 FIP 차이",
+      "name": "starter_fip_diff"
+    },
+    {
+      "importance": 0.08897895014303527,
+      "label": "선발 누적 이닝 차이",
+      "name": "starter_ip_diff"
+    },
+    {
+      "importance": 0.07419314197151146,
+      "label": "선발 9이닝당 삼진 차이",
+      "name": "starter_k9_diff"
+    },
+    {
+      "importance": 0.06858006408193067,
+      "label": "지난 시즌 승률 차이",
+      "name": "prev_season_diff"
+    },
+    {
+      "importance": 0.06314336198548909,
+      "label": "팀 승률 차이",
+      "name": "win_pct_diff"
+    },
+    {
+      "importance": 0.048122949900605665,
+      "label": "선발 평균자책점 차이",
+      "name": "starter_era_diff"
+    },
+    {
+      "importance": 0.04256028916561435,
+      "label": "타선 삼진 비율 차이",
+      "name": "k_rate_diff"
+    },
+    {
+      "importance": 0.04058973205766088,
+      "label": "올 시즌 맞대결 승률",
+      "name": "h2h_home_pct"
+    },
+    {
+      "importance": 0.03563326799249977,
+      "label": "투수진 평균자책점 차이",
+      "name": "era_diff"
+    },
+    {
+      "importance": 0.03506242875264647,
+      "label": "타선 출루율 차이",
+      "name": "obp_diff"
+    },
+    {
+      "importance": 0.03263417286928672,
+      "label": "타선 홈런 비율 차이",
+      "name": "hr_rate_diff"
+    },
+    {
+      "importance": 0.03202090510304691,
+      "label": "선발 9이닝당 볼넷 차이",
+      "name": "starter_bb9_diff"
+    },
+    {
+      "importance": 0.03138394232889623,
+      "label": "선발 최근 3경기 실점 차이",
+      "name": "starter_last3_runs_diff"
+    },
+    {
+      "importance": 0.029133767306655848,
+      "label": "최근 3일 불펜 투구수 차이",
+      "name": "bullpen3_diff"
+    },
+    {
+      "importance": 0.02886773539420157,
+      "label": "홈팀의 홈 경기 승률",
+      "name": "home_venue_pct"
+    },
+    {
+      "importance": 0.022471550449758508,
+      "label": "경기당 득실차",
+      "name": "run_diff_diff"
+    },
+    {
+      "importance": 0.02131195927443004,
+      "label": "투수진 9이닝당 볼넷 차이",
+      "name": "bb9_diff"
+    },
+    {
+      "importance": 0.02114043772005371,
+      "label": "원정팀의 원정 경기 승률",
+      "name": "away_venue_pct"
+    },
+    {
+      "importance": 0.016500187423586353,
+      "label": "피타고리안 기대 승률 차이",
+      "name": "pyth_diff"
+    },
+    {
+      "importance": 0.015873250352908364,
+      "label": "타선 볼넷 비율 차이",
+      "name": "bb_rate_diff"
+    },
+    {
+      "importance": 0.015757675263824527,
+      "label": "투수진 9이닝당 삼진 차이",
+      "name": "k9_diff"
+    },
+    {
+      "importance": 0.013522023483667024,
+      "label": "시즌 진행도",
+      "name": "season_progress"
+    },
+    {
+      "importance": 0.010379107500557103,
+      "label": "투수진 FIP 차이",
+      "name": "fip_diff"
+    },
+    {
+      "importance": 0.006422771996524818,
+      "label": "휴식일 차이",
+      "name": "rest_diff"
+    },
+    {
+      "importance": 0.00566211957721461,
+      "label": "최근 10경기 흐름",
+      "name": "last10_diff"
+    },
+    {
+      "importance": 0.0,
+      "label": "선발투수 기록 유무",
+      "name": "starter_known"
+    }
+  ],
+  "features_sha256": "75c5470ddd17e872227c8ecbeb60cb395688e9e0fb387b2a71da6f9302f8f1f3",
+  "generated_at": "2026-10-29T12:24:58+09:00",
+  "matchup_feature_ablation": null,
+  "model_version": "report-2026",
+  "models": {
+    "lgbm": {
+      "best_iteration": 45,
+      "calibration": "isotonic",
+      "test": {
+        "accuracy": 0.5883190883190883,
+        "brier": 0.2418602583975975,
+        "log_loss": 0.6789919974249583,
+        "n": 702
+      },
+      "val": {
+        "accuracy": 0.5787965616045845,
+        "brier": 0.23770498101904242,
+        "log_loss": 0.6651784341428061,
+        "n": 698
+      }
+    },
+    "lr": {
+      "calibration": "isotonic",
+      "test": {
+        "accuracy": 0.5911680911680912,
+        "brier": 0.2400202165076793,
+        "log_loss": 0.6762358756152216,
+        "n": 702
+      },
+      "val": {
+        "accuracy": 0.5845272206303725,
+        "brier": 0.23741225152695047,
+        "log_loss": 0.6661342107518938,
+        "n": 698
+      }
+    }
+  },
+  "n": {
+    "test": 702,
+    "train": 7065,
+    "val": 698
+  },
+  "run_url": null,
+  "selected": "lgbm",
+  "significance": {
+    "baseline_correct": 398,
+    "mcnemar_p": 0.32099040312889326,
+    "model_correct": 413,
+    "vs": "lower_starter_era"
+  },
+  "test_season": 2026,
+  "train_seasons": [
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024
+  ],
+  "val_season": 2025
+}
