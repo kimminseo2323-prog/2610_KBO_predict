@@ -178,7 +178,7 @@ def test_training_frame_excludes_draws_and_non_regular():
 
 **Files:**
 - Modify: `src/kbo_predict/features.py` (`build_dataset`, `save_features`, `load_features`, `features_sha256`, `__main__`)
-- Modify: `requirements.txt` (`pyarrow==26.0.0`), `.gitignore` (`data/processed/`)
+- Modify: `requirements.txt` (`pyarrow==19.0.1`), `.gitignore` (`data/processed/`)
 - Test: `tests/test_features.py`, `tests/test_dataset_real.py` (신규, 커밋된 `data/raw` 사용)
 
 **Interfaces:**
