@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from scipy.stats import rankdata
+from sklearn.metrics import log_loss
 
 from kbo_predict import MODEL_VERSION, REPORT_VERSION, train_win
 from kbo_predict.features import FACTOR_LABELS, FEATURE_NAMES, load_features, save_features
@@ -269,12 +270,18 @@ def test_train_report_keys_and_selection(report):
     assert rep["train_seasons"] == [2023, 2024] and rep["val_season"] == 2025 and rep["test_season"] == 2026
     assert rep["n"] == {"train": 1000, "val": 500, "test": 500}
     assert rep["selected"] in {"lr", "lgbm"}
-    assert set(rep["models"]["lr"]) == {"calibration", "val", "test"}
-    assert set(rep["models"]["lgbm"]) == {"calibration", "best_iteration", "val", "test"}
+    model_keys = {"calibration", "calibration_fit", "calibration_val_logloss", "val", "test"}
+    assert set(rep["models"]["lr"]) == model_keys
+    assert set(rep["models"]["lgbm"]) == model_keys | {"best_iteration"}
     assert 1 <= rep["models"]["lgbm"]["best_iteration"] < 2000
     for kind in ("lr", "lgbm"):
-        assert rep["models"][kind]["calibration"] in {"none", "platt", "isotonic"}
-        assert set(rep["models"][kind]["test"]) == {"n", "accuracy", "log_loss", "brier"}
+        m = rep["models"][kind]
+        assert m["calibration_fit"] == "loso_oof_train"
+        losses = m["calibration_val_logloss"]
+        assert set(losses) == {"none", "platt", "isotonic"}
+        assert losses[m["calibration"]] == min(losses.values())  # val 로그 손실이 가장 낮은 방법을 골랐다
+        assert m["val"]["log_loss"] == pytest.approx(losses[m["calibration"]])
+        assert set(m["test"]) == {"n", "accuracy", "log_loss", "brier"}
     other = "lgbm" if rep["selected"] == "lr" else "lr"
     assert rep["models"][rep["selected"]]["val"]["log_loss"] <= rep["models"][other]["val"]["log_loss"]
     assert set(rep["baselines"]) == {"val", "test"}
@@ -301,6 +308,20 @@ def test_train_report_bundle_reproduces_test_metrics(report, season_df):
     rep, bundle = report
     test = season_df[season_df["season"] == 2026]
     assert evaluate(bundle, test) == rep["models"][rep["selected"]]["test"]
+
+
+@pytest.mark.parametrize("method", ["platt", "isotonic"])
+def test_train_report_calibrators_fit_on_train_oof_not_val(report, season_df, method):
+    """캘리브레이터는 train 시즌 OOF 예측으로 맞춘다 (val은 방법 선택에만). 보고서가 기록한 val 로그 손실을 재현한다."""
+    rep, _ = report
+    train = season_df[season_df["season"].isin([2023, 2024])]
+    val = season_df[season_df["season"] == 2025]
+    for kind in ("lr", "lgbm"):
+        n_est = rep["models"]["lgbm"]["best_iteration"]
+        raw = fit_model(train, kind=kind, n_estimators=n_est, version="x", seasons=[2023, 2024])
+        cal = fit_calibrator(method, oof_predictions(train, kind=kind, n_estimators=n_est), train["y"].to_numpy())
+        want = log_loss(val["y"], apply_calibrator(cal, predict_raw(raw, val)), labels=[0, 1])
+        assert rep["models"][kind]["calibration_val_logloss"][method] == pytest.approx(want, abs=1e-12)
 
 
 def test_train_report_rejects_missing_season(season_df):

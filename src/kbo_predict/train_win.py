@@ -20,6 +20,7 @@ explain은 캘리브레이션 전 로짓(log-odds)을 피처별 기여 + 기본�
 학습 CLI를 얹는다:
     python -m kbo_predict.train_win report  → data/public/model_report.json + models/report-2026.pkl
         2015~2024 학습 / 2025 검증(트리 수·캘리브레이션·알고리즘 선택) / 2026 홀드아웃 평가
+        캘리브레이터는 train 시즌 leave-one-out 예측으로 맞추고, 방법 선택만 2025로 한다.
     python -m kbo_predict.train_win live    → models/win_model.pkl (v0.2, 2015~2026 전체 학습)
         보고서가 고른 알고리즘·캘리브레이션·트리 수를 그대로 쓴다 → report를 먼저 돌린다.
 두 명령 모두 models/manifest.json(피처·모델 파일 SHA256)을 갱신한다.
@@ -278,23 +279,30 @@ def _early_stopping_rounds(train: pd.DataFrame, val: pd.DataFrame, max_rounds: i
     return int(m.best_iteration_ or max_rounds)
 
 
-def _choose_calibration(bundle: dict, val: pd.DataFrame) -> dict:
-    """캘리브레이션 3종(none/platt/isotonic) 중 val 로그 손실이 가장 낮은 것을 붙인 번들을 돌려준다.
-    주의(낙관 편향): 캘리브레이터를 val에서 맞추고 같은 val에서 평가하므로 val 지표는 약간 좋게 나온다
-    (특히 자유도가 큰 isotonic). 그래서 최종 성능은 손대지 않은 test 시즌으로만 말한다."""
-    raw, y = predict_raw(bundle, val), val["y"].to_numpy()
-    best = None
-    for method in CALIBRATIONS:  # 동률이면 앞의 것(단순한 쪽)
-        cal = None if method == "none" else fit_calibrator(method, raw, y)
-        loss = log_loss(y, apply_calibrator(cal, raw), labels=[0, 1])
-        if best is None or loss < best[0]:
-            best = (loss, method, cal)
-    return {**bundle, "calibration": best[1], "calibrator": best[2]}
+CALIBRATION_FIT = "loso_oof_train"  # 보고서에 적는 '캘리브레이터를 무엇으로 맞췄나'
+
+
+def _choose_calibration(bundle: dict, train: pd.DataFrame, val: pd.DataFrame) -> tuple[dict, dict]:
+    """캘리브레이션 3종(none/platt/isotonic)을 표본 밖(out-of-sample)에서 고른다.
+    - 맞추기: train 시즌 leave-one-out 예측(oof_predictions) + train y → platt·isotonic 캘리브레이터.
+    - 고르기: val 시즌의 (캘리브레이션 전) 예측에 각 캘리브레이터를 씌운 로그 손실이 가장 낮은 방법.
+    val은 캘리브레이터 학습에 한 번도 쓰지 않는다 — val에서 맞추고 val에서 재면 자유도가 큰
+    isotonic이 늘 이겨 버린다(낙관 편향). 라이브 모델(train_live)도 같은 방식(OOF)으로 맞춘다.
+    반환: (선택된 캘리브레이터를 붙인 번들, {방법: val 로그 손실})."""
+    oof = oof_predictions(train, kind=bundle["kind"], n_estimators=bundle["n_estimators"] or 300)
+    raw_val, y_val = predict_raw(bundle, val), val["y"].to_numpy()
+    losses, calibrators = {}, {}
+    for method in CALIBRATIONS:
+        calibrators[method] = None if method == "none" else fit_calibrator(method, oof, train["y"].to_numpy())
+        losses[method] = float(log_loss(y_val, apply_calibrator(calibrators[method], raw_val), labels=[0, 1]))
+    best = min(CALIBRATIONS, key=losses.get)  # 동률이면 앞의 것(단순한 쪽)
+    return {**bundle, "calibration": best, "calibrator": calibrators[best]}, losses
 
 
 def train_report(df: pd.DataFrame, *, train_seasons=range(2015, 2025), val_season: int = 2025,
                  test_season: int = 2026, meta: dict) -> tuple[dict, dict]:
-    """보고서용 모델: train 시즌으로 학습 → val 시즌으로 트리 수·캘리브레이션·알고리즘 선택 → test 시즌은 마지막에 한 번만 평가.
+    """보고서용 모델: train 시즌으로 학습(캘리브레이터는 train OOF로) → val 시즌으로 트리 수·캘리브레이션 방법·
+    알고리즘 선택 → test 시즌은 마지막에 한 번만 평가.
     반환: (model_report.json 내용, 선택된 번들 version=REPORT_VERSION)."""
     train_seasons = [int(s) for s in train_seasons]
     parts = {"train": df[df["season"].isin(train_seasons)], "val": df[df["season"] == val_season],
@@ -306,13 +314,14 @@ def train_report(df: pd.DataFrame, *, train_seasons=range(2015, 2025), val_seaso
     train, val, test = parts["train"], parts["val"], parts["test"]
 
     best_iteration = _early_stopping_rounds(train, val)
-    bundles = {
-        kind: _choose_calibration(fit_model(train, kind=kind, n_estimators=best_iteration,
-                                            version=REPORT_VERSION, seasons=train_seasons), val)
-        for kind in KINDS
-    }
-    models = {kind: {"calibration": b["calibration"], "val": evaluate(b, val), "test": evaluate(b, test)}
-              for kind, b in bundles.items()}
+    bundles, models = {}, {}
+    for kind in KINDS:
+        raw_bundle = fit_model(train, kind=kind, n_estimators=best_iteration, version=REPORT_VERSION,
+                               seasons=train_seasons)
+        b, cal_losses = _choose_calibration(raw_bundle, train, val)
+        bundles[kind] = b
+        models[kind] = {"calibration": b["calibration"], "calibration_fit": CALIBRATION_FIT,
+                        "calibration_val_logloss": cal_losses, "val": evaluate(b, val), "test": evaluate(b, test)}
     models["lgbm"]["best_iteration"] = best_iteration
     selected = min(KINDS, key=lambda k: models[k]["val"]["log_loss"])  # 동률이면 lr(KINDS 순서)
     bundle = bundles[selected]

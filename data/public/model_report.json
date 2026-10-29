@@ -13,67 +13,67 @@
   },
   "calibration_bins": [
     {
-      "actual_rate": 0.2,
+      "actual_rate": null,
       "hi": 0.1,
       "lo": 0.0,
-      "n": 5,
-      "pred_mean": 0.01
+      "n": 0,
+      "pred_mean": null
+    },
+    {
+      "actual_rate": null,
+      "hi": 0.2,
+      "lo": 0.1,
+      "n": 0,
+      "pred_mean": null
     },
     {
       "actual_rate": 0.0,
-      "hi": 0.2,
-      "lo": 0.1,
-      "n": 1,
-      "pred_mean": 0.13059372726785173
-    },
-    {
-      "actual_rate": 0.25,
       "hi": 0.3,
       "lo": 0.2,
-      "n": 4,
-      "pred_mean": 0.2
+      "n": 1,
+      "pred_mean": 0.24115430157212692
     },
     {
-      "actual_rate": 0.5,
+      "actual_rate": 0.36666666666666664,
       "hi": 0.4,
       "lo": 0.3,
-      "n": 12,
-      "pred_mean": 0.3453891905630571
+      "n": 30,
+      "pred_mean": 0.3702810823531666
     },
     {
-      "actual_rate": 0.43646408839779005,
+      "actual_rate": 0.3864734299516908,
       "hi": 0.5,
       "lo": 0.4,
-      "n": 362,
-      "pred_mean": 0.4660964626640919
+      "n": 207,
+      "pred_mean": 0.46147092895073977
     },
     {
-      "actual_rate": 0.6061946902654868,
+      "actual_rate": 0.5605633802816902,
       "hi": 0.6,
       "lo": 0.5,
-      "n": 226,
-      "pred_mean": 0.5624046184704549
+      "n": 355,
+      "pred_mean": 0.5494095136291824
     },
     {
-      "actual_rate": 0.6222222222222222,
+      "actual_rate": 0.6224489795918368,
       "hi": 0.7,
       "lo": 0.6,
-      "n": 90,
-      "pred_mean": 0.637949164312719
+      "n": 98,
+      "pred_mean": 0.6301464561363008
     },
     {
-      "actual_rate": 1.0,
+      "actual_rate": 0.9090909090909091,
       "hi": 0.8,
       "lo": 0.7,
-      "n": 1,
-      "pred_mean": 0.7687943642320545
+      "n": 11,
+      "pred_mean": 0.7229015304921383
     },
     {
-      "actual_rate": 1.0,
+      "actual_rate": null,
       "hi": 0.9,
       "lo": 0.8,
-      "n": 1,
-      "pred_mean": 0.8043994744076266
+      "n": 0,
+      "pred_mean": null
     },
     {
       "actual_rate": null,
@@ -87,169 +87,181 @@
   "commit_sha": null,
   "feature_importance": [
     {
-      "importance": 0.20005420790439404,
-      "label": "선발 FIP 차이",
-      "name": "starter_fip_diff"
-    },
-    {
-      "importance": 0.08897895014303527,
-      "label": "선발 누적 이닝 차이",
-      "name": "starter_ip_diff"
-    },
-    {
-      "importance": 0.07419314197151146,
-      "label": "선발 9이닝당 삼진 차이",
-      "name": "starter_k9_diff"
-    },
-    {
-      "importance": 0.06858006408193067,
-      "label": "지난 시즌 승률 차이",
-      "name": "prev_season_diff"
-    },
-    {
-      "importance": 0.06314336198548909,
-      "label": "팀 승률 차이",
-      "name": "win_pct_diff"
-    },
-    {
-      "importance": 0.048122949900605665,
-      "label": "선발 평균자책점 차이",
-      "name": "starter_era_diff"
-    },
-    {
-      "importance": 0.04256028916561435,
-      "label": "타선 삼진 비율 차이",
-      "name": "k_rate_diff"
-    },
-    {
-      "importance": 0.04058973205766088,
-      "label": "올 시즌 맞대결 승률",
-      "name": "h2h_home_pct"
-    },
-    {
-      "importance": 0.03563326799249977,
-      "label": "투수진 평균자책점 차이",
-      "name": "era_diff"
-    },
-    {
-      "importance": 0.03506242875264647,
-      "label": "타선 출루율 차이",
-      "name": "obp_diff"
-    },
-    {
-      "importance": 0.03263417286928672,
-      "label": "타선 홈런 비율 차이",
-      "name": "hr_rate_diff"
-    },
-    {
-      "importance": 0.03202090510304691,
-      "label": "선발 9이닝당 볼넷 차이",
-      "name": "starter_bb9_diff"
-    },
-    {
-      "importance": 0.03138394232889623,
-      "label": "선발 최근 3경기 실점 차이",
-      "name": "starter_last3_runs_diff"
-    },
-    {
-      "importance": 0.029133767306655848,
-      "label": "최근 3일 불펜 투구수 차이",
-      "name": "bullpen3_diff"
-    },
-    {
-      "importance": 0.02886773539420157,
-      "label": "홈팀의 홈 경기 승률",
-      "name": "home_venue_pct"
-    },
-    {
-      "importance": 0.022471550449758508,
-      "label": "경기당 득실차",
-      "name": "run_diff_diff"
-    },
-    {
-      "importance": 0.02131195927443004,
-      "label": "투수진 9이닝당 볼넷 차이",
-      "name": "bb9_diff"
-    },
-    {
-      "importance": 0.02114043772005371,
-      "label": "원정팀의 원정 경기 승률",
-      "name": "away_venue_pct"
-    },
-    {
-      "importance": 0.016500187423586353,
+      "importance": 0.10582702557077826,
       "label": "피타고리안 기대 승률 차이",
       "name": "pyth_diff"
     },
     {
-      "importance": 0.015873250352908364,
-      "label": "타선 볼넷 비율 차이",
-      "name": "bb_rate_diff"
+      "importance": 0.09442041976503002,
+      "label": "경기당 득실차",
+      "name": "run_diff_diff"
     },
     {
-      "importance": 0.015757675263824527,
-      "label": "투수진 9이닝당 삼진 차이",
-      "name": "k9_diff"
+      "importance": 0.08568717957240785,
+      "label": "선발 9이닝당 삼진 차이",
+      "name": "starter_k9_diff"
     },
     {
-      "importance": 0.013522023483667024,
-      "label": "시즌 진행도",
-      "name": "season_progress"
+      "importance": 0.08424808136931769,
+      "label": "선발 FIP 차이",
+      "name": "starter_fip_diff"
     },
     {
-      "importance": 0.010379107500557103,
-      "label": "투수진 FIP 차이",
-      "name": "fip_diff"
+      "importance": 0.08251101458471799,
+      "label": "팀 승률 차이",
+      "name": "win_pct_diff"
     },
     {
-      "importance": 0.006422771996524818,
+      "importance": 0.07402020583963387,
+      "label": "지난 시즌 승률 차이",
+      "name": "prev_season_diff"
+    },
+    {
+      "importance": 0.06234849890953419,
+      "label": "선발 누적 이닝 차이",
+      "name": "starter_ip_diff"
+    },
+    {
+      "importance": 0.058231450117247105,
+      "label": "선발 9이닝당 볼넷 차이",
+      "name": "starter_bb9_diff"
+    },
+    {
+      "importance": 0.056770248182704326,
+      "label": "타선 홈런 비율 차이",
+      "name": "hr_rate_diff"
+    },
+    {
+      "importance": 0.05539609387476028,
+      "label": "타선 삼진 비율 차이",
+      "name": "k_rate_diff"
+    },
+    {
+      "importance": 0.035119056188151684,
       "label": "휴식일 차이",
       "name": "rest_diff"
     },
     {
-      "importance": 0.00566211957721461,
+      "importance": 0.0305920670761858,
+      "label": "홈팀의 홈 경기 승률",
+      "name": "home_venue_pct"
+    },
+    {
+      "importance": 0.026429821408818815,
+      "label": "최근 3일 불펜 투구수 차이",
+      "name": "bullpen3_diff"
+    },
+    {
+      "importance": 0.022149095807539786,
+      "label": "투수진 FIP 차이",
+      "name": "fip_diff"
+    },
+    {
+      "importance": 0.019183748461031918,
+      "label": "시즌 진행도",
+      "name": "season_progress"
+    },
+    {
+      "importance": 0.018134141657949618,
+      "label": "투수진 평균자책점 차이",
+      "name": "era_diff"
+    },
+    {
+      "importance": 0.01761113878209037,
+      "label": "투수진 9이닝당 볼넷 차이",
+      "name": "bb9_diff"
+    },
+    {
+      "importance": 0.017398912972122607,
       "label": "최근 10경기 흐름",
       "name": "last10_diff"
     },
     {
-      "importance": 0.0,
+      "importance": 0.015548831584116928,
       "label": "선발투수 기록 유무",
       "name": "starter_known"
+    },
+    {
+      "importance": 0.011278077765543348,
+      "label": "원정팀의 원정 경기 승률",
+      "name": "away_venue_pct"
+    },
+    {
+      "importance": 0.008943045078689106,
+      "label": "타선 출루율 차이",
+      "name": "obp_diff"
+    },
+    {
+      "importance": 0.005583738386760412,
+      "label": "투수진 9이닝당 삼진 차이",
+      "name": "k9_diff"
+    },
+    {
+      "importance": 0.005417911198530466,
+      "label": "올 시즌 맞대결 승률",
+      "name": "h2h_home_pct"
+    },
+    {
+      "importance": 0.004549198421099969,
+      "label": "선발 평균자책점 차이",
+      "name": "starter_era_diff"
+    },
+    {
+      "importance": 0.0023737607485993556,
+      "label": "타선 볼넷 비율 차이",
+      "name": "bb_rate_diff"
+    },
+    {
+      "importance": 0.00022723667663845291,
+      "label": "선발 최근 3경기 실점 차이",
+      "name": "starter_last3_runs_diff"
     }
   ],
   "features_sha256": "75c5470ddd17e872227c8ecbeb60cb395688e9e0fb387b2a71da6f9302f8f1f3",
-  "generated_at": "2026-10-29T12:24:58+09:00",
+  "generated_at": "2026-10-29T12:28:54+09:00",
   "matchup_feature_ablation": null,
   "model_version": "report-2026",
   "models": {
     "lgbm": {
       "best_iteration": 45,
-      "calibration": "isotonic",
+      "calibration": "platt",
+      "calibration_fit": "loso_oof_train",
+      "calibration_val_logloss": {
+        "isotonic": 0.6824528275059143,
+        "none": 0.6805673101598311,
+        "platt": 0.6805047768867738
+      },
       "test": {
-        "accuracy": 0.5883190883190883,
-        "brier": 0.2418602583975975,
-        "log_loss": 0.6789919974249583,
+        "accuracy": 0.5797720797720798,
+        "brier": 0.24059789666488302,
+        "log_loss": 0.6741095862215064,
         "n": 702
       },
       "val": {
-        "accuracy": 0.5787965616045845,
-        "brier": 0.23770498101904242,
-        "log_loss": 0.6651784341428061,
+        "accuracy": 0.5716332378223495,
+        "brier": 0.24372090889057063,
+        "log_loss": 0.6805047768867738,
         "n": 698
       }
     },
     "lr": {
-      "calibration": "isotonic",
+      "calibration": "platt",
+      "calibration_fit": "loso_oof_train",
+      "calibration_val_logloss": {
+        "isotonic": 0.6777687717328887,
+        "none": 0.6772150985658068,
+        "platt": 0.677094023802874
+      },
       "test": {
-        "accuracy": 0.5911680911680912,
-        "brier": 0.2400202165076793,
-        "log_loss": 0.6762358756152216,
+        "accuracy": 0.594017094017094,
+        "brier": 0.23928964306457198,
+        "log_loss": 0.6712607960845185,
         "n": 702
       },
       "val": {
-        "accuracy": 0.5845272206303725,
-        "brier": 0.23741225152695047,
-        "log_loss": 0.6661342107518938,
+        "accuracy": 0.5687679083094556,
+        "brier": 0.24208141660412236,
+        "log_loss": 0.677094023802874,
         "n": 698
       }
     }
@@ -260,11 +272,11 @@
     "val": 698
   },
   "run_url": null,
-  "selected": "lgbm",
+  "selected": "lr",
   "significance": {
     "baseline_correct": 398,
-    "mcnemar_p": 0.32099040312889326,
-    "model_correct": 413,
+    "mcnemar_p": 0.21518592344658005,
+    "model_correct": 417,
     "vs": "lower_starter_era"
   },
   "test_season": 2026,

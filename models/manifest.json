@@ -2,16 +2,16 @@
   "commit_sha": null,
   "features_path": "data/processed/features.parquet",
   "features_sha256": "75c5470ddd17e872227c8ecbeb60cb395688e9e0fb387b2a71da6f9302f8f1f3",
-  "generated_at": "2026-10-29T12:25:10+09:00",
+  "generated_at": "2026-10-29T12:28:57+09:00",
   "models": {
     "live": {
       "path": "models/win_model.pkl",
-      "sha256": "8e92f46b77337cc31ba6e3ae5955e28fa37596752f94a244917fb4d19d1db0b6",
+      "sha256": "16d434a796ec1fa9f4a5463cb226d49a72cef5d65f225471d845e0693cc20f8f",
       "version": "v0.2"
     },
     "report": {
       "path": "models/report-2026.pkl",
-      "sha256": "f79827050fbc216a9cb83219baef7bb37f19302307a8154a879ea31a027773b1",
+      "sha256": "eb7c1e4be86b3512f33e9fa3cbb3ca697d0dc29c930f762c49e2e694a9ab3321",
       "version": "report-2026"
     }
   }
