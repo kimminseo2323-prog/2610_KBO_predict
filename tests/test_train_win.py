@@ -551,6 +551,27 @@ def test_cli_report_refuses_to_overwrite_frozen_report(tmp_path, monkeypatch):
     assert set(json.loads(frozen.read_text(encoding="utf-8"))) == REPORT_KEYS
 
 
+def test_cli_report_force_refuses_to_drop_matchup_and_cluster_blocks(tmp_path, monkeypatch):
+    """기존 보고서에 matchup_feature_ablation·cluster_quality가 있는데 --matchup·--clusters 없이 report --force면
+    블록이 null로 되돌아가므로 정식 명령을 알려 주며 거부한다. --reset-blocks면 일부러 지우는 것이라 진행한다."""
+    monkeypatch.chdir(tmp_path)
+    _cli_parquet(tmp_path)
+    frozen = tmp_path / "data/public/model_report.json"
+    frozen.parent.mkdir(parents=True)
+    old = json.dumps({"matchup_feature_ablation": {"adopt": False}, "cluster_quality": {"version": "c"}}) + "\n"
+    frozen.write_text(old, encoding="utf-8")
+    canonical = "report --force --matchup data/processed/matchup.parquet --clusters models/clusters.pkl"
+    with pytest.raises(SystemExit, match="matchup_feature_ablation, cluster_quality") as e:
+        train_win.main(["report", "--force"])
+    assert canonical in str(e.value) and "--reset-blocks" in str(e.value)
+    with pytest.raises(SystemExit, match=r"non-null cluster_quality;"):    # --matchup만 주면 군집 블록만 문제
+        train_win.main(["report", "--force", "--matchup", "data/processed/matchup.parquet"])
+    assert frozen.read_text(encoding="utf-8") == old and not (tmp_path / "models").exists()
+    train_win.main(["report", "--force", "--reset-blocks"])
+    rep = json.loads(frozen.read_text(encoding="utf-8"))
+    assert rep["matchup_feature_ablation"] is None and rep["cluster_quality"] is None
+
+
 # ---------- 상성 피처 전후 비교 · 군집 품질 ----------
 
 MATCHUP_NAMES = ["bat_type0_diff", "bat_type1_diff", "starter_type0_diff", "starter_type1_diff", "types_known"]

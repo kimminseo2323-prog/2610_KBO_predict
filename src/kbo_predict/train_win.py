@@ -30,7 +30,8 @@ explain은 캘리브레이션 전 로짓(log-odds)을 피처별 기여 + 기본�
         ← 커밋된 model_report.json을 만드는 정식(전체) 명령. 위와 같고, 상성 피처(직전 시즌 선수 유형) 전후
         비교(matchup_feature_ablation)와 군집 품질(cluster_quality)을 보고서에 더한다. 본 모델·선택·지표는
         상성 피처 없이 만든 것 그대로다 (상성은 비교로만 기록, 라이브 반영은 4단계).
-        주의: 두 옵션 없이 `report --force`만 돌리면 그 두 블록이 null로 되돌아간다 (나머지 키는 같다).
+        주의: 기존 보고서에 그 두 블록이 있는데 해당 옵션 없이 `report --force`를 돌리면 블록이 null로 되돌아가므로
+        거부한다 (정식 명령을 알려 준다). 일부러 지우려면 --reset-blocks를 더한다.
         상성 parquet는 먼저 `python -m kbo_predict.features --matchup-out data/processed/matchup.parquet
         --clusters models/clusters.pkl`로 만든다.
     python -m kbo_predict.train_win live    → models/win_model.pkl (v0.2, 2015~2026 전체 학습)
@@ -581,6 +582,32 @@ LIVE_PKL = Path("models/win_model.pkl")
 MANIFEST = Path("models/manifest.json")
 
 
+CANONICAL_REPORT_CMD = ("python -m kbo_predict.train_win report --force "
+                       "--matchup data/processed/matchup.parquet --clusters models/clusters.pkl")
+
+
+def _guard_report_blocks(path: Path, *, matchup, clusters, reset: bool) -> None:
+    """report --force가 기존 보고서의 상성 비교·군집 품질 블록을 모르게 null로 지우지 않게 막는다.
+    기존 파일에 matchup_feature_ablation(또는 cluster_quality)이 있는데 --matchup(또는 --clusters)이 없으면
+    정식 명령(CANONICAL_REPORT_CMD)을 알려 주며 거부한다. --reset-blocks면 그대로 진행한다.
+    기존 파일을 JSON으로 읽을 수 없으면 지킬 블록도 없으므로 진행한다."""
+    if reset:
+        return
+    try:
+        old = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if not isinstance(old, dict):
+        return
+    lost = [key for key, opt, given in (("matchup_feature_ablation", "--matchup", matchup),
+                                        ("cluster_quality", "--clusters", clusters))
+            if old.get(key) is not None and not given]
+    if lost:
+        raise SystemExit(f"{Path(path).name} has non-null {', '.join(lost)}; running without the matching option "
+                         f"would reset it to null. Run the canonical command:\n  {CANONICAL_REPORT_CMD}\n"
+                         "(or add --reset-blocks to drop those blocks on purpose)")
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="승패 모델 학습: report(2015~2024 학습/2025 검증/2026 평가) 또는 live(전 시즌)")
     ap.add_argument("command", choices=["report", "live"])
@@ -588,9 +615,13 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--force", action="store_true", help="report: 이미 있는(얼려 둔) model_report.json을 덮어쓴다")
     ap.add_argument("--matchup", help="report: 상성 피처 parquet (features --matchup-out) → matchup_feature_ablation")
     ap.add_argument("--clusters", help="report: 군집 묶음 pkl (models/clusters.pkl) → cluster_quality")
+    ap.add_argument("--reset-blocks", action="store_true",
+                    help="report --force: 기존 보고서의 matchup_feature_ablation·cluster_quality를 null로 되돌려도 된다")
     args = ap.parse_args(argv)
-    if args.command == "report" and REPORT_JSON.exists() and not args.force:
-        raise SystemExit(f"{REPORT_JSON.name} exists; use --force to overwrite the frozen report")
+    if args.command == "report" and REPORT_JSON.exists():
+        if not args.force:
+            raise SystemExit(f"{REPORT_JSON.name} exists; use --force to overwrite the frozen report")
+        _guard_report_blocks(REPORT_JSON, matchup=args.matchup, clusters=args.clusters, reset=args.reset_blocks)
     features_path = Path(args.features)
     meta = {"generated_at": datetime.now(KST).isoformat(timespec="seconds"),
             "commit_sha": _commit_sha(), "run_url": os.environ.get("RUN_URL"),
