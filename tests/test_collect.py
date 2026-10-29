@@ -237,33 +237,47 @@ def test_fetch_starters_scheduled_only_and_continues_on_error(monkeypatch, fixtu
 
     def fake_fetch(path, **kw):
         calls.append((path, kw.get("use_cache")))
-        if path == "/games/1-A":
+        if path == "/games/14050-A":
             return sched
-        if path == "/games/2-B":
+        if path == "/games/9809-B":
             return no_section
         raise requests.ConnectionError("boom")
 
     monkeypatch.setattr(collect, "fetch_html", fake_fetch)
     games = [
-        {"game_id": 1, "date": "2026-10-29", "path": "/games/1-A", "status": "SCHEDULED"},
-        {"game_id": 2, "date": "2026-10-29", "path": "/games/2-B", "status": "SCHEDULED"},
+        {"game_id": 14050, "date": "2026-10-29", "path": "/games/14050-A", "status": "SCHEDULED"},
+        {"game_id": 9809, "date": "2026-10-29", "path": "/games/9809-B", "status": "SCHEDULED"},
         {"game_id": 3, "date": "2026-10-28", "path": "/games/3-C", "status": "FINAL"},
         {"game_id": 4, "date": "2026-10-30", "path": "/games/4-D", "status": "SCHEDULED"},
     ]
     out = collect.fetch_starters(games, fetched_at="2026-10-29T10:00:00+09:00")
-    assert [c[0] for c in calls] == ["/games/1-A", "/games/2-B", "/games/4-D"]
+    assert [c[0] for c in calls] == ["/games/14050-A", "/games/9809-B", "/games/4-D"]
     assert all(c[1] is False for c in calls)
-    assert set(out["starters"]) == {1, 2}
-    assert out["starters"][1] == {"game_id": 1, "date": "2026-10-29", "fetched_at": "2026-10-29T10:00:00+09:00",
-                                  "away": {"player_id": 1096, "name": "Choi Won-tae"},
-                                  "home": {"player_id": 2730, "name": "Shirakawa Keisho"}}
-    assert out["starters"][2]["away"] is None and out["starters"][2]["home"] is None
+    assert set(out["starters"]) == {14050, 9809}
+    assert out["starters"][14050] == {"game_id": 14050, "date": "2026-10-29", "fetched_at": "2026-10-29T10:00:00+09:00",
+                                      "away": {"player_id": 1096, "name": "Choi Won-tae"},
+                                      "home": {"player_id": 2730, "name": "Shirakawa Keisho"}}
+    assert out["starters"][9809]["away"] is None and out["starters"][9809]["home"] is None
     assert len(out["errors"]) == 1 and out["errors"][0]["path"] == "/games/4-D"
 
 
 def test_fetch_starters_unrecognised_section_is_error_not_tba(monkeypatch, fixture_html):
     html = fixture_html("mykbo_game_14050_scheduled.html").replace("starter-comparison__pitcher--", "x--")
     monkeypatch.setattr(collect, "fetch_html", lambda path, **kw: html)
-    out = collect.fetch_starters([{"game_id": 1, "date": "2026-10-29", "path": "/games/1-A", "status": "SCHEDULED"}],
-                                 fetched_at="t")
+    out = collect.fetch_starters([{"game_id": 14050, "date": "2026-10-29", "path": "/games/14050-A",
+                                   "status": "SCHEDULED"}], fetched_at="t")
     assert out["starters"] == {} and len(out["errors"]) == 1 and "unrecognised" in out["errors"][0]["error"]
+
+
+def test_fetch_starters_wrong_or_non_game_page_is_error_not_tba(monkeypatch, fixture_html):
+    """(e) 다른 경기 페이지·챌린지 페이지를 받으면 TBA 행을 만들지 않고 경기 단위 오류로 기록한다."""
+    pages = {"/games/14051-A": fixture_html("mykbo_game_14050_scheduled.html"),
+             "/games/14052-B": "<html><head><title>Just a moment...</title></head><body></body></html>"}
+    monkeypatch.setattr(collect, "fetch_html", lambda path, **kw: pages[path])
+    games = [{"game_id": 14051, "date": "2026-10-29", "path": "/games/14051-A", "status": "SCHEDULED"},
+             {"game_id": 14052, "date": "2026-10-29", "path": "/games/14052-B", "status": "SCHEDULED"}]
+    out = collect.fetch_starters(games, fetched_at="t")
+    assert out["starters"] == {}
+    assert [e["game_id"] for e in out["errors"]] == [14051, 14052]
+    assert "starters page mismatch: expected 14051, got 14050" in out["errors"][0]["error"]
+    assert "not a game page" in out["errors"][1]["error"]

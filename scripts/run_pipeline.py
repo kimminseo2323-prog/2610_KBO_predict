@@ -93,7 +93,9 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     # ⑤ 발행 (경기 행이 아예 없으면 latest 유지)
     if entries:
         write_latest(pub / "latest.json", date=iso, games=entries, meta=meta)
-        upsert_history(pub / "history.csv", preds, predicted_at=meta["generated_at"])
+        # history의 model_version = 실제로 예측한 번들의 버전 (패키지 상수가 아니라)
+        upsert_history(pub / "history.csv", preds, predicted_at=meta["generated_at"],
+                       model_version=meta["model_version"])
 
     # ⑥ status
     upcoming = [g["date"] for g in games if g["date"] > iso and g["status"] != "CANCELED"]

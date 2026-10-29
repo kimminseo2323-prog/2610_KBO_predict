@@ -191,3 +191,29 @@ def test_parse_starters_unrecognised_section_raises(fixture_html):
     html = fixture_html("mykbo_game_14050_scheduled.html").replace("starter-comparison__pitcher--", "x--")
     with pytest.raises(ValueError, match="unrecognised starting pitchers section"):
         parse_starters(html)
+
+
+def test_parse_starters_checks_game_id(fixture_html):
+    """(d) game_id를 주면 og:url의 경기 번호와 맞춰 본다: 같으면 정상, 다르면 ValueError."""
+    html = fixture_html("mykbo_game_14050_scheduled.html")
+    assert parse_starters(html, game_id=14050)["home"]["player_id"] == 2730
+    with pytest.raises(ValueError, match="starters page mismatch: expected 1, got 14050"):
+        parse_starters(html, game_id=1)
+
+
+def test_parse_starters_other_game_page_raises(fixture_html):
+    """(c) 다른 경기 페이지(섹션 없는 LIVE 페이지 9809)를 받으면 None(TBA)이 아니라 ValueError."""
+    html = fixture_html("mykbo_game_9809_live.html")
+    assert parse_starters(html, game_id=9809) is None  # 진짜 그 경기 페이지에 섹션만 없으면 지금처럼 None
+    with pytest.raises(ValueError, match="starters page mismatch: expected 14050, got 9809"):
+        parse_starters(html, game_id=14050)
+
+
+def test_parse_starters_not_a_game_page_raises():
+    """챌린지·인터스티셜처럼 경기 식별 정보(og:url)가 없는 페이지는 섹션 없음(None)으로 보지 않는다."""
+    html = "<html><head><title>Just a moment...</title></head><body>checking your browser</body></html>"
+    with pytest.raises(ValueError, match="not a game page"):
+        parse_starters(html, game_id=14050)
+    week = '<html><head><meta property="og:url" content="http://mykbostats.com/schedule/week_of/2026-10-27"></head></html>'
+    with pytest.raises(ValueError, match="not a game page"):
+        parse_starters(week, game_id=14050)

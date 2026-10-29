@@ -19,21 +19,25 @@ explain은 캘리브레이션 전 로짓(log-odds)을 피처별 기여 + 기본�
 
 그 위에 평가(정확도·로그 손실·브라이어, 베이스라인 3종, 캘리브레이션 표, McNemar 검정, 피처 중요도)와
 학습 CLI를 얹는다:
-    python -m kbo_predict.train_win report  → data/public/model_report.json + models/report-2026.pkl
+    python -m kbo_predict.train_win report [--force]  → data/public/model_report.json + models/report-2026.pkl
+        보고서는 한 번 만든 뒤 얼려 둔다: 파일이 이미 있으면 --force 없이는 거부한다.
         2015~2024 학습 / 2025 검증(트리 수·캘리브레이션·알고리즘·유의성 비교 대상 선택) / 2026 홀드아웃 평가
         캘리브레이터는 train 시즌 leave-one-out 예측으로 맞추고, 방법 선택만 2025로 한다.
         선발 가정: 학습·평가 행의 선발 피처는 박스스코어의 '실제' 선발(투수 순서 1)로 만든다 — 지표는
         "경기 전에 선발을 안다"는 가정 위의 값이다 (라이브는 예고 선발). 그래서 선발 피처를 뺀
         팀 피처 19개 모델(ablation.no_starter)도 같은 절차로 학습해 함께 적는다.
     python -m kbo_predict.train_win live    → models/win_model.pkl (v0.2, 2015~2026 전체 학습)
-        보고서가 고른 알고리즘·캘리브레이션·트리 수를 그대로 쓴다 → report를 먼저 돌린다.
-두 명령 모두 models/manifest.json(피처·모델 파일 SHA256)을 갱신한다.
+        보고서에서 selected·캘리브레이션 방법·LightGBM 트리 수만 읽는다 → report를 먼저 돌린다.
+        parquet가 보고서 때와 달라도(새 경기가 쌓여도) 다시 학습할 수 있다 (해시 일치를 요구하지 않음).
+models/manifest.json에는 모델별로 (파일 SHA256, 버전, 그 모델을 만든 parquet SHA256)을 적는다.
+각 명령은 자기 모델 항목만 갱신하고 다른 항목은 기존 manifest 그대로 둔다.
 """
 import argparse
 import hashlib
 import json
 import math
 import os
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
@@ -409,13 +413,16 @@ def train_report(df: pd.DataFrame, *, train_seasons=range(2015, 2025), val_seaso
     return report, bundle
 
 
-def train_live(df: pd.DataFrame, *, kind: str, calibration: str, n_estimators: int, meta: dict) -> dict:
+def train_live(df: pd.DataFrame, *, kind: str, calibration: str, n_estimators: int, meta: dict,
+               features: list[str] | None = None) -> dict:
     """사이트용 라이브 모델: 있는 시즌 전부로 학습 (알고리즘·캘리브레이션 방법·트리 수는 보고서에서 고른 값).
-    전체를 학습에 쓰면 캘리브레이터를 맞출 '안 본 데이터'가 없으므로, 시즌 leave-one-out 예측(oof_predictions)으로 맞춘다."""
+    전체를 학습에 쓰면 캘리브레이터를 맞출 '안 본 데이터'가 없으므로, 시즌 leave-one-out 예측(oof_predictions)으로 맞춘다.
+    features: 쓸 피처 목록 (기본 FEATURE_NAMES 26개). CLI는 기본값을 쓴다."""
     seasons = sorted(int(s) for s in df["season"].unique())
-    bundle = fit_model(df, kind=kind, n_estimators=n_estimators, version=MODEL_VERSION, seasons=seasons)
+    bundle = fit_model(df, kind=kind, n_estimators=n_estimators, version=MODEL_VERSION, seasons=seasons,
+                       features=features)
     if calibration != "none":
-        oof = oof_predictions(df, kind=kind, n_estimators=n_estimators)
+        oof = oof_predictions(df, kind=kind, n_estimators=n_estimators, features=features)
         bundle.update(calibration=calibration, calibrator=fit_calibrator(calibration, oof, df["y"].to_numpy()))
     if meta.get("generated_at"):
         bundle["trained_at"] = meta["generated_at"]
@@ -432,13 +439,28 @@ def _write_json(path: Path, obj) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def write_manifest(path: Path, *, features_path: Path, bundles: dict[str, Path], meta: dict) -> None:
-    """models/manifest.json: 어떤 피처 파일(SHA256)로 어떤 모델 파일(SHA256·버전)을 만들었는지 기록."""
-    models = {name: {"path": Path(p).as_posix(), "sha256": _sha256(p), "version": load_bundle(p).get("version")}
-              for name, p in bundles.items()}
+def write_manifest(path: Path, *, name: str, bundle_path: Path, features_path: Path, meta: dict) -> None:
+    """models/manifest.json의 모델 하나(name) 항목만 갱신한다: 모델 파일 SHA256·버전 + 그 모델을 만든 parquet SHA256.
+    다른 모델 항목은 기존 manifest에서 그대로 둔다 — 이번에 다시 학습하지 않은 모델 파일에 새 parquet 해시를
+    붙이지 않기 위해서다. generated_at·commit_sha는 마지막으로 manifest를 쓴 실행의 값."""
+    path = Path(path)
+    models = json.loads(path.read_text(encoding="utf-8")).get("models", {}) if path.exists() else {}
+    models[name] = {"path": Path(bundle_path).as_posix(), "sha256": _sha256(bundle_path),
+                    "version": load_bundle(bundle_path).get("version"), "features_sha256": _sha256(features_path)}
     _write_json(path, {"generated_at": meta.get("generated_at"), "commit_sha": meta.get("commit_sha"),
-                       "features_sha256": _sha256(features_path), "features_path": Path(features_path).as_posix(),
                        "models": models})
+
+
+def _commit_sha() -> str | None:
+    """지금 코드의 커밋: GitHub Actions면 GITHUB_SHA, 아니면 `git rev-parse HEAD`. 둘 다 안 되면 None."""
+    if os.environ.get("GITHUB_SHA"):
+        return os.environ["GITHUB_SHA"]
+    try:
+        out = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    sha = (out.stdout or "").strip()
+    return sha if out.returncode == 0 and sha else None
 
 
 # ---------- CLI ----------
@@ -453,10 +475,13 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="승패 모델 학습: report(2015~2024 학습/2025 검증/2026 평가) 또는 live(전 시즌)")
     ap.add_argument("command", choices=["report", "live"])
     ap.add_argument("--features", default="data/processed/features.parquet", help="피처 parquet 경로")
+    ap.add_argument("--force", action="store_true", help="report: 이미 있는(얼려 둔) model_report.json을 덮어쓴다")
     args = ap.parse_args(argv)
+    if args.command == "report" and REPORT_JSON.exists() and not args.force:
+        raise SystemExit(f"{REPORT_JSON.name} exists; use --force to overwrite the frozen report")
     features_path = Path(args.features)
     meta = {"generated_at": datetime.now(KST).isoformat(timespec="seconds"),
-            "commit_sha": os.environ.get("GITHUB_SHA"), "run_url": os.environ.get("RUN_URL"),
+            "commit_sha": _commit_sha(), "run_url": os.environ.get("RUN_URL"),
             "features_sha256": _sha256(features_path)}
     df = load_features(features_path)
     t0 = time.time()
@@ -478,9 +503,9 @@ def main(argv: list[str] | None = None) -> None:
     else:
         if not REPORT_JSON.exists():
             raise SystemExit(f"{REPORT_JSON} not found — run `python -m kbo_predict.train_win report` first")
+        # 보고서에서는 선택 결과 세 가지만 읽는다. parquet 해시는 맞춰 보지 않는다 — 라이브는 새 경기가 쌓인
+        # parquet로 다시 학습하는 것이 정상이고, 어떤 parquet로 만들었는지는 manifest의 live 항목에 남는다.
         report = json.loads(REPORT_JSON.read_text(encoding="utf-8"))
-        if report.get("features_sha256") != meta["features_sha256"]:
-            raise SystemExit("features parquet differs from the one model_report.json was built on — rerun `report`")
         kind = report["selected"]
         bundle = train_live(df, kind=kind, calibration=report["models"][kind]["calibration"],
                             n_estimators=report["models"]["lgbm"]["best_iteration"], meta=meta)
@@ -488,9 +513,8 @@ def main(argv: list[str] | None = None) -> None:
         print(f"live {bundle['version']}: {kind} calibration={bundle['calibration']} "
               f"seasons={bundle['seasons'][0]}~{bundle['seasons'][-1]} n={bundle['n_games']}")
     print(f"done in {time.time() - t0:.1f}s")
-    write_manifest(MANIFEST, features_path=features_path,
-                   bundles={name: p for name, p in (("report", REPORT_PKL), ("live", LIVE_PKL)) if p.exists()},
-                   meta=meta)
+    name, bundle_path = ("report", REPORT_PKL) if args.command == "report" else ("live", LIVE_PKL)
+    write_manifest(MANIFEST, name=name, bundle_path=bundle_path, features_path=features_path, meta=meta)
 
 
 if __name__ == "__main__":

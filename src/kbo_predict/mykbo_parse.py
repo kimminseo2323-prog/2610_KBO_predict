@@ -213,14 +213,32 @@ def parse_game(html: str) -> dict:
     }
 
 
-def parse_starters(html: str) -> dict | None:
+def _page_game_id(soup: BeautifulSoup) -> int | None:
+    """페이지가 어느 경기 페이지인지: og:url의 /games/{id}- 에서 읽는다 (parse_game과 같은 방법). 없으면 None."""
+    og_tag = soup.find("meta", property="og:url")
+    m = re.search(r"/games/(\d+)-", og_tag.get("content", "")) if og_tag is not None else None
+    return int(m.group(1)) if m else None
+
+
+def parse_starters(html: str, game_id: int | None = None) -> dict | None:
     """경기 페이지의 예고 선발투수. 섹션이 아예 없으면 None.
 
+    game_id를 주면 먼저 '정말 그 경기 페이지인가'를 확인한다 — 섹션이 없다는 이유만으로 None(미정)을 돌려주면
+    챌린지·인터스티셜 페이지나 엉뚱한 경기 페이지가 이미 알던 선발을 TBA로 덮어쓸 수 있기 때문이다.
+      - 경기 식별 정보(og:url의 /games/{id}-)가 없으면 ValueError("not a game page")
+      - 다른 경기 페이지면 ValueError("starters page mismatch: expected …, got …")
     원정/홈은 블록 클래스(starter-comparison__pitcher--away/--home)로 구분한다. 선수 링크가 없는 쪽은 None(미발표).
     섹션은 있는데 선수 블록을 알아볼 수 없으면 페이지 구조가 바뀐 것이므로 ValueError.
     같은 선수에 사진 링크와 이름 링크가 있으므로 텍스트가 있는 링크에서 이름을 읽는다.
     """
-    section = BeautifulSoup(html, "html.parser").select_one('section[aria-label="Starting pitchers"]')
+    soup = BeautifulSoup(html, "html.parser")
+    if game_id is not None:
+        found = _page_game_id(soup)
+        if found is None:
+            raise ValueError("not a game page")
+        if found != game_id:
+            raise ValueError(f"starters page mismatch: expected {game_id}, got {found}")
+    section = soup.select_one('section[aria-label="Starting pitchers"]')
     if section is None:
         return None
     blocks = {side: section.select_one(f".starter-comparison__pitcher--{side}") for side in ("away", "home")}

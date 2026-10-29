@@ -324,3 +324,12 @@ def test_non_request_exception_from_collect_still_writes_status(tmp_data_dir, bu
     run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
     status = json.loads((tmp_data_dir / "public/status.json").read_text(encoding="utf-8"))
     assert status["collect_errors"] == [repr(ValueError("unrecognised week row"))]
+
+
+def test_history_model_version_is_bundle_version(tmp_data_dir, bundle_path, fixture_html):
+    """history.csv의 model_version은 패키지 상수가 아니라 실제로 불러온 번들의 버전(meta["model_version"])."""
+    upsert_games(2026, parse_week(fixture_html("mykbo_week_2026-10-27.html")))
+    run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False)
+    import pandas as pd
+    hist = pd.read_csv(tmp_data_dir / "public/history.csv")
+    assert hist.model_version.tolist() == ["v-test"]

@@ -114,14 +114,17 @@ def collect_range(from_date: date, to_date: date, *, season: int | None = None, 
 
 
 def fetch_starters(games: list[dict], *, fetched_at: str, session=None) -> dict:
-    """SCHEDULED 경기 페이지에서 예고 선발을 읽는다 (캐시 없이). 섹션이 없으면 양쪽 None(미정)으로 기록."""
+    """SCHEDULED 경기 페이지에서 예고 선발을 읽는다 (캐시 없이). 섹션이 없으면 양쪽 None(미정)으로 기록.
+    받은 페이지가 그 경기 페이지가 아니면(챌린지 페이지, 다른 경기) parse_starters가 ValueError를 내고,
+    여기서는 경기 단위 오류로만 남긴다 — TBA 행을 만들지 않는다."""
     starters: dict[int, dict] = {}
     errors: list[dict] = []
     for g in games:
         if g["status"] != "SCHEDULED":
             continue
         try:
-            s = parse_starters(fetch_html(g["path"], session=session, use_cache=False)) or {"away": None, "home": None}
+            html = fetch_html(g["path"], session=session, use_cache=False)
+            s = parse_starters(html, game_id=g["game_id"]) or {"away": None, "home": None}
         except (ValueError, KeyError, AttributeError, TypeError, IndexError, requests.RequestException) as e:
             err = {"game_id": g["game_id"], "path": g["path"], "error": f"{type(e).__name__}: {e}"}
             errors.append(err)

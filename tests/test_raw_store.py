@@ -74,3 +74,20 @@ def test_upsert_starters_dedupes_and_sorts(tmp_data_dir):
     lines = [json.loads(x) for x in starters_path(2026).read_text(encoding="utf-8").splitlines()]
     assert [(x["date"], x["game_id"]) for x in lines] == [("2026-10-28", 30), ("2026-10-29", 20), ("2026-10-30", 10)]
     assert load_starters(2025) == {}
+
+
+def test_upsert_starters_never_downgrades_known_starter(tmp_data_dir):
+    """(a) 섹션 없는 재수집(양쪽 None)은 저장된 선발을 지우지 않는다 — 변경 0, 파일 그대로.
+    (b) 홈만 새로 발표되면 홈만 바뀌고 이미 알던 원정은 유지된다."""
+    from kbo_predict.raw_store import load_starters, starters_path, upsert_starters
+
+    a, h = {"player_id": 1, "name": "A"}, {"player_id": 2, "name": "H"}
+    assert upsert_starters(2026, [{"game_id": 7, "date": "2026-10-29", "fetched_at": "t1", "away": a, "home": None}]) == 1
+    before = starters_path(2026).read_bytes()
+    tba = {"game_id": 7, "date": "2026-10-29", "fetched_at": "t2", "away": None, "home": None}
+    assert upsert_starters(2026, [tba]) == 0
+    assert starters_path(2026).read_bytes() == before
+    assert upsert_starters(2026, [dict(tba, fetched_at="t3", home=h)]) == 1
+    assert load_starters(2026)[7] == {"game_id": 7, "date": "2026-10-29", "fetched_at": "t3", "away": a, "home": h}
+    assert upsert_starters(2026, [dict(tba, fetched_at="t4")]) == 0  # 둘 다 알려진 뒤의 TBA 재수집도 변경 0
+    assert load_starters(2026)[7]["away"] == a and load_starters(2026)[7]["home"] == h

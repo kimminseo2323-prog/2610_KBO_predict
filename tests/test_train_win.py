@@ -439,43 +439,113 @@ def test_train_live_uses_all_seasons_and_oof_calibrator(season_df, kind, calibra
         np.testing.assert_array_equal(apply_calibrator(bundle["calibrator"], p), apply_calibrator(want, p))
 
 
-def test_write_manifest(tmp_path, data):
-    feats = tmp_path / "features.parquet"
-    feats.write_bytes(b"parquet-bytes")
-    a = tmp_path / "models" / "a.pkl"
+def test_train_live_features_kwarg(season_df):
+    """M-5: features를 주면 그 피처만으로 학습·캘리브레이션한다 (기본은 FEATURE_NAMES 26개)."""
+    bundle = train_live(season_df, kind="lr", calibration="platt", n_estimators=60, meta=META,
+                        features=TEAM_FEATURES)
+    assert bundle["features"] == list(TEAM_FEATURES)
+    oof = oof_predictions(season_df, kind="lr", n_estimators=60, features=TEAM_FEATURES)
+    want = fit_calibrator("platt", oof, season_df["y"].to_numpy())
+    p = predict_raw(bundle, season_df.iloc[:50])
+    np.testing.assert_array_equal(apply_calibrator(bundle["calibrator"], p), apply_calibrator(want, p))
+    assert train_live(season_df, kind="lr", calibration="none", n_estimators=60, meta=META)["features"] == FEATURE_NAMES
+
+
+def test_write_manifest_updates_one_model_and_keeps_others(tmp_path, data):
+    """manifest는 모델별로 (파일 해시, 버전, 그 모델을 만든 parquet 해시)를 적는다.
+    한 명령은 자기 모델 항목만 갱신하고, 다른 항목은 기존 manifest에서 그대로 둔다."""
+    f1, f2 = tmp_path / "f1.parquet", tmp_path / "f2.parquet"
+    f1.write_bytes(b"parquet-1")
+    f2.write_bytes(b"parquet-2")
+    a, b = tmp_path / "models" / "a.pkl", tmp_path / "models" / "b.pkl"
     save_bundle(_fit(data, "lr"), a)
+    save_bundle(_fit(data, "lgbm"), b)
     out = tmp_path / "models" / "manifest.json"
-    write_manifest(out, features_path=feats, bundles={"live": a}, meta=META)
+    write_manifest(out, name="report", bundle_path=a, features_path=f1, meta=META)
     text = out.read_text(encoding="utf-8")
     assert text.endswith("}\n")
-    assert json.loads(text) == {
-        "generated_at": META["generated_at"], "commit_sha": "abc123",
-        "features_sha256": hashlib.sha256(b"parquet-bytes").hexdigest(), "features_path": feats.as_posix(),
-        "models": {"live": {"path": a.as_posix(), "sha256": hashlib.sha256(a.read_bytes()).hexdigest(),
-                            "version": "v-test"}},
-    }
+    entry_a = {"path": a.as_posix(), "sha256": hashlib.sha256(a.read_bytes()).hexdigest(), "version": "v-test",
+               "features_sha256": hashlib.sha256(b"parquet-1").hexdigest()}
+    assert json.loads(text) == {"generated_at": META["generated_at"], "commit_sha": "abc123",
+                                "models": {"report": entry_a}}
+    save_bundle(_fit(data, "lr"), a)  # 디스크의 report pkl이 바뀌어도 live 명령은 report 항목을 건드리지 않는다
+    write_manifest(out, name="live", bundle_path=b, features_path=f2, meta={**META, "generated_at": "later"})
+    m = json.loads(out.read_text(encoding="utf-8"))
+    assert m["generated_at"] == "later" and m["models"]["report"] == entry_a
+    assert m["models"]["live"]["features_sha256"] == hashlib.sha256(b"parquet-2").hexdigest()
+    assert m["models"]["live"]["sha256"] == hashlib.sha256(b.read_bytes()).hexdigest()
 
 
-def test_cli_report_then_live(tmp_path, monkeypatch):
-    """CLI: report → model_report.json + report-2026.pkl, live → win_model.pkl(v0.2), 둘 다 manifest 갱신.
-    기본 분할(2015~2024 / 2025 / 2026)을 쓰므로 12시즌짜리 작은 합성 parquet을 만든다."""
+def test_commit_sha_from_env_then_git(monkeypatch):
+    """M-4: GITHUB_SHA가 있으면 그 값, 없으면 git rev-parse HEAD, git도 실패하면 None."""
+    import subprocess
+    monkeypatch.setenv("GITHUB_SHA", "envsha")
+    assert train_win._commit_sha() == "envsha"
+    monkeypatch.delenv("GITHUB_SHA")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="deadbeef\n"))
+    assert train_win._commit_sha() == "deadbeef"
+
+    def boom(*a, **k):
+        raise FileNotFoundError("git")
+    monkeypatch.setattr(subprocess, "run", boom)
+    assert train_win._commit_sha() is None
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 128, stdout=""))
+    assert train_win._commit_sha() is None
+
+
+def _cli_parquet(tmp_path, extra_rows: int = 0):
+    """기본 분할(2015~2024 / 2025 / 2026)을 쓰는 12시즌짜리 작은 합성 parquet. extra_rows만큼 2026 행을 덧붙인다."""
     rng = np.random.default_rng(3)
     n = 12 * 120
     X = pd.DataFrame(rng.normal(0, 1, (n, len(FEATURE_NAMES))), columns=FEATURE_NAMES)
     y = (rng.random(n) < 1 / (1 + np.exp(-2 * X["win_pct_diff"]))).astype(int)
     df = X.assign(season=np.repeat(range(2015, 2027), 120), y=y)
+    if extra_rows:
+        df = pd.concat([df, df[df["season"] == 2026].iloc[:extra_rows]], ignore_index=True)
+    path = tmp_path / "data/processed/features.parquet"
+    save_features(df, path)
+    return path
+
+
+def test_cli_report_then_live(tmp_path, monkeypatch):
+    """CLI: report → model_report.json + report-2026.pkl, live → win_model.pkl(v0.2), 각자 자기 manifest 항목 갱신.
+    live는 보고서에서 selected·calibration·best_iteration만 읽으므로, parquet가 바뀌어도(경기 추가) 다시 학습된다."""
     monkeypatch.chdir(tmp_path)
-    save_features(df, tmp_path / "data/processed/features.parquet")
+    monkeypatch.setenv("GITHUB_SHA", "cafe01")
+    feats = _cli_parquet(tmp_path)
     with pytest.raises(SystemExit):
         train_win.main(["live"])  # 보고서가 없으면 live는 실패
     train_win.main(["report"])
     rep = json.loads((tmp_path / "data/public/model_report.json").read_text(encoding="utf-8"))
     assert set(rep) == REPORT_KEYS and rep["train_seasons"] == list(range(2015, 2025))
+    assert rep["commit_sha"] == "cafe01"
     assert load_bundle(tmp_path / "models/report-2026.pkl")["version"] == REPORT_VERSION
+    report_entry = json.loads((tmp_path / "models/manifest.json").read_text(encoding="utf-8"))["models"]["report"]
+    assert report_entry["features_sha256"] == rep["features_sha256"]
+
+    feats = _cli_parquet(tmp_path, extra_rows=30)  # 새 경기가 쌓인 parquet (보고서와 해시가 다르다)
+    new_hash = hashlib.sha256(feats.read_bytes()).hexdigest()
+    assert new_hash != rep["features_sha256"]
     train_win.main(["live"])
     live = load_bundle(tmp_path / "models/win_model.pkl")
     assert live["version"] == MODEL_VERSION and live["kind"] == rep["selected"]
     assert live["calibration"] == rep["models"][rep["selected"]]["calibration"]
+    assert live["n_games"] == 12 * 120 + 30
     manifest = json.loads((tmp_path / "models/manifest.json").read_text(encoding="utf-8"))
-    assert manifest["features_sha256"] == rep["features_sha256"]
+    assert manifest["models"]["report"] == report_entry  # report 항목은 report 때 값 그대로
+    assert manifest["models"]["live"]["features_sha256"] == new_hash
     assert {k: v["version"] for k, v in manifest["models"].items()} == {"report": REPORT_VERSION, "live": MODEL_VERSION}
+
+
+def test_cli_report_refuses_to_overwrite_frozen_report(tmp_path, monkeypatch):
+    """보고서는 한 번 만든 뒤 얼려 둔다: 이미 있으면 --force 없이는 거부하고 파일을 건드리지 않는다."""
+    monkeypatch.chdir(tmp_path)
+    _cli_parquet(tmp_path)
+    frozen = tmp_path / "data/public/model_report.json"
+    frozen.parent.mkdir(parents=True)
+    frozen.write_text("{}\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="model_report.json exists; use --force to overwrite the frozen report"):
+        train_win.main(["report"])
+    assert frozen.read_text(encoding="utf-8") == "{}\n" and not (tmp_path / "models").exists()
+    train_win.main(["report", "--force"])
+    assert set(json.loads(frozen.read_text(encoding="utf-8"))) == REPORT_KEYS

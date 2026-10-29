@@ -108,11 +108,15 @@ def load_starters(season: int) -> dict[int, dict]:
 
 
 def upsert_starters(season: int, rows: list[dict]) -> int:
-    """game_id 기준 덮어쓰기(fetched_at 제외 비교). 신규 + 선발이 바뀐 행 수를 반환."""
+    """game_id 기준 덮어쓰기(fetched_at 제외 비교). 신규 + 선발이 바뀐 행 수를 반환.
+    알려진 선발은 None(미정)으로 되돌리지 않는다: 새 행의 한쪽이 None인데 저장된 행의 같은 쪽이 있으면
+    저장된 쪽을 유지한다 (섹션이 빠진 페이지·홈만 새로 발표된 페이지를 다시 받아도 이미 알던 선발이 지워지지 않게)."""
     by_id = load_starters(season)
     changed = 0
     for r in rows:
         old = by_id.get(r["game_id"])
+        if old is not None:
+            r = {**r, **{side: old.get(side) for side in ("away", "home") if r.get(side) is None}}
         # 다시 받아도 선발이 같으면 저장된 행(원래 fetched_at)을 유지한다
         if old is None or {k: v for k, v in old.items() if k != "fetched_at"} != {k: v for k, v in r.items() if k != "fetched_at"}:
             by_id[r["game_id"]] = r
