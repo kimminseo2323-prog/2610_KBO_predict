@@ -1,6 +1,6 @@
 {
- "commit_sha": "f89efc81462d696821e050b854d83bec557147b0",
- "generated_at": "2026-10-29T19:04:41+09:00",
+ "commit_sha": "f94cacf63bb43d56785a01c876129a2351192e66",
+ "generated_at": "2026-10-29T19:07:01+09:00",
  "model_version": "report-2026",
  "note": "model_expected는 2026(홀드아웃)만; 2015~2025는 학습·검증 시즌이라 null (2026은 승패가 갈린 경기 기준, 무승부 제외)",
  "teams": [
