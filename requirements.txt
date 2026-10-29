@@ -15,3 +15,4 @@ ipykernel==6.29.5
 pyarrow==19.0.1
 lightgbm==4.7.0
 pyyaml==6.0.2
+threadpoolctl==3.5.0
