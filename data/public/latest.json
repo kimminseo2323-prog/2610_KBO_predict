@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-10-29T14:40:20+09:00",
-  "date": "2026-10-29",
+  "generated_at": "2026-10-30T00:11:32+09:00",
+  "date": "2026-10-30",
   "mode": "live",
   "model_version": "v0.2",
-  "commit_sha": "2f47e86ed032c5b1350aeb4f42b7c55dc2b51f21",
-  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40824677694",
+  "commit_sha": "934464b671cd2758338a91d62cdfb81b15ef61d9",
+  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40898946083",
   "games": [
     {
-      "game_id": 14050,
-      "date": "2026-10-29",
+      "game_id": 14053,
+      "date": "2026-10-30",
       "time": "18:30",
       "stadium": "Gwangju",
       "round": "postseason",
@@ -17,13 +17,17 @@
         "code": "HT",
         "name": "KIA",
         "starter": {
-          "player_id": 2730,
-          "name": "Shirakawa Keisho",
-          "era": 4.75,
-          "k9": 7.45,
-          "bb9": 4.86,
-          "ip": 83.3,
-          "starts": 17
+          "player_id": 2590,
+          "name": "James Naile",
+          "era": 3.49,
+          "k9": 7.67,
+          "bb9": 1.87,
+          "ip": 183.0,
+          "starts": 31,
+          "type": {
+            "id": 0,
+            "name": "선발형"
+          }
         },
         "win_pct_season": 0.556,
         "last10": 0.7,
@@ -33,35 +37,36 @@
         "code": "SS",
         "name": "삼성",
         "starter": {
-          "player_id": 1096,
-          "name": "Choi Won-tae",
-          "era": 4.75,
-          "k9": 8.57,
-          "bb9": 3.24,
-          "ip": 125.0,
-          "starts": 24
+          "player_id": 3097,
+          "name": "Chris Paddack",
+          "era": 3.18,
+          "k9": 9.43,
+          "bb9": 1.3,
+          "ip": 76.3,
+          "starts": 12,
+          "type": null
         },
         "win_pct_season": 0.589,
         "last10": 0.4,
         "run_diff": 0.96
       },
-      "home_win_prob": 0.4464,
+      "home_win_prob": 0.5195,
       "factors": [
         {
           "name": "선발 누적 이닝 차이",
-          "contribution_pp": -2.9
+          "contribution_pp": 4.6
         },
         {
           "name": "기본 홈 어드밴티지",
           "contribution_pp": 2.4
         },
         {
-          "name": "타선 삼진 비율 차이",
-          "contribution_pp": -1.5
+          "name": "선발 9이닝당 삼진 차이",
+          "contribution_pp": -2.0
         },
         {
-          "name": "선발 9이닝당 볼넷 차이",
-          "contribution_pp": -1.2
+          "name": "타선 삼진 비율 차이",
+          "contribution_pp": -1.6
         },
         {
           "name": "지난 시즌 승률 차이",
@@ -71,5 +76,32 @@
       "starter_known": true,
       "status_note": null
     }
-  ]
+  ],
+  "outlook": {
+    "type": "series",
+    "as_of": "2026-10-30",
+    "name": "플레이오프",
+    "best_of": 5,
+    "teams": [
+      "SS",
+      "HT"
+    ],
+    "head_start": [
+      0,
+      0
+    ],
+    "wins": [
+      2,
+      1
+    ],
+    "win_prob": [
+      0.7771,
+      0.2229
+    ],
+    "most_common_result": "3-1",
+    "goes_distance_prob": 0.5226,
+    "games_remaining_max": 2,
+    "today_game_prob_source": "win_model (starter-inclusive)",
+    "next_game_date": "2026-10-30"
+  }
 }
