@@ -272,3 +272,28 @@ def test_records_table_absent_gives_none(fixture_html):
     assert all(r["doubles"] is None and r["triples"] is None and r["sb"] is None
                for s in ("away", "home") for r in g["batting"][s])
     assert g["names_ko"] == {} and g["records_unmatched"] == []
+
+
+def test_records_multi_hr_garbled_cell_stays_one_entry_per_batter():
+    # 실제 2015 경기(game_id 943)의 HR 칸: 한 타자의 두 번째 홈런부터 영어 칸이 섞여 나온다.
+    from bs4 import BeautifulSoup
+    from kbo_predict.mykbo_parse import _records
+    html = ('<table data-game-section="records"><tr>'
+            '<td title="홈런: 테임즈2호3호(2회1점 6회3점 유창식) 이호준2호(6회2점 배영수) ">HR</td>'
+            '<td>Eric Thames (#2, 2nd inning off Yoo Chang-sik),, 1 run; #3, 6th inning off Lee Ho-joon '
+            '(#2, 6th inning off Bae Young-soo, 3 run, 2 run)</td></tr></table>')
+    row = lambda pid, name: {"player_id": pid, "name": name}
+    bat = {"away": [row(1, "Eric Thames"), row(2, "Lee Ho-joon")], "home": []}
+    pit = {"away": [], "home": [row(3, "Yoo Chang-sik"), row(4, "Bae Young-soo")]}
+    stats, names_ko, unmatched = _records(BeautifulSoup(html, "html.parser"), bat, pit)
+    assert unmatched == []
+    assert names_ko == {"1": "테임즈", "2": "이호준", "3": "유창식", "4": "배영수"}
+
+
+def test_match_player_suffix_and_korean_names():
+    from kbo_predict.mykbo_parse import _match_player
+    rows = [{"player_id": 1, "name": "Van Hekken"}, {"player_id": 2, "name": "Han Dong-min"}]
+    assert _match_player("Andy Van Hekken", rows) == 1
+    assert _match_player("한동민", rows) is None
+    assert _match_player("한동민", rows, {2: "한동민"}) == 2
+    assert _match_player("한동민", rows, {1: "한동민", 2: "한동민"}) is None
