@@ -4,18 +4,26 @@
     rates        누적 기록 -> 비율 지표 (K%, BB%, HR%, ISO, BABIP, 도루율 / 선발 비중)
     qualify      규정급 행만 남긴다 (타자 200타석, 투수 50이닝 또는 구원 30경기) + 지표에 NaN 있는 행 제외
     fit_group    맞춤 시즌(2015~2025) 행으로 표준화 -> K=4..7 K-means -> 점수(실루엣 + 유지율)로 K 선택
-                 -> 유형 번호를 뜻이 있게 다시 매김 -> 그 중심에서 출발하는 GMM(소속 확률) -> PCA 2D 좌표
+                 -> 유형 번호를 뜻이 있게 다시 매김 -> 소속 확률 방식 선택(아래) -> PCA 2D 좌표
     assign       자격 행 전부(2026 포함)에 유형·소속 확률·2D 좌표를 붙인다
     similar_players  표준화 공간 코사인 유사도로 '비슷한 선수-시즌' 상위 5개 (같은 선수의 다른 시즌은 제외)
 
 용어:
     유지율(retention)  연속 두 시즌 모두 자격이 있는 선수 중 두 해의 유형이 같은 비율. 유형이 '그 선수다움'을
                        잡는지(한 해 운에 흔들리지 않는지) 보는 지표라 K 선택 점수에 실루엣과 함께 더한다.
-    GMM 일치도         GMM 최대 확률 성분 == K-means 유형인 행의 비율.
+    일치도(agreement)  소속 확률의 최댓값 성분 == K-means 유형인 행의 비율. 화면에 보이는 유형과 '가장 높은
+                       소속 확률'이 어긋나면 안 되므로 소속 확률 방식을 이 값으로 고른다.
+소속 확률(membership) 방식:
+    1) K-means 중심에서 출발하는 GMM을 공분산 tied / diag / full 세 가지로 맞추고, 맞춤 행 일치도가 가장 높은 것
+       (동률이면 이 순서)을 고른다 -> "gmm_tied" 등.
+    2) 그 최고 일치도도 AGREEMENT_FLOOR(0.80) 미만이면 GMM을 버리고 거리 기반 소프트맥스를 쓴다 -> "kmeans_softmax":
+       membership_t ∝ exp(-d_t² / (2·s²)), d_t = 표준화 공간에서 중심 t까지 거리, s² = 맞춤 행의 군집 내 평균 제곱거리.
+       가장 가까운 중심이 가장 큰 확률이므로 최댓값 성분 == 유형이 구조적으로 항상 성립한다.
 유형 번호: 타자는 표준화 HR% 중심이 큰 순서(0 = 가장 장타형), 투수는 선발 비중 큰 순서, 같으면 K% 큰 순서.
 
-재현성: seed 42 고정, KMeans n_init=10, PCA svd_solver="full", 계산은 1스레드(_single_thread). 같은 입력이면 두 번 맞춰도 중심·라벨·확률·좌표가
-비트 단위로 같다. 2026 행은 맞춤에 쓰지 않으므로 2026 경기가 쌓여도 유형 정의(중심)는 바뀌지 않는다.
+재현성: seed 42 고정, KMeans n_init=10, PCA svd_solver="full", 계산은 1스레드(_single_thread).
+같은 입력이면 두 번 맞춰도 중심·라벨·확률·좌표가 비트 단위로 같다.
+2026 행은 맞춤에 쓰지 않으므로 2026 경기가 쌓여도 유형 정의(중심)는 바뀌지 않는다.
 
 CLI:
     python -m kbo_predict.cluster fit [--out models/clusters.pkl]
@@ -54,6 +62,8 @@ PITCHER_FEATURES = ["k_pct", "bb_pct", "hr_pct", "babip", "start_share"]
 FEATURES = {"batter": BATTER_FEATURES, "pitcher": PITCHER_FEATURES}
 GROUPS = ("batter", "pitcher")
 CLUSTER_VERSION = "clusters-2026"
+GMM_COVARIANCES = ("tied", "diag", "full")   # 소속 확률 GMM 후보 (일치도 동률이면 이 순서)
+AGREEMENT_FLOOR = 0.80                      # GMM 최고 일치도가 이보다 낮으면 kmeans_softmax로 대체
 EXAMPLE_SEASON = 2025                       # 유형 예시 선수를 고르는 시즌 (없으면 그 유형의 최근 시즌)
 
 CLUSTERS_PKL = Path("models/clusters.pkl")
@@ -143,9 +153,11 @@ def _relabel_order(group: str, centers_z: np.ndarray, feats: list[str]) -> np.nd
 
 
 @_single_thread
-def fit_group(df: pd.DataFrame, group: str, *, fit_seasons=FIT_SEASONS, k: int | None = None) -> dict:
+def fit_group(df: pd.DataFrame, group: str, *, fit_seasons=FIT_SEASONS, k: int | None = None,
+              agreement_floor: float = AGREEMENT_FLOOR) -> dict:
     """한 그룹(타자 또는 투수)의 군집 번들을 만든다. 맞춤에는 fit_seasons 자격 행만 쓴다.
-    k를 주면 그 K로, 안 주면 K_RANGE에서 score(= 실루엣 + 유지율)가 가장 큰 K (동률이면 작은 K)."""
+    k를 주면 그 K로, 안 주면 K_RANGE에서 score(= 실루엣 + 유지율)가 가장 큰 K (동률이면 작은 K).
+    소속 확률은 GMM 후보 중 일치도 최고(agreement_floor 이상일 때) 또는 kmeans_softmax (모듈 설명 참조)."""
     feats = FEATURES[group]
     fit_seasons = [int(s) for s in fit_seasons]
     q = qualify(df, group)
@@ -174,27 +186,62 @@ def fit_group(df: pd.DataFrame, group: str, *, fit_seasons=FIT_SEASONS, k: int |
     km.cluster_centers_ = km.cluster_centers_[order].copy()
     km.labels_ = new_id[km.labels_].astype(km.labels_.dtype)
 
-    gmm = GaussianMixture(n_components=k, covariance_type="full", means_init=km.cluster_centers_,
-                          random_state=SEED).fit(Z)
+    # 소속 확률 방식 고르기: GMM 후보별 맞춤 행 일치도(최댓값 성분 == K-means 라벨)
+    candidates, best = {}, None
+    for cov in GMM_COVARIANCES:
+        g = GaussianMixture(n_components=k, covariance_type=cov, means_init=km.cluster_centers_,
+                            random_state=SEED).fit(Z)
+        agr = float(np.mean(g.predict_proba(Z).argmax(axis=1) == km.labels_))
+        candidates[cov] = agr
+        if best is None or agr > best[1]:                 # 동률이면 먼저 나온 후보 유지
+            best = (cov, agr, g)
+    # 군집 내 평균 제곱거리 (kmeans_softmax의 s²): 각 맞춤 행에서 자기 중심까지 제곱거리의 평균
+    s2 = float(np.mean(((Z - km.cluster_centers_[km.labels_]) ** 2).sum(axis=1)))
+    if best[1] >= agreement_floor:
+        method, gmm = f"gmm_{best[0]}", best[2]
+        agreement = best[1]
+    else:
+        method, gmm = "kmeans_softmax", None
+        agreement = float(np.mean(_softmax_membership(Z, km.cluster_centers_, s2).argmax(axis=1) == km.labels_))
     pca = PCA(n_components=2, random_state=SEED, svd_solver="full").fit(Z)
     index = pd.RangeIndex(k, name="type")
     return {
         "group": group, "features": list(feats), "fit_seasons": fit_seasons, "k": int(k), "k_table": k_table,
         "scaler": scaler, "kmeans": km, "gmm": gmm, "pca": pca, "version": CLUSTER_VERSION, "n_fit": len(fit),
+        "membership_method": method, "gmm_agreement": agreement, "gmm_candidates": candidates, "softmax_s2": s2,
         "centers": pd.DataFrame(scaler.inverse_transform(km.cluster_centers_), columns=feats, index=index),
         "centers_z": pd.DataFrame(km.cluster_centers_, columns=feats, index=index),
     }
 
 
+def _sq_dist(Z: np.ndarray, centers: np.ndarray) -> np.ndarray:
+    """행 x 중심 제곱 유클리드 거리 (차이를 직접 제곱해 더한다)."""
+    return ((Z[:, None, :] - centers[None, :, :]) ** 2).sum(axis=2)
+
+
+def _softmax_membership(Z: np.ndarray, centers: np.ndarray, s2: float) -> np.ndarray:
+    """membership_t ∝ exp(-d_t² / (2·s²)). 가장 큰 지수를 빼고 계산해 넘침(underflow)을 막는다."""
+    logits = -_sq_dist(Z, centers) / (2.0 * s2)
+    w = np.exp(logits - logits.max(axis=1, keepdims=True))
+    return w / w.sum(axis=1, keepdims=True)
+
+
 @_single_thread
 def assign(bundle: dict, df_rates: pd.DataFrame) -> pd.DataFrame:
-    """자격 행 전부에 유형(type: K-means), 소속 확률(membership: GMM 사후 확률 리스트), prob(= membership[type]),
-    2D 좌표(x, y: PCA)를 붙인다. 맞춤 시즌 밖(2026) 행도 같은 표준화·모델로 배정한다."""
+    """자격 행 전부에 유형(type: K-means 가장 가까운 중심), 소속 확률(membership: 선택된 방식의 확률 리스트),
+    prob(= membership[type]), 2D 좌표(x, y: PCA)를 붙인다. 맞춤 시즌 밖(2026) 행도 같은 표준화·모델로 배정한다.
+    kmeans_softmax일 때 유형은 소속 확률과 같은 거리 계산의 argmin으로 정한다 — K-means predict와 같은 규칙이지만
+    거리 계산식이 달라 거의 같은 거리(부동소수 동률)에서 갈릴 수 있으므로, 최댓값 성분 == 유형을 항상 지키기 위해서다."""
     feats = bundle["features"]
     out = qualify(df_rates, bundle["group"])
     Z = bundle["scaler"].transform(out[feats])
-    types = bundle["kmeans"].predict(Z).astype(int)
-    mem = bundle["gmm"].predict_proba(Z)
+    centers = bundle["kmeans"].cluster_centers_
+    if bundle.get("membership_method", "gmm_full") == "kmeans_softmax":
+        mem = _softmax_membership(Z, centers, bundle["softmax_s2"])
+        types = mem.argmax(axis=1).astype(int)
+    else:
+        types = bundle["kmeans"].predict(Z).astype(int)
+        mem = bundle["gmm"].predict_proba(Z)
     xy = bundle["pca"].transform(Z)
     out["type"] = types
     out["membership"] = [row.tolist() for row in mem]
@@ -204,7 +251,7 @@ def assign(bundle: dict, df_rates: pd.DataFrame) -> pd.DataFrame:
 
 
 def gmm_agreement(assigned: pd.DataFrame) -> float:
-    """GMM 최대 확률 성분이 K-means 유형과 같은 행의 비율."""
+    """소속 확률 최댓값 성분이 유형과 같은 행의 비율 (배정된 행 기준)."""
     mem = np.array(assigned["membership"].tolist())
     return float(np.mean(mem.argmax(axis=1) == assigned["type"].to_numpy()))
 
@@ -270,7 +317,8 @@ def _num(v, nd: int = 4):
 
 def quality(bundles: dict, assigned: dict, names_cfg: dict) -> dict:
     """model_report.json의 cluster_quality 값. bundles·assigned는 {group: 번들 / assign 결과}.
-    유지율·GMM 일치도는 배정된 전체 행(2026 포함) 기준이고, k_table의 유지율은 맞춤 시즌 행 기준이다.
+    유지율·일치도(gmm_agreement)는 배정된 전체 행(2026 포함) 기준이고, k_table의 유지율과
+    gmm_agreement_fit·gmm_candidates(방식 선택에 쓴 값)는 맞춤 시즌 행 기준이다.
     유형의 n은 배정된 전체 행 수, n_fit은 그중 맞춤 시즌 행 수. examples는 한글 이름(name_ko 열이 있으면) 3명."""
     first = bundles[GROUPS[0]]
     out = {"version": first.get("version", CLUSTER_VERSION), "fit_seasons": list(first["fit_seasons"])}
@@ -291,7 +339,9 @@ def quality(bundles: dict, assigned: dict, names_cfg: dict) -> dict:
             "k": b["k"], "k_table": [{"k": r["k"], "silhouette": _num(r["silhouette"]),
                                       "retention": _num(r["retention"]), "score": _num(r["score"])}
                                      for r in b["k_table"]],
-            "n_fit": int(in_fit.sum()), "n_all": len(a), "gmm_agreement": _num(gmm_agreement(a)),
+            "n_fit": int(in_fit.sum()), "n_all": len(a), "membership_method": b["membership_method"],
+            "gmm_agreement": _num(gmm_agreement(a)), "gmm_agreement_fit": _num(b["gmm_agreement"]),
+            "gmm_candidates": {c: _num(v) for c, v in b["gmm_candidates"].items()},
             "retention": _num(retention(a)), "types": types,
         }
     return out
@@ -342,7 +392,10 @@ def profile_table(obj: dict) -> str:
         feats = b["features"]
         in_fit = a["season"].isin(b["fit_seasons"])
         lines += [f"## {g} (K={b['k']}, n_fit={int(in_fit.sum())}, n_all={len(a)}, "
-                  f"gmm_agreement={gmm_agreement(a):.3f}, retention_all={retention(a):.3f})", "",
+                  f"retention_all={retention(a):.3f})", "",
+                  f"membership: {b['membership_method']} — agreement fit={b['gmm_agreement']:.3f}, "
+                  f"all={gmm_agreement(a):.3f}; candidates "
+                  + ", ".join(f"{c}={v:.3f}" for c, v in b["gmm_candidates"].items()), "",
                   "| k | silhouette | retention | score |", "|---|---|---|---|"]
         lines += [f"| {r['k']} | {r['silhouette']:.4f} | {r['retention']:.4f} | {r['score']:.4f} |"
                   for r in b["k_table"]]

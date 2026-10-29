@@ -111,7 +111,8 @@ def test_qualify_thresholds(synthetic, synthetic_pit):
 def test_fit_is_deterministic(synthetic):
     a, b = fit_group(synthetic, "batter"), fit_group(synthetic, "batter")
     assert a["k"] == b["k"] and (a["kmeans"].cluster_centers_ == b["kmeans"].cluster_centers_).all()
-    assert (a["gmm"].means_ == b["gmm"].means_).all() and (a["pca"].components_ == b["pca"].components_).all()
+    assert a["membership_method"] == b["membership_method"] and a["gmm_candidates"] == b["gmm_candidates"]
+    assert (a["pca"].components_ == b["pca"].components_).all()
     assert assign(a, synthetic).equals(assign(b, synthetic))
 
 
@@ -149,7 +150,35 @@ def test_assign_columns_and_gmm(synthetic):
     m = np.array(a.membership.tolist())
     assert m.shape == (len(a), b["k"]) and np.allclose(m.sum(axis=1), 1)
     assert np.allclose(a.prob, m[np.arange(len(a)), a.type])
-    assert gmm_agreement(a) > 0.95 and retention(a) > 0.9             # 원형이 뚜렷하면 GMM·K-means가 일치
+    assert retention(a) > 0.9
+
+
+def test_membership_method_agrees_with_type(synthetic, synthetic_pit):
+    for df, group in ((synthetic, "batter"), (synthetic_pit, "pitcher")):
+        b = fit_group(df, group)
+        assert set(b["gmm_candidates"]) == set(cluster.GMM_COVARIANCES)
+        assert b["gmm_agreement"] >= cluster.AGREEMENT_FLOOR
+        if b["membership_method"] == "kmeans_softmax":
+            assert b["gmm"] is None
+        else:                                                         # 선택된 GMM = 후보 중 일치도 최고
+            assert b["membership_method"] == "gmm_" + b["gmm"].covariance_type
+            assert b["gmm_agreement"] == max(b["gmm_candidates"].values())
+        assert gmm_agreement(assign(b, df)) >= cluster.AGREEMENT_FLOOR
+
+
+def test_softmax_fallback_argmax_is_type(synthetic):
+    b = fit_group(synthetic, "batter", agreement_floor=1.01)          # 어떤 GMM도 넘을 수 없는 기준 -> 대체
+    assert b["membership_method"] == "kmeans_softmax" and b["gmm"] is None and b["gmm_agreement"] == 1.0
+    a = assign(b, synthetic)
+    m = np.array(a.membership.tolist())
+    assert (m.argmax(axis=1) == a.type.to_numpy()).all() and gmm_agreement(a) == 1.0
+    assert np.allclose(m.sum(axis=1), 1) and np.allclose(a.prob, m[np.arange(len(a)), a.type])
+    Z = b["scaler"].transform(a[b["features"]])
+    assert (a.type.to_numpy() == b["kmeans"].predict(Z)).all()        # 유형 = K-means 가장 가까운 중심
+    d2 = ((Z[:, None, :] - b["kmeans"].cluster_centers_[None]) ** 2).sum(axis=2)
+    w = np.exp(-d2 / (2 * b["softmax_s2"]))
+    assert np.allclose(m, w / w.sum(axis=1, keepdims=True))           # membership ∝ exp(-d²/(2s²))
+    assert assign(b, synthetic).equals(a)
 
 
 def test_similar_excludes_same_player(synthetic):
@@ -180,6 +209,7 @@ def test_types_map_and_quality_shape(obj):
     assert q["version"] == cluster.CLUSTER_VERSION and q["fit_seasons"] == cluster.FIT_SEASONS
     bq = q["batter"]
     assert bq["k"] == 4 and bq["n_fit"] < bq["n_all"] and len(bq["types"]) == 4
+    assert bq["membership_method"] == obj["batter"]["bundle"]["membership_method"] and bq["gmm_agreement"] >= 0.8
     t0 = bq["types"][0]
     assert t0["id"] == 0 and t0["name"] == "유형 0" and set(t0["center"]) == set(cluster.BATTER_FEATURES)
     assert len(t0["examples"]) == 3 and sum(t["n"] for t in bq["types"]) == bq["n_all"]
