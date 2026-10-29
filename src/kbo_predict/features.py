@@ -152,7 +152,10 @@ class LeagueState:
     def start_season(self, season: int) -> None:
         """현재 시즌 누적을 '직전 시즌'으로 넘기고 현재 시즌을 비운다.
         팀은 최종 승률만, 투수는 시즌 합계를 넘긴다 (두 시즌 전 기록은 버린다).
-        투수의 최근 3선발 실점은 시즌을 넘어 그대로 이어진다."""
+        투수의 최근 3선발 실점은 시즌을 넘어 그대로 이어진다.
+        같은 시즌으로 두 번 불러도 아무 일 없다 (직전 시즌 기록이 지워지지 않게)."""
+        if season == self.season:
+            return
         self.season = season
         old = self._t
         self._t = defaultdict(_new_team)
@@ -213,12 +216,12 @@ class LeagueState:
         t = self._t.get(code) or _new_team()
         day = _date.fromisoformat(on)
         rf, ra = t["runs_for"], t["runs_against"]
-        win_pct = _pct(t["wins"], t["losses"])
         last = t["last_game_date"]
+        # 분모가 0인 값(아직 경기 없음 등)은 전부 None → game_features에서 NaN
         return {
-            "win_pct": 0.5 if win_pct is None else win_pct,
-            "last10": sum(t["results"]) / len(t["results"]) if t["results"] else 0.5,
-            "run_diff": (rf - ra) / t["games"] if t["games"] else 0.0,
+            "win_pct": _pct(t["wins"], t["losses"]),
+            "last10": _ratio(sum(t["results"]), len(t["results"])),
+            "run_diff": _ratio(rf - ra, t["games"]),
             "pyth": _ratio(rf**PYTH_EXP, rf**PYTH_EXP + ra**PYTH_EXP),
             "games": t["games"],
             **_batting_rates(t["bat"]),
@@ -275,9 +278,9 @@ def game_features(game: dict, state: LeagueState, starters: dict | None = None) 
     home, away, on = game["home_code"], game["away_code"], game["date"]
     h, a = state.team_line(home, on), state.team_line(away, on)
     f = {
-        "win_pct_diff": h["win_pct"] - a["win_pct"],
-        "last10_diff": h["last10"] - a["last10"],
-        "run_diff_diff": h["run_diff"] - a["run_diff"],
+        "win_pct_diff": _diff(h["win_pct"], a["win_pct"]),
+        "last10_diff": _diff(h["last10"], a["last10"]),
+        "run_diff_diff": _diff(h["run_diff"], a["run_diff"]),
         "pyth_diff": _diff(h["pyth"], a["pyth"]),
         "prev_season_diff": _diff(h["prev_win_pct"], a["prev_win_pct"]),
     }

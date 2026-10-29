@@ -90,7 +90,7 @@ def test_feature_names_are_26_and_labelled():
 
 def test_state_defaults_when_empty():
     line = LeagueState().team_line("LG", "2026-04-01")
-    assert line["win_pct"] == 0.5 and line["last10"] == 0.5 and line["run_diff"] == 0.0 and line["games"] == 0
+    assert line["win_pct"] is None and line["last10"] is None and line["run_diff"] is None and line["games"] == 0
     assert line["obp"] is None and line["pyth"] is None and line["rest_days"] is None and line["prev_win_pct"] is None
     assert line["home_pct"] is None and line["away_pct"] is None and line["bullpen3"] == 0
 
@@ -113,14 +113,15 @@ def test_canceled_and_scheduled_not_counted():
     s.update(mk("2026-08-16", 1, hs=None, as_=None, status="CANCELED"))
     s.update(mk("2026-08-17", 2, status="SCHEDULED"))
     line = s.team_line("LG", "2026-08-18")
-    assert line["win_pct"] == 0.5 and line["games"] == 0 and line["rest_days"] is None
+    assert line["win_pct"] is None and line["games"] == 0 and line["rest_days"] is None
 
 
 def test_draw_counts_runs_but_not_wins():
     s = LeagueState()
     s.update(mk("2026-08-16", 1, hs=3, as_=3))
     line = s.team_line("LG", "2026-08-17")
-    assert line["win_pct"] == 0.5 and line["last10"] == 0.5 and line["games"] == 1 and line["run_diff"] == 0.0
+    # 무승부만 있으면 승률·최근10 분모가 0 → None, 득실차는 경기 수가 분모라 0.0
+    assert line["win_pct"] is None and line["last10"] is None and line["games"] == 1 and line["run_diff"] == 0.0
     assert line["pyth"] == pytest.approx(0.5) and line["home_pct"] is None
     assert s.h2h_home_pct("LG", "HH") is None
 
@@ -281,10 +282,13 @@ def test_prev_season_via_start_season():
     s.update(mk("2015-04-03", 3, hs=1, as_=2), None)
     s.start_season(2016)
     lg = s.team_line("LG", "2016-04-01")
-    assert lg["prev_win_pct"] == pytest.approx(2 / 3) and lg["games"] == 0 and lg["win_pct"] == 0.5
+    assert lg["prev_win_pct"] == pytest.approx(2 / 3) and lg["games"] == 0 and lg["win_pct"] is None
     assert lg["rest_days"] is None and s.h2h_home_pct("LG", "HH") is None
     f = game_features(mk("2016-04-01", 10), s)
     assert f["prev_season_diff"] == pytest.approx(2 / 3 - 1 / 3) and f["season_progress"] == 0.0
+    assert all(math.isnan(f[n]) for n in ("win_pct_diff", "last10_diff", "run_diff_diff"))  # 당해 0경기 → NaN
+    s.start_season(2016)  # 같은 시즌으로 다시 불러도 아무 일 없음 (직전 시즌 기록 유지)
+    assert s.team_line("LG", "2016-04-01")["prev_win_pct"] == pytest.approx(2 / 3)
     f_new = game_features(mk("2016-04-01", 11, away="NC Dinos"), s)  # 직전 시즌 기록 없는 팀
     assert math.isnan(f_new["prev_season_diff"])
 
