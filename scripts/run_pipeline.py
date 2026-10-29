@@ -7,7 +7,7 @@ from pathlib import Path
 
 from kbo_predict import KST, raw_store, seasons
 from kbo_predict.cluster import load_bundle as load_clusters
-from kbo_predict.cluster import load_labels, types_map
+from kbo_predict.cluster import load_labels, require_names, types_map
 from kbo_predict.collect import collect_range, fetch_starters
 from kbo_predict.features import LeagueState, regular_finals
 from kbo_predict.predict import predict_game
@@ -46,12 +46,19 @@ CLUSTERS_PKL = Path("models/clusters.pkl")
 def starter_types(clusters_path: Path, season: int) -> dict[int, dict] | None:
     """투수 player_id -> {"id", "name"}: 직전 시즌(season-1) 투수 유형. latest.json 선발 블록의 type 칸에 쓴다.
     직전 시즌을 쓰는 이유: 시즌 중 유형은 표본이 작아 흔들리고, 상성 피처(features)도 직전 시즌 유형을 쓴다.
-    clusters.pkl이 없으면 None (유형 없이 예전처럼 돈다 — 선발 블록의 type은 모두 null)."""
+    clusters.pkl이 없으면 None (유형 없이 예전처럼 돈다 — 선발 블록의 type은 모두 null).
+    이름표(config/cluster_labels.yaml)가 없으면 FileNotFoundError, 유형 번호에 이름이 빠져 있으면 ValueError —
+    run()이 잡아서 status.json의 collect_errors에 경고로 남기고 유형 없이 계속한다."""
     clusters_path = Path(clusters_path)
     if not clusters_path.exists():
         return None
     obj = load_clusters(clusters_path)
-    names = load_labels()["pitcher"]
+    labels = load_labels()
+    pit = obj["pitcher"]
+    # 유형 수 k: 번들이 있으면 그 k, (테스트용 최소 묶음처럼) 없으면 배정된 유형 번호의 최댓값 + 1
+    k = pit["bundle"]["k"] if "bundle" in pit else int(pit["assigned"]["type"].max()) + 1
+    require_names(labels, "pitcher", k)
+    names = labels["pitcher"]
     return {pid: {"id": t["pitcher"], "name": names[t["pitcher"]]["name"]}
             for (s, pid), t in types_map(obj).items() if s == season - 1 and "pitcher" in t}
 
@@ -91,7 +98,12 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     # ③ 상태 누적 (직전 시즌 + target 이전 당해 정규시즌 FINAL — 학습 시 build_dataset과 동일)
     state = build_state(season, iso)
     starters = raw_store.load_starters(season)  # 저장된 예고 선발 (--no-fetch여도 이전에 받은 값을 쓴다)
-    sp_types = starter_types(clusters_path, season)  # 선발 유형 표시용 (예측 확률에는 쓰지 않는다)
+    try:  # 선발 유형 표시용 (예측 확률에는 쓰지 않는다) — 실패해도 예측·발행은 유형 없이 계속한다
+        sp_types = starter_types(clusters_path, season)
+    except Exception as e:  # 깨진 clusters.pkl, 이름표 없음·빠짐 등
+        sp_types = None
+        collect_errors.append(f"starter types unavailable ({clusters_path}): {e!r}")
+        print(f"[pipeline] starter types unavailable, continuing without them: {e!r}", file=sys.stderr)
 
     # ④ 예측 (취소 경기는 예측 없이 표시만)
     day = [g for g in games if g["date"] == iso]

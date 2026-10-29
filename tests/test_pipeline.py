@@ -371,8 +371,6 @@ def test_pipeline_runs_without_clusters_pkl(tmp_data_dir, bundle_path, fixture_h
 def test_pipeline_fills_starter_type_from_previous_season(tmp_data_dir, bundle_path, fixture_html, monkeypatch,
                                                           tmp_path):
     """clusters.pkl이 있으면 직전 시즌(2025) 투수 유형만 쓴다. 2026 유형·타자 유형은 무시. 확률은 그대로."""
-    from kbo_predict.cluster import load_labels
-
     _seed(fixture_html)
     monkeypatch.setattr(rp, "collect_range", _no_collect)
     run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)  # 예고 선발 저장
@@ -383,6 +381,26 @@ def test_pipeline_fills_starter_type_from_previous_season(tmp_data_dir, bundle_p
     ])
     run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False, clusters_path=pkl)
     g = next(g for g in _latest(tmp_data_dir)["games"] if g["game_id"] == 14050)
-    assert g["home"]["starter"]["type"] == {"id": 1, "name": load_labels()["pitcher"][1]["name"]}
+    assert g["home"]["starter"]["type"] == {"id": 1, "name": "스윙맨형"}      # config/cluster_labels.yaml 투수 1
     assert g["away"]["starter"]["type"] is None
     assert g["home_win_prob"] == base
+
+
+def test_pipeline_survives_corrupt_clusters_pkl(tmp_data_dir, bundle_path, fixture_html, monkeypatch, tmp_path,
+                                                capsys):
+    """clusters.pkl이 깨져 있어도 예측·발행은 유형 없이 계속하고, status.json collect_errors와 stderr에 경고를 남긴다."""
+    _seed(fixture_html)
+    monkeypatch.setattr(rp, "collect_range", _no_collect)
+    run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)  # 예고 선발 저장
+    base = next(g for g in _latest(tmp_data_dir)["games"] if g["game_id"] == 14050)["home_win_prob"]
+    bad = tmp_path / "clusters.pkl"
+    bad.write_bytes(b"not a pickle")
+    out = run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False,
+              clusters_path=bad)
+    assert out["games_today"] == 1
+    g = next(g for g in _latest(tmp_data_dir)["games"] if g["game_id"] == 14050)
+    assert g["home"]["starter"]["type"] is None and g["away"]["starter"]["type"] is None
+    assert g["home_win_prob"] == base
+    status = json.loads((tmp_data_dir / "public/status.json").read_text(encoding="utf-8"))
+    assert len(status["collect_errors"]) == 1 and status["collect_errors"][0].startswith("starter types unavailable")
+    assert "starter types unavailable" in capsys.readouterr().err
