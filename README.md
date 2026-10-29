@@ -294,7 +294,7 @@ python scripts/run_pipeline.py [--date YYYY-MM-DD] [--no-fetch]
 - 박스스코어의 2루타·3루타·도루·한글 이름은 로컬 HTML 캐시를 다시 파싱해 채웠습니다: `python -X utf8 scripts/reparse_boxscores.py --cache data/cache/html --seasons 2015-2026 [--dry-run] [--infer-aliases]` (요청 없음, 기존 칸 불변 검사). 일일 수집도 새 경기의 기록표를 같은 파서로 읽지만, 한글 이름 힌트와 별칭 없이 읽습니다.
 - `config/cluster_labels.yaml`(유형 이름)은 패키지 위치 기준으로 찾으므로 어느 폴더에서 실행해도 같은 이름이 나옵니다. 군집은 단일 스레드로 계산해 같은 기계에서는 비트 단위로 재현되지만, 다른 BLAS(예: Linux의 Actions)에서는 마지막 자리가 다를 수 있어 커밋된 `models/clusters.pkl`이 기준입니다.
 
-테스트는 `python -X utf8 -m pytest -q`입니다 (252개, 노트북 실행 포함 약 2분).
+테스트는 `python -X utf8 -m pytest -q`입니다 (261개, 노트북 실행 포함 약 2분).
 
 ## 데이터 출처
 
