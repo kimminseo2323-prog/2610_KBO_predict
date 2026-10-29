@@ -9,6 +9,7 @@ from .features import _num, regular_finals
 BATTING_SUM = ("ab", "r", "h", "hr", "rbi", "bb", "so", "hbp", "doubles", "triples", "sb")
 PITCHING_SUM = ("ip_outs", "np", "r", "er", "h", "hr", "so", "bb", "hbp")
 NAME_MIN_SHARE = 0.6
+NAME_RECENT_MIN_VOTES = 3                # 이 이상 표가 있는 가장 최근 시즌의 이름을 쓴다
 
 
 def _season_boxes(season: int):
@@ -84,16 +85,32 @@ def pitching_seasons(seasons: list[int]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=cols)
 
 
+def _majority(c: Counter) -> str | None:
+    """최빈 이름이 득표의 NAME_MIN_SHARE(60%) 이상이면 그 이름, 아니면 None. 동률은 가나다 순 첫 값."""
+    top = max(c.values())
+    if top / sum(c.values()) < NAME_MIN_SHARE:
+        return None
+    return min(n for n, v in c.items() if v == top)
+
+
 def korean_names(seasons: list[int]) -> dict[int, str]:
-    """모든 박스스코어의 names_ko 투표. 최빈 이름이 득표의 60% 이상이면 채택, 동률은 가나다 순 첫 값."""
-    votes: dict[int, Counter] = {}
+    """선수 player_id -> 한글 이름. 박스스코어의 names_ko를 시즌별로 투표한다.
+    규칙: 득표가 NAME_RECENT_MIN_VOTES(3) 이상인 시즌 중 가장 최근 시즌의 최빈 이름이 그 시즌 득표의 60% 이상이면 채택.
+        (개명한 선수 — 예: 한동민 -> 한유섬 — 는 옛 이름 표가 많이 쌓여 전체 합으로는 60%를 못 넘으므로
+        최근 시즌 이름을 쓴다.) 3표 이상인 시즌이 하나도 없으면 모든 시즌 표를 합쳐 같은 60% 규칙을 쓴다.
+    동률은 가나다 순 첫 값. 60%를 못 넘으면 이름 없음(그 선수는 목록에서 빠진다)."""
+    votes: dict[int, dict[int, Counter]] = {}
     for season in seasons:
         for box in raw_store.load_boxscores(season).values():
             for pid, name in (box.get("names_ko") or {}).items():
-                votes.setdefault(int(pid), Counter())[name] += 1
+                votes.setdefault(int(pid), {}).setdefault(season, Counter())[name] += 1
     out = {}
-    for pid, c in votes.items():
-        top = max(c.values())
-        if top / sum(c.values()) >= NAME_MIN_SHARE:
-            out[pid] = min(n for n, v in c.items() if v == top)
+    for pid, by_season in votes.items():
+        recent = [s for s, c in by_season.items() if sum(c.values()) >= NAME_RECENT_MIN_VOTES]
+        if recent:
+            name = _majority(by_season[max(recent)])
+        else:
+            name = _majority(sum(by_season.values(), Counter()))
+        if name is not None:
+            out[pid] = name
     return out

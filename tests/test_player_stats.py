@@ -64,7 +64,7 @@ def test_pitching_bf_and_starts(fake_raw):
     assert (row["bf"], row["starts"], row["games"]) == (row["ip_outs"] + row["h"] + row["bb"] + row["hbp"], 1, 2)
 
 
-def test_korean_names_majority(fake_raw):               # 1: 두 경기 모두 "김철수" -> 채택; 3: "박a"/"박b" 반반 -> 제외
+def test_korean_names_majority(fake_raw):               # 1: 두 경기 모두 "김철수" -> 채택; 3: "박a"/"박b" 반반 -> 제외 (2표뿐이라 전체 합 규칙)
     names = korean_names([S])
     assert names[1] == "김철수" and 3 not in names
 
@@ -107,3 +107,39 @@ def test_two_rows_in_one_game_count_one_game(monkeypatch):
 def test_korean_names_single_vote_accepted(monkeypatch):
     install(monkeypatch, [box(1, "2025-04-01", "LG", "HT", [brow(9)], [], [], [], {"9": "홍길동"})])
     assert korean_names([S]) == {9: "홍길동"}
+
+
+def _install_seasons(monkeypatch, names_by_season):
+    """names_by_season = {season: [names_ko 딕셔너리, ...]} -> 시즌마다 박스스코어 한 경기씩 (이름 투표만 본다)."""
+    data = {s: {i + 1: {"game_id": i + 1, "names_ko": n} for i, n in enumerate(lst)}
+            for s, lst in names_by_season.items()}
+    monkeypatch.setattr(raw_store, "load_boxscores", lambda season: data.get(season, {}))
+
+
+def test_korean_names_renamed_player_uses_latest_season(monkeypatch):
+    # 선수 452: 2019·2020에 옛 이름 5표씩(합계 10), 2021에 새 이름 4표 -> 전체 합으로는 새 이름 29%지만
+    # 3표 이상인 가장 최근 시즌(2021)의 다수 이름을 쓴다. 2022의 1표(옛 이름)는 3표 미만 시즌이라 보지 않는다.
+    _install_seasons(monkeypatch, {
+        2019: [{"452": "한동민"}] * 5, 2020: [{"452": "한동민"}] * 5,
+        2021: [{"452": "한유섬"}] * 4, 2022: [{"452": "한동민"}],
+    })
+    assert korean_names([2019, 2020, 2021, 2022]) == {452: "한유섬"}
+
+
+def test_korean_names_latest_season_split_is_none(monkeypatch):
+    # 가장 최근 3표 이상 시즌이 반반(2:2)이면 60% 미만 -> 이름 없음 (앞 시즌의 다수 이름으로 돌아가지 않는다)
+    _install_seasons(monkeypatch, {
+        2019: [{"5": "가"}] * 5,
+        2020: [{"5": "가"}, {"5": "가"}, {"5": "나"}, {"5": "나"}],
+    })
+    assert korean_names([2019, 2020]) == {}
+
+
+def test_korean_names_pools_when_no_season_has_three_votes(monkeypatch):
+    # 어느 시즌도 3표가 안 되면 모든 시즌을 합친다: "가" 3표 / "나" 1표 = 75% -> "가".
+    _install_seasons(monkeypatch, {
+        2019: [{"6": "가", "7": "다"}, {"6": "가", "7": "나"}], 2020: [{"6": "가"}, {"6": "나"}],
+    })
+    assert korean_names([2019, 2020]) == {6: "가"}
+    _install_seasons(monkeypatch, {2019: [{"7": "다"}, {"7": "나"}], 2020: [{"7": "나"}, {"7": "다"}]})
+    assert korean_names([2019, 2020]) == {}           # 2:2는 50% -> 제외
