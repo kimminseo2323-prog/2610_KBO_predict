@@ -217,3 +217,55 @@ def test_parse_starters_not_a_game_page_raises():
     week = '<html><head><meta property="og:url" content="http://mykbostats.com/schedule/week_of/2026-10-27"></head></html>'
     with pytest.raises(ValueError, match="not a game page"):
         parse_starters(week, game_id=14050)
+
+
+def test_parse_game_records_2015(fixture_html):
+    g = parse_game(fixture_html("mykbo_game_1189_final.html"))
+    bat = {r["player_id"]: r for s in ("away", "home") for r in g["batting"][s]}
+    assert (bat[293]["doubles"], bat[273]["doubles"], bat[825]["doubles"], bat[13]["doubles"]) == (1, 1, 1, 1)
+    assert bat[909]["triples"] == 1
+    assert sum(r["sb"] for r in bat.values()) == 0 and sum(r["doubles"] for r in bat.values()) == 4
+    assert all(r["triples"] == 0 for pid, r in bat.items() if pid != 909)
+    assert g["names_ko"]["293"] == "신종길" and g["names_ko"]["825"] == "필" and g["names_ko"]["909"] == "최용규"
+    assert g["names_ko"]["930"] == "정진호" and g["names_ko"]["30"] == "양의지"      # HR, GIDP 행에서
+    assert g["names_ko"]["288"] == "서재응" and g["names_ko"]["18"] == "니퍼트"      # HR을 맞은 투수
+    assert g["records_unmatched"] == []
+
+
+def test_parse_game_records_2026(fixture_html):
+    g = parse_game(fixture_html("mykbo_game_14048_final.html"))
+    bat = {r["player_id"]: r for s in ("away", "home") for r in g["batting"][s]}
+    assert bat[532]["doubles"] == 1 and bat[2281]["doubles"] == 1
+    assert bat[2281]["sb"] == 1 and bat[1879]["sb"] == 1 and sum(r["sb"] for r in bat.values()) == 2
+    assert g["names_ko"]["2949"] == "카스트로" and g["names_ko"]["3097"] == "페덱" and g["names_ko"]["1964"] == "박민"
+
+
+def _with_2b_row(fixture_html, en, title):
+    html = fixture_html("mykbo_game_1189_final.html")
+    i = html.index('title="2루타')
+    j = html.index("</tr>", i)
+    row = f'title="{title}">2B</td><td>{en}</td>'
+    return html[:i] + row + html[j:]
+
+
+def test_records_multi_inning_counts_two(fixture_html):
+    g = parse_game(_with_2b_row(fixture_html, "Shin Jong-gil (1st, 9th inning)", "2루타: 신종길2(1 9회)"))
+    bat = {r["player_id"]: r for s in ("away", "home") for r in g["batting"][s]}
+    assert bat[293]["doubles"] == 2 and g["names_ko"]["293"] == "신종길"
+
+
+def test_records_ambiguous_name_goes_to_unmatched(fixture_html):
+    html = _with_2b_row(fixture_html, "Kim (3rd inning)", "2루타: 김(3회)")
+    html = re.sub(r"(<a[^>]*href=\"/players/\d+[^>]*>)\s*(?:Kim Joo-chan|Kim Jae-ho)\s*(</a>)", r"\g<1>Kim\g<2>", html)
+    g = parse_game(html)
+    names = [r["name"] for s in ("away", "home") for r in g["batting"][s]]
+    assert names.count("Kim") == 2
+    assert g["records_unmatched"] == ["2B: Kim (3rd inning)"]
+
+
+def test_records_table_absent_gives_none(fixture_html):
+    html = fixture_html("mykbo_game_1189_final.html").replace('data-game-section="records"', 'data-game-section="x"')
+    g = parse_game(html)
+    assert all(r["doubles"] is None and r["triples"] is None and r["sb"] is None
+               for s in ("away", "home") for r in g["batting"][s])
+    assert g["names_ko"] == {} and g["records_unmatched"] == []

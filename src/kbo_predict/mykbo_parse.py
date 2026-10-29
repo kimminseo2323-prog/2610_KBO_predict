@@ -171,6 +171,82 @@ _BAT_COLS = [(h.lower(), h) for h in ("AB", "R", "H", "HR", "RBI", "BB", "SO", "
 _PIT_COLS = [("ip_outs", "IP")] + [(h.lower(), h) for h in ("NP", "R", "ER", "H", "HR", "SO", "BB")] + [("hbp", "HB")]
 
 
+_COUNT_LABELS = {"2B": "doubles", "3B": "triples", "SB": "sb"}
+_NAME_LABELS = {"HR", "E", "GIDP"}  # 세지는 않고 한글 이름에만 쓰는 행
+_KO_TOKEN = re.compile(r"(\S+?)(\d+)?\((.*?)\)")
+
+
+def _match_player(name: str, rows: list[dict]) -> int | None:
+    """기록표 이름 -> player_id. 이름이 같으면 그 선수, 아니면 성(마지막 단어)만 적힌 외국인 행과 맞춘다.
+    후보가 정확히 한 명일 때만 돌려주고, 없거나 여러 명이면 None."""
+    key = name.casefold()
+    last = key.split(" ")[-1] if key else ""
+    exact = {r["player_id"] for r in rows if r["name"].casefold() == key}
+    if len(exact) == 1:
+        return exact.pop()
+    if exact:
+        return None
+    surname = {r["player_id"] for r in rows if " " not in r["name"] and r["name"].casefold() == last}
+    return surname.pop() if len(surname) == 1 else None
+
+
+def _split_entries(text: str) -> list[str]:
+    """'A (1st inning), B (2nd inning)' -> ['A (1st inning)', 'B (2nd inning)']"""
+    parts = re.split(r"\),\s*", _norm(text))
+    return [p if p.endswith(")") else p + ")" for p in parts if p]
+
+
+def _records(soup, batting: dict, pitching: dict):
+    """기록표 -> (선수별 2루타/3루타/도루, 한글 이름, 못 붙인 항목). 기록표가 없으면 ({}, {}, [])와 None 구분을 위해 호출 쪽에서 판단."""
+    table = soup.find("table", attrs={"data-game-section": "records"})
+    stats: dict[int, dict[str, int]] = {}
+    names_ko: dict[str, str] = {}
+    unmatched: list[str] = []
+    if table is None:
+        return None, names_ko, unmatched
+    bat_rows = [r for s in ("away", "home") for r in batting[s]]
+    pit_rows = [r for s in ("away", "home") for r in pitching[s]]
+    for r in bat_rows:
+        stats[r["player_id"]] = {"doubles": 0, "triples": 0, "sb": 0}
+
+    def put_ko(pid, ko):
+        names_ko.setdefault(str(pid), ko)
+
+    for tr in table.find_all("tr"):
+        tds = tr.find_all("td")
+        if len(tds) < 2:
+            continue
+        label = _norm(tds[0].get_text())
+        if label not in _COUNT_LABELS and label not in _NAME_LABELS:
+            continue
+        entries = _split_entries(tds[1].get_text())
+        title = tds[0].get("title", "")
+        ko = [(re.sub(r"(?:\d+호)+$", "", m.group(1)), m.group(3))
+              for m in _KO_TOKEN.finditer(title.split(":", 1)[1])] if ":" in title else []
+        pair_ko = len(ko) == len(entries)
+        pool = bat_rows + pit_rows if label == "E" else bat_rows
+        for i, entry in enumerate(entries):
+            name = entry.split(" (", 1)[0].strip()
+            pid = _match_player(name, pool)
+            if pid is None:
+                unmatched.append(f"{label}: {entry}")
+                continue
+            if label in _COUNT_LABELS and pid in stats:
+                inner = entry.split(" (", 1)[1].rstrip(")") if " (" in entry else ""
+                stats[pid][_COUNT_LABELS[label]] += len([t for t in inner.split(",") if t.strip()])
+            if pair_ko:
+                put_ko(pid, ko[i][0])
+        if label == "HR":  # 홈런을 맞은 투수
+            en = [m.strip() for m in re.findall(r"\boff ([^,;)]+)", " ".join(entries))]
+            kp = [t for _, inner in ko for t in inner.split() if not t.endswith(("회", "점"))]
+            if en and len(en) == len(kp):
+                for n, k in zip(en, kp):
+                    pid = _match_player(n, pit_rows)
+                    if pid is not None:
+                        put_ko(pid, k)
+    return stats, names_ko, unmatched
+
+
 def parse_game(html: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     og_tag = soup.find("meta", property="og:url")
@@ -197,6 +273,13 @@ def parse_game(html: str) -> dict:
         elif "ERA" in heads:
             pitching[side] = _table_rows(table, _PIT_COLS, "pitching")
 
+    stats, names_ko, records_unmatched = _records(soup, batting, pitching)
+    for side in ("away", "home"):
+        for r in batting[side]:
+            st = stats[r["player_id"]] if stats is not None else {}
+            for k in ("doubles", "triples", "sb"):
+                r[k] = st.get(k)
+
     def side_info(name, code):
         return {"name": name, "code": code, "score": runs.get(name)}
 
@@ -210,6 +293,8 @@ def parse_game(html: str) -> dict:
         "batting": batting,
         "pitching": pitching,
         "linescore": linescore,
+        "names_ko": names_ko,
+        "records_unmatched": records_unmatched,
     }
 
 
