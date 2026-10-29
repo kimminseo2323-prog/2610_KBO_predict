@@ -1,6 +1,6 @@
 {
-  "commit_sha": "5de4b575a84fe0280243a2db16f34dd030030b25",
-  "generated_at": "2026-10-29T18:51:35+09:00",
+  "commit_sha": "19828b934759bbb2bf3cf624e8546adc1c4db07c",
+  "generated_at": "2026-10-29T20:01:00+09:00",
   "models": {
     "clusters": {
       "fit_seasons": [
@@ -17,7 +17,7 @@
         2025
       ],
       "path": "models/clusters.pkl",
-      "sha256": "35cb3b6f631a5aefa3190ba3188852f69c7281eecd9b43a8b838e021078dbf55",
+      "sha256": "7d78bf0333db225b000d99a2f2cf86c2c705b2af06baad7e8ebd9aaf1e26c53f",
       "types_sha256": "d44f1f371f312ded8f360a232df8cd1965ae1c4f02789a7471d9df7620860531",
       "version": "clusters-2026"
     },
@@ -31,7 +31,7 @@
       "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
       "matchup_sha256": "c13c19b8bb2e965a8752a5946c8bf34088f0bbdfd8eebd536926263621aaeeb6",
       "path": "models/report-2026.pkl",
-      "sha256": "eeb8426f3007a3fcca1493742dfb3f81c4505d421590ff81dc83509afb3f0c4b",
+      "sha256": "19c07570a738d274b2189b53dab7e4dbf744c53765023e13f1c7c1af203cfada",
       "version": "report-2026"
     }
   }
