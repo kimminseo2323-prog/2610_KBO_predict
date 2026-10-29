@@ -160,12 +160,12 @@ def test_build_state_matches_training_features(tmp_data_dir, fixture_html):
 
 def test_build_state_uses_shared_regular_finals(tmp_data_dir, fixture_html, monkeypatch):
     """build_state는 features.regular_finals(학습과 같은 필터)를 쓰고, upto 컷만 따로 적용한다."""
-    from kbo_predict import features
+    from kbo_predict import features, rewind
 
     _seed_two_seasons(fixture_html)
     calls = []
     real = features.regular_finals
-    monkeypatch.setattr(rp, "regular_finals", lambda games, season: calls.append(season) or real(games, season))
+    monkeypatch.setattr(rewind, "regular_finals", lambda games, season: calls.append(season) or real(games, season))
     st = build_state(2026, "2026-10-29")
     assert calls == [2025, 2026]
     assert st.team_line("HT", "2026-10-29")["games"] == 2

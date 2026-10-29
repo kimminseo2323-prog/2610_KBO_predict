@@ -9,35 +9,15 @@ from kbo_predict import KST, raw_store, seasons
 from kbo_predict.cluster import load_bundle as load_clusters
 from kbo_predict.cluster import load_labels, require_names, types_map
 from kbo_predict.collect import collect_range, fetch_starters
-from kbo_predict.features import LeagueState, regular_finals
 from kbo_predict.predict import predict_game
 from kbo_predict.publish import settle_history, upsert_history, write_latest, write_status
+from kbo_predict.rewind import state_before
 from kbo_predict.train_win import load_bundle
 
 
-def _regular_finals(games: list[dict], season: int, before: str | None = None) -> list[dict]:
-    """상태에 넣을 경기: features.regular_finals(학습과 같은 필터·순서 — 정규시즌 FINAL, (date, game_id) 순)에
-    before 컷만 더한다. before가 있으면 그 날짜 전 경기만 (당일 경기 결과가 당일 예측에 새지 않게).
-    점수가 없거나 무승부인 경기는 LeagueState.update가 알아서 처리한다 (학습 때와 동일)."""
-    return [g for g in regular_finals(games, season) if before is None or g["date"] < before]
-
-
-def build_state(season: int, upto: str) -> LeagueState:
-    """upto('YYYY-MM-DD') 경기 직전 시점의 리그 상태.
-    직전 시즌 정규 FINAL 전체(박스스코어 포함) → start_season(season) → 당해 시즌 upto 전날까지의 정규 FINAL.
-    학습(features.build_dataset)이 시즌을 이어 붙이는 방식과 같다. 직전 시즌 데이터가 없으면(2015 등) 건너뛴다."""
-    state = LeagueState()
-    prev_games = raw_store.load_games(season - 1)
-    if prev_games:
-        state.start_season(season - 1)
-        prev_boxes = raw_store.load_boxscores(season - 1)
-        for g in _regular_finals(prev_games, season - 1):
-            state.update(g, prev_boxes.get(g["game_id"]))
-    state.start_season(season)
-    boxes = raw_store.load_boxscores(season)
-    for g in _regular_finals(raw_store.load_games(season), season, before=upto):
-        state.update(g, boxes.get(g["game_id"]))
-    return state
+# upto('YYYY-MM-DD') 경기 직전 시점의 리그 상태. 되감기(rewind)와 같은 함수를 쓰도록 kbo_predict.rewind로 옮겼다.
+# 이름(build_state)은 기존 테스트·노트북이 그대로 쓰도록 별칭으로 남긴다.
+build_state = state_before
 
 
 CLUSTERS_PKL = Path("models/clusters.pkl")
