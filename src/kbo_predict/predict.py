@@ -1,42 +1,78 @@
-"""경기 1건 추론. I/O 없음."""
+"""경기 1건 추론. I/O 없음.
+
+predict_game이 돌려주는 항목(latest.json의 games[] 한 칸):
+    game_id, date, time, stadium, round, status  경기 정보
+    home / away       {code, name, starter, win_pct_season, last10, run_diff}
+                      starter = {player_id, name, era, k9, bb9, ip, starts} (당해 시즌 기록) 또는 None(미발표)
+    home_win_prob     캘리브레이션까지 적용한 최종 P(홈 승)
+    factors           요인 상위 5개 [{name, contribution_pp}] — |pp| 큰 순서
+    starter_known     두 선발 모두 기록이 있어 선발 피처를 쓸 수 있었는가 (피처 starter_known과 같은 값)
+
+요인(pp) 계산: train_win.explain이 캘리브레이션 전 로짓을 '피처 26개 기여 + 기본값(bias)'으로 정확히 나눈다.
+로짓 1만큼의 변화는 최종 확률 p 근처에서 약 p(1−p)만큼의 확률 변화이므로 pp = 기여 × p(1−p) × 100 (퍼센트포인트).
+bias(평균적인 경기의 홈 어드밴티지)도 후보에 넣고 27개 중 |pp| 상위 5개를 고른다.
+"""
 from datetime import date as _date
 
 import pandas as pd
 
-from .features import FACTOR_LABELS, FEATURE_NAMES, LeagueState, game_features
+from .features import FACTOR_LABELS, LeagueState, game_features
 from .seasons import is_regular
 from .teams import TEAMS
+from .train_win import explain, predict_proba
+
+TOP_FACTORS = 5
 
 
-def _side(full_name: str, code: str, line: dict) -> dict:
+def _r(v, nd: int):
+    """반올림. 값이 없으면(None) None 그대로 — 개막일처럼 기록이 없는 팀도 죽지 않게 (R4)."""
+    return None if v is None else round(v, nd)
+
+
+def _starter(announced: dict | None, line: dict | None) -> dict | None:
+    """예고 선발 블록. 발표가 없으면 None, 발표됐지만 아직 기록이 없으면 통계 칸만 None."""
+    if not announced or announced.get("player_id") is None:
+        return None
+    season = (line or {}).get("season") or {}
     return {
-        "code": code,
-        "name": TEAMS[full_name]["ko"],
-        "starter": None,
-        "win_pct_season": round(line["win_pct"], 3),
-        "last10": round(line["last10"], 3),
-        "run_diff": round(line["run_diff"], 2),
+        "player_id": announced["player_id"],
+        "name": announced.get("name"),
+        "era": _r(season.get("era"), 2),
+        "k9": _r(season.get("k9"), 2),
+        "bb9": _r(season.get("bb9"), 2),
+        "ip": _r(season.get("ip"), 1),
+        "starts": season.get("starts"),
     }
 
 
-def predict_game(bundle: dict, game: dict, state: LeagueState) -> dict:
-    f = game_features(game, state)
-    scaler, model = bundle["scaler"], bundle["model"]
-    x = pd.DataFrame([[f[n] for n in FEATURE_NAMES]], columns=FEATURE_NAMES)
-    z = scaler.transform(x)[0]
-    p = float(model.predict_proba(scaler.transform(x))[0, 1])
+def _side(full_name: str, code: str, line: dict, starter: dict | None) -> dict:
+    return {
+        "code": code,
+        "name": TEAMS[full_name]["ko"],
+        "starter": starter,
+        "win_pct_season": _r(line["win_pct"], 3),
+        "last10": _r(line["last10"], 3),
+        "run_diff": _r(line["run_diff"], 2),
+    }
+
+
+def _factors(bundle: dict, X: pd.DataFrame, p: float) -> list[dict]:
+    """요인 27개(피처 26 + bias)를 pp로 바꿔 |pp| 상위 TOP_FACTORS개. 순서는 반올림 전 |pp| 기준 (동률은 피처 순서)."""
+    contrib, base = explain(bundle, X)
     slope = p * (1 - p) * 100
-    coef = model.coef_[0]
-    # 피처 차이가 0인 "동률 매치업"을 기준선으로 삼는다: z0 = scaler(0) 의 기여분은 절편(홈 어드밴티지)에 합친다.
-    # 이렇게 해야 두 팀이 같을 때 팀 요인이 0이 되고, 모든 요인의 합은 로짓 선형항과 일치한다.
-    z0 = scaler.transform(pd.DataFrame([[0.0] * len(FEATURE_NAMES)], columns=FEATURE_NAMES))[0]
-    factors = [
-        {"name": FACTOR_LABELS[n], "contribution_pp": round(float(c * (zi - z0i) * slope), 1) + 0.0}
-        for n, c, zi, z0i in zip(FEATURE_NAMES, coef, z, z0)
-    ]
-    home_adv = float(model.intercept_[0] + (coef * z0).sum())
-    factors.append({"name": FACTOR_LABELS["intercept"], "contribution_pp": round(home_adv * slope, 1) + 0.0})
-    factors.sort(key=lambda d: -abs(d["contribution_pp"]))
+    items = [(FACTOR_LABELS[n], float(c) * slope) for n, c in zip(bundle["features"], contrib[0])]
+    items.append((FACTOR_LABELS["bias"], float(base[0]) * slope))
+    items.sort(key=lambda kv: -abs(kv[1]))
+    # + 0.0: 반올림 결과가 -0.0이면 0.0으로 (JSON에 "-0.0"이 나오지 않게)
+    return [{"name": name, "contribution_pp": round(v, 1) + 0.0} for name, v in items[:TOP_FACTORS]]
+
+
+def predict_game(bundle: dict, game: dict, state: LeagueState, starters: dict | None = None) -> dict:
+    """경기 하나 예측. starters = 예고 선발 행(raw_store.load_starters의 값) 또는 None(미발표)."""
+    f = game_features(game, state, starters)
+    X = pd.DataFrame([{n: f[n] for n in bundle["features"]}])
+    p = float(predict_proba(bundle, X)[0])
+    announced = starters or {}
     season = int(game["season"])
     return {
         "game_id": game["game_id"],
@@ -45,8 +81,11 @@ def predict_game(bundle: dict, game: dict, state: LeagueState) -> dict:
         "stadium": game.get("stadium"),
         "round": "regular" if is_regular(season, _date.fromisoformat(game["date"]), game["game_id"]) else "postseason",
         "status": game["status"],
-        "home": _side(game["home"], game["home_code"], f["home_line"]),
-        "away": _side(game["away"], game["away_code"], f["away_line"]),
+        "home": _side(game["home"], game["home_code"], f["home_line"],
+                      _starter(announced.get("home"), f["home_starter"])),
+        "away": _side(game["away"], game["away_code"], f["away_line"],
+                      _starter(announced.get("away"), f["away_starter"])),
         "home_win_prob": round(p, 4),
-        "factors": factors,
+        "factors": _factors(bundle, X, p),
+        "starter_known": bool(f["starter_known"]),
     }

@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-10-29T00:03:46+09:00",
+  "generated_at": "2026-10-29T12:41:56+09:00",
   "date": "2026-10-29",
   "mode": "live",
-  "model_version": "v0.1",
-  "commit_sha": "2a3ca76e1595d155cd253fb66591e58a520f3d5a",
-  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40712074849",
+  "model_version": "v0.2",
+  "commit_sha": null,
+  "run_url": null,
   "games": [
     {
       "game_id": 14050,
@@ -16,7 +16,15 @@
       "home": {
         "code": "HT",
         "name": "KIA",
-        "starter": null,
+        "starter": {
+          "player_id": 2730,
+          "name": "Shirakawa Keisho",
+          "era": 4.75,
+          "k9": 7.45,
+          "bb9": 4.86,
+          "ip": 83.3,
+          "starts": 17
+        },
         "win_pct_season": 0.556,
         "last10": 0.7,
         "run_diff": 0.73
@@ -24,30 +32,43 @@
       "away": {
         "code": "SS",
         "name": "삼성",
-        "starter": null,
+        "starter": {
+          "player_id": 1096,
+          "name": "Choi Won-tae",
+          "era": 4.75,
+          "k9": 8.57,
+          "bb9": 3.24,
+          "ip": 125.0,
+          "starts": 24
+        },
         "win_pct_season": 0.589,
         "last10": 0.4,
         "run_diff": 0.96
       },
-      "home_win_prob": 0.5368,
+      "home_win_prob": 0.4463,
       "factors": [
         {
-          "name": "최근 10경기 흐름",
-          "contribution_pp": 2.8
+          "name": "선발 누적 이닝 차이",
+          "contribution_pp": -3.3
         },
         {
-          "name": "홈 어드밴티지",
-          "contribution_pp": 1.6
+          "name": "기본 홈 어드밴티지",
+          "contribution_pp": 2.7
         },
         {
-          "name": "팀 승률 차이",
-          "contribution_pp": -0.8
+          "name": "타선 삼진 비율 차이",
+          "contribution_pp": -1.8
         },
         {
-          "name": "경기당 득실차",
-          "contribution_pp": 0.1
+          "name": "선발 9이닝당 볼넷 차이",
+          "contribution_pp": -1.3
+        },
+        {
+          "name": "지난 시즌 승률 차이",
+          "contribution_pp": -1.2
         }
       ],
+      "starter_known": true,
       "status_note": null
     }
   ]

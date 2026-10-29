@@ -6,11 +6,38 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from kbo_predict import KST, raw_store, seasons
-from kbo_predict.collect import collect_range
+from kbo_predict.collect import collect_range, fetch_starters
 from kbo_predict.features import LeagueState
 from kbo_predict.predict import predict_game
 from kbo_predict.publish import settle_history, upsert_history, write_latest, write_status
 from kbo_predict.train_win import load_bundle
+
+
+def _regular_finals(games: list[dict], season: int, before: str | None = None) -> list[dict]:
+    """상태에 넣을 경기: 정규시즌 FINAL, (date, game_id) 순. before가 있으면 그 날짜 전 경기만.
+    features.build_training_frame과 같은 필터·순서 — 라이브 피처가 학습 피처와 같은 방식으로 만들어지게.
+    점수가 없거나 무승부인 경기는 LeagueState.update가 알아서 처리한다 (학습 때와 동일)."""
+    return [g for g in sorted(games, key=lambda g: (g["date"], g["game_id"]))
+            if g["status"] == "FINAL" and (before is None or g["date"] < before)
+            and seasons.is_regular(season, date.fromisoformat(g["date"]), g["game_id"])]
+
+
+def build_state(season: int, upto: str) -> LeagueState:
+    """upto('YYYY-MM-DD') 경기 직전 시점의 리그 상태.
+    직전 시즌 정규 FINAL 전체(박스스코어 포함) → start_season(season) → 당해 시즌 upto 전날까지의 정규 FINAL.
+    학습(features.build_dataset)이 시즌을 이어 붙이는 방식과 같다. 직전 시즌 데이터가 없으면(2015 등) 건너뛴다."""
+    state = LeagueState()
+    prev_games = raw_store.load_games(season - 1)
+    if prev_games:
+        state.start_season(season - 1)
+        prev_boxes = raw_store.load_boxscores(season - 1)
+        for g in _regular_finals(prev_games, season - 1):
+            state.update(g, prev_boxes.get(g["game_id"]))
+    state.start_season(season)
+    boxes = raw_store.load_boxscores(season)
+    for g in _regular_finals(raw_store.load_games(season), season, before=upto):
+        state.update(g, boxes.get(g["game_id"]))
+    return state
 
 
 def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bool = True) -> dict:
@@ -19,14 +46,18 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     iso = target.isoformat()
     pub = data_dir / "public"
 
-    # ① 수집
+    # ① 수집 (경기·박스스코어 → 오늘 예정 경기의 예고 선발)
     collect_errors: list[str] = []
     if fetch:
         try:
             out = collect_range(target - timedelta(days=7), target + timedelta(days=14))
-            collect_errors = [f"{e['path']}: {e['error']}" for e in out["errors"]]
+            collect_errors += [f"{e['path']}: {e['error']}" for e in out["errors"]]
+            today = [g for g in raw_store.load_games(season) if g["date"] == iso and g["status"] == "SCHEDULED"]
+            st = fetch_starters(today, fetched_at=meta["generated_at"])
+            raw_store.upsert_starters(season, list(st["starters"].values()))
+            collect_errors += [f"{e['path']}: {e['error']}" for e in st["errors"]]
         except Exception as e:  # 네트워크 오류뿐 아니라 파서/예기치 않은 예외도 status.json은 남긴다
-            collect_errors = [repr(e)]
+            collect_errors.append(repr(e))
             print(f"[pipeline] collect failed, continuing with existing data: {e!r}", file=sys.stderr)
             if not raw_store.load_games(season):
                 raise
@@ -40,12 +71,9 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     # ② 정산
     settled = settle_history(pub / "history.csv", games)
 
-    # ③ 상태 누적 (target 이전 정규시즌 FINAL 경기만 — 학습 시 build_training_frame과 동일)
-    state = LeagueState()
-    for g in sorted((g for g in games if g["status"] == "FINAL" and g["date"] < iso
-                     and seasons.is_regular(int(g["season"]), date.fromisoformat(g["date"]), g["game_id"])),
-                    key=lambda g: (g["date"], g["game_id"])):
-        state.update(g)
+    # ③ 상태 누적 (직전 시즌 + target 이전 당해 정규시즌 FINAL — 학습 시 build_dataset과 동일)
+    state = build_state(season, iso)
+    starters = raw_store.load_starters(season)  # 저장된 예고 선발 (--no-fetch여도 이전에 받은 값을 쓴다)
 
     # ④ 예측 (취소 경기는 예측 없이 표시만)
     day = [g for g in games if g["date"] == iso]
@@ -59,7 +87,7 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
                 "home": {"code": g["home_code"]}, "away": {"code": g["away_code"]},
             })
         else:
-            e = predict_game(bundle, g, state)
+            e = predict_game(bundle, g, state, starters.get(g["game_id"]))
             e["status_note"] = g.get("status_note")
             entries.append(e)
     preds = [e for e in entries if e["status"] != "CANCELED"]

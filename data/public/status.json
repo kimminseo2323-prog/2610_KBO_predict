@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-10-29T00:03:46+09:00",
-  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40712074849",
-  "commit_sha": "2a3ca76e1595d155cd253fb66591e58a520f3d5a",
+  "generated_at": "2026-10-29T12:41:56+09:00",
+  "run_url": null,
+  "commit_sha": null,
   "mode": "live",
   "next_game_date": "2026-10-30",
   "games_today": 1,
-  "model_version": "v0.1",
+  "model_version": "v0.2",
   "collect_errors": []
 }
