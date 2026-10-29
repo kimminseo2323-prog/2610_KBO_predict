@@ -33,6 +33,9 @@ CLI:
     python -m kbo_predict.cluster fit [--out models/clusters.pkl]
         -> models/clusters.pkl (build 결과 전체), data/processed/player_types.csv,
            models/manifest.json의 models.clusters 항목 갱신, 유형 프로파일 표를 표준 출력에 찍는다.
+    python -m kbo_predict.cluster publish [--clusters models/clusters.pkl] [--report models/report-2026.pkl]
+                                          [--features data/processed/features.parquet] [--out-dir data/public]
+        -> data/public/players.json, data/public/teams.json (사이트 데이터, site_data 모듈 참조)
 """
 import argparse
 import functools
@@ -74,6 +77,9 @@ CLUSTERS_PKL = Path("models/clusters.pkl")
 TYPES_CSV = Path("data/processed/player_types.csv")
 MANIFEST = Path("models/manifest.json")
 LABELS_YAML = Path("config/cluster_labels.yaml")
+REPORT_PKL = Path("models/report-2026.pkl")             # publish: teams.json의 model_expected를 내는 평가 모델
+FEATURES_PARQUET = Path("data/processed/features.parquet")
+PUBLIC_DIR = Path("data/public")
 
 __all__ = ["rates", "qualify", "fit_group", "assign", "similar_players", "retention", "gmm_agreement",
            "quality", "load_labels", "build", "build_from", "types_map", "save_bundle", "load_bundle"]
@@ -435,14 +441,48 @@ def profile_table(obj: dict) -> str:
 
 # ---------- CLI ----------
 
+def publish_site(clusters_path: Path, report_path: Path, features_path: Path, out_dir: Path,
+                 seasons=ALL_SEASONS) -> dict:
+    """사이트 데이터 players.json·teams.json을 out_dir에 쓴다 (site_data 참조). 두 payload를 돌려준다.
+    teams.json의 model_expected(2026)에 평가 모델(report_path)과 피처 parquet(features_path)을 쓴다."""
+    from . import site_data                      # site_data가 cluster를 import하므로 순환을 피해 여기서 읽는다
+    from .features import load_features
+    from .publish import _write_json
+
+    if not features_path.exists():
+        raise SystemExit(f"{features_path} not found — run "
+                         f"`python -m kbo_predict.features --out {features_path.as_posix()}` first")
+    obj, labels = load_bundle(clusters_path), load_labels()
+    meta = {"generated_at": datetime.now(KST).isoformat(timespec="seconds"), "commit_sha": _commit_sha()}
+    players = site_data.players_payload(obj, labels, meta)
+    teams = site_data.teams_payload(seasons, obj=obj, labels=labels, features_df=load_features(features_path),
+                                    report_bundle=load_bundle(report_path), meta=meta)
+    _write_json(out_dir / "players.json", players, indent=1, sort_keys=True)
+    _write_json(out_dir / "teams.json", teams, indent=1, sort_keys=True)
+    return {"players": players, "teams": teams}
+
+
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(description="선수 유형 군집: 2015~2025 맞춤, 2015~2026 배정")
-    ap.add_argument("command", choices=["fit"])
-    ap.add_argument("--out", default=str(CLUSTERS_PKL), help="군집 묶음 pkl 경로")
-    ap.add_argument("--types", default=str(TYPES_CSV), help="선수-시즌 유형 csv 경로")
-    ap.add_argument("--manifest", default=str(MANIFEST), help="models/manifest.json 경로")
+    ap = argparse.ArgumentParser(description="선수 유형 군집: fit = 2015~2025 맞춤·2015~2026 배정, "
+                                             "publish = 사이트 데이터 players.json·teams.json 발행")
+    ap.add_argument("command", choices=["fit", "publish"])
+    ap.add_argument("--out", default=str(CLUSTERS_PKL), help="fit: 군집 묶음 pkl 경로")
+    ap.add_argument("--types", default=str(TYPES_CSV), help="fit: 선수-시즌 유형 csv 경로")
+    ap.add_argument("--manifest", default=str(MANIFEST), help="fit: models/manifest.json 경로")
+    ap.add_argument("--clusters", default=str(CLUSTERS_PKL), help="publish: 군집 묶음 pkl 경로")
+    ap.add_argument("--report", default=str(REPORT_PKL), help="publish: 평가 모델 pkl (model_expected용)")
+    ap.add_argument("--features", default=str(FEATURES_PARQUET), help="publish: 피처 parquet (model_expected용)")
+    ap.add_argument("--out-dir", default=str(PUBLIC_DIR), help="publish: players.json·teams.json을 쓸 폴더")
     args = ap.parse_args(argv)
     t0 = time.time()
+    if args.command == "publish":
+        out = publish_site(Path(args.clusters), Path(args.report), Path(args.features), Path(args.out_dir))
+        n_teams = len(out["teams"]["teams"])
+        n_seasons = len({t["season"] for t in out["teams"]["teams"]})
+        print(f"players.json: {len(out['players']['players'])} player-seasons; "
+              f"teams.json: {n_teams} team-seasons over {n_seasons} seasons")
+        print(f"done in {time.time() - t0:.1f}s")
+        return
     obj = build(ALL_SEASONS)
     out, types_csv = Path(args.out), Path(args.types)
     save_bundle(obj, out)

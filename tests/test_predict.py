@@ -18,7 +18,7 @@ STARTERS = {"game_id": 14050, "date": "2026-10-29", "fetched_at": "2026-10-29T09
 ENTRY_KEYS = {"game_id", "date", "time", "stadium", "round", "status", "home", "away", "home_win_prob", "factors",
               "starter_known"}
 SIDE_KEYS = {"code", "name", "starter", "win_pct_season", "last10", "run_diff"}
-STARTER_KEYS = {"player_id", "name", "era", "k9", "bb9", "ip", "starts"}
+STARTER_KEYS = {"player_id", "name", "era", "k9", "bb9", "ip", "starts", "type"}
 
 
 def _game(fixture_html):
@@ -102,7 +102,7 @@ def test_announced_starter_without_record_has_none_stats(bundle, fixture_html):
     out = predict_game(bundle, _game(fixture_html), _played_state(), rookie)
     assert out["starter_known"] is False
     assert out["home"]["starter"] == {"player_id": 999999, "name": "Rookie", "era": None, "k9": None,
-                                      "bb9": None, "ip": None, "starts": None}
+                                      "bb9": None, "ip": None, "starts": None, "type": None}
 
 
 def test_empty_state_does_not_crash_and_emits_none(bundle, fixture_html):
@@ -185,3 +185,16 @@ def test_explain_identity_and_sign_consistency(bundle, fixture_html):
         for f in out["factors"]:
             if f["contribution_pp"] != 0:
                 assert np.sign(f["contribution_pp"]) == np.sign(pp[f["name"]])
+
+
+def test_predict_game_adds_starter_type(bundle, fixture_html):
+    """starter_types를 주면 선발 블록에 type {"id", "name"}, 없거나 그 투수가 없으면 None. 확률은 그대로."""
+    game, state = _game(fixture_html), _played_state()
+    types = {HOME_SP: {"id": 0, "name": "선발형"}}
+    with_t = predict_game(bundle, game, state, STARTERS, starter_types=types)
+    assert with_t["home"]["starter"]["type"] == {"id": 0, "name": "선발형"}
+    assert with_t["away"]["starter"]["type"] is None              # 유형표에 없는 투수
+    without = predict_game(bundle, game, state, STARTERS)
+    assert without["home"]["starter"]["type"] is None and without["away"]["starter"]["type"] is None
+    assert with_t["home_win_prob"] == without["home_win_prob"] and with_t["factors"] == without["factors"]
+    assert predict_game(bundle, game, state, None, starter_types=types)["home"]["starter"] is None  # 미발표는 그대로

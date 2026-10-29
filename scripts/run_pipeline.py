@@ -6,6 +6,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from kbo_predict import KST, raw_store, seasons
+from kbo_predict.cluster import load_bundle as load_clusters
+from kbo_predict.cluster import load_labels, types_map
 from kbo_predict.collect import collect_range, fetch_starters
 from kbo_predict.features import LeagueState, regular_finals
 from kbo_predict.predict import predict_game
@@ -38,7 +40,24 @@ def build_state(season: int, upto: str) -> LeagueState:
     return state
 
 
-def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bool = True) -> dict:
+CLUSTERS_PKL = Path("models/clusters.pkl")
+
+
+def starter_types(clusters_path: Path, season: int) -> dict[int, dict] | None:
+    """투수 player_id -> {"id", "name"}: 직전 시즌(season-1) 투수 유형. latest.json 선발 블록의 type 칸에 쓴다.
+    직전 시즌을 쓰는 이유: 시즌 중 유형은 표본이 작아 흔들리고, 상성 피처(features)도 직전 시즌 유형을 쓴다.
+    clusters.pkl이 없으면 None (유형 없이 예전처럼 돈다 — 선발 블록의 type은 모두 null)."""
+    clusters_path = Path(clusters_path)
+    if not clusters_path.exists():
+        return None
+    obj = load_clusters(clusters_path)
+    names = load_labels()["pitcher"]
+    return {pid: {"id": t["pitcher"], "name": names[t["pitcher"]]["name"]}
+            for (s, pid), t in types_map(obj).items() if s == season - 1 and "pitcher" in t}
+
+
+def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bool = True,
+        clusters_path: Path = CLUSTERS_PKL) -> dict:
     data_dir = Path(data_dir)
     season = target.year
     iso = target.isoformat()
@@ -72,6 +91,7 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     # ③ 상태 누적 (직전 시즌 + target 이전 당해 정규시즌 FINAL — 학습 시 build_dataset과 동일)
     state = build_state(season, iso)
     starters = raw_store.load_starters(season)  # 저장된 예고 선발 (--no-fetch여도 이전에 받은 값을 쓴다)
+    sp_types = starter_types(clusters_path, season)  # 선발 유형 표시용 (예측 확률에는 쓰지 않는다)
 
     # ④ 예측 (취소 경기는 예측 없이 표시만)
     day = [g for g in games if g["date"] == iso]
@@ -85,7 +105,7 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
                 "home": {"code": g["home_code"]}, "away": {"code": g["away_code"]},
             })
         else:
-            e = predict_game(bundle, g, state, starters.get(g["game_id"]))
+            e = predict_game(bundle, g, state, starters.get(g["game_id"]), starter_types=sp_types)
             e["status_note"] = g.get("status_note")
             entries.append(e)
     preds = [e for e in entries if e["status"] != "CANCELED"]

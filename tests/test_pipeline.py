@@ -37,6 +37,13 @@ def fake_fetch_starters(monkeypatch, fixture_html):
     return calls
 
 
+@pytest.fixture(autouse=True)
+def no_repo_clusters(tmp_path, monkeypatch):
+    """run의 clusters_path 기본값(models/clusters.pkl)은 작업 폴더 기준이다. 실제 저장소의 군집 파일에 따라
+    결과가 달라지지 않도록 빈 tmp 폴더로 옮긴다 (그 기본 경로에 파일이 없는 상태 = 군집 없이 도는 기존 동작)."""
+    monkeypatch.chdir(tmp_path)
+
+
 def _no_collect(*a, **k):
     return {"weeks": 1, "games": 0, "boxscores": 0, "errors": []}
 
@@ -179,7 +186,7 @@ def test_run_uses_previous_season_and_starter_stats(tmp_data_dir, bundle_path, f
     g = next(g for g in _latest(tmp_data_dir)["games"] if g["game_id"] == 14050)
     hs, as_ = g["home"]["starter"], g["away"]["starter"]
     assert hs == {"player_id": HOME_SP, "name": "Shirakawa Keisho", "era": 3.0, "k9": 9.0, "bb9": 3.0,
-                  "ip": 6.0, "starts": 1}
+                  "ip": 6.0, "starts": 1, "type": None}
     assert as_["player_id"] == AWAY_SP and as_["starts"] == 0 and as_["ip"] == 0.0 and as_["era"] is None
     assert g["starter_known"] is True  # 두 선발 모두 (직전 시즌 포함) 기록이 있음
     assert g["home"]["win_pct_season"] == 0.5 and g["round"] == "postseason"
@@ -333,3 +340,49 @@ def test_history_model_version_is_bundle_version(tmp_data_dir, bundle_path, fixt
     import pandas as pd
     hist = pd.read_csv(tmp_data_dir / "public/history.csv")
     assert hist.model_version.tolist() == ["v-test"]
+
+
+# ---------- 선발 유형 (clusters.pkl) ----------
+
+def _clusters_pkl(path, rows):
+    """types_map이 읽는 최소 군집 묶음: assigned에 (season, player_id, type)만. rows = [(group, season, pid, type)]."""
+    import pandas as pd
+
+    from kbo_predict.cluster import save_bundle
+
+    obj = {g: {"assigned": pd.DataFrame([r[1:] for r in rows if r[0] == g],
+                                        columns=["season", "player_id", "type"])}
+           for g in ("batter", "pitcher")}
+    save_bundle(obj, path)
+    return path
+
+
+def test_pipeline_runs_without_clusters_pkl(tmp_data_dir, bundle_path, fixture_html, monkeypatch):
+    """clusters.pkl이 없어도 기존과 같이 돌고, 선발 블록의 type 키는 null로 있다."""
+    _seed(fixture_html)
+    monkeypatch.setattr(rp, "collect_range", _no_collect)
+    out = run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True,
+              clusters_path=tmp_data_dir / "missing.pkl")
+    assert out["games_today"] == 1
+    g = next(g for g in _latest(tmp_data_dir)["games"] if g["game_id"] == 14050)
+    assert g["home"]["starter"]["type"] is None and g["away"]["starter"]["type"] is None
+
+
+def test_pipeline_fills_starter_type_from_previous_season(tmp_data_dir, bundle_path, fixture_html, monkeypatch,
+                                                          tmp_path):
+    """clusters.pkl이 있으면 직전 시즌(2025) 투수 유형만 쓴다. 2026 유형·타자 유형은 무시. 확률은 그대로."""
+    from kbo_predict.cluster import load_labels
+
+    _seed(fixture_html)
+    monkeypatch.setattr(rp, "collect_range", _no_collect)
+    run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)  # 예고 선발 저장
+    base = next(g for g in _latest(tmp_data_dir)["games"] if g["game_id"] == 14050)["home_win_prob"]
+    pkl = _clusters_pkl(tmp_path / "clusters.pkl", [
+        ("pitcher", 2025, HOME_SP, 1), ("pitcher", 2026, HOME_SP, 3),   # 2026 유형은 쓰지 않는다
+        ("batter", 2025, AWAY_SP, 2), ("pitcher", 2024, AWAY_SP, 0),    # 타자 유형·2년 전 유형도 아니다
+    ])
+    run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False, clusters_path=pkl)
+    g = next(g for g in _latest(tmp_data_dir)["games"] if g["game_id"] == 14050)
+    assert g["home"]["starter"]["type"] == {"id": 1, "name": load_labels()["pitcher"][1]["name"]}
+    assert g["away"]["starter"]["type"] is None
+    assert g["home_win_prob"] == base

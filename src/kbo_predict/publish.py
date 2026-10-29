@@ -10,10 +10,13 @@ HISTORY_COLUMNS = [
 ]
 
 
-def _write_json(path, obj) -> None:
+def _write_json(path, obj, *, indent: int = 2, sort_keys: bool = False) -> None:
+    """UTF-8 JSON(한글 그대로) + 끝 줄바꿈. 기본값(indent=2, 키 순서 유지)은 latest/status.json 형식 그대로.
+    사이트 데이터(players/teams.json)는 indent=1, sort_keys=True로 써서 크기를 줄이고 바이트를 결정적으로 만든다."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(obj, ensure_ascii=False, indent=indent, sort_keys=sort_keys) + "\n",
+                    encoding="utf-8")
 
 
 def write_latest(path, *, date: str, games: list[dict], meta: dict) -> None:

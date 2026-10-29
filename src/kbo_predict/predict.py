@@ -3,7 +3,8 @@
 predict_game이 돌려주는 항목(latest.json의 games[] 한 칸):
     game_id, date, time, stadium, round, status  경기 정보
     home / away       {code, name, starter, win_pct_season, last10, run_diff}
-                      starter = {player_id, name, era, k9, bb9, ip, starts} (당해 시즌 기록) 또는 None(미발표)
+                      starter = {player_id, name, era, k9, bb9, ip, starts, type} (당해 시즌 기록) 또는 None(미발표)
+                      type = {id, name} 직전 시즌 투수 유형 (clusters.pkl) 또는 None
     home_win_prob     캘리브레이션까지 적용한 최종 P(홈 승)
     factors           요인 상위 5개 [{name, contribution_pp}] — |pp| 큰 순서
     starter_known     두 선발 모두 기록이 있어 선발 피처를 쓸 수 있었는가 (피처 starter_known과 같은 값)
@@ -34,8 +35,9 @@ def _r(v, nd: int):
     return None if v is None else round(v, nd)
 
 
-def _starter(announced: dict | None, line: dict | None) -> dict | None:
-    """예고 선발 블록. 발표가 없으면 None, 발표됐지만 아직 기록이 없으면 통계 칸만 None."""
+def _starter(announced: dict | None, line: dict | None, starter_types: dict | None = None) -> dict | None:
+    """예고 선발 블록. 발표가 없으면 None, 발표됐지만 아직 기록이 없으면 통계 칸만 None.
+    type = starter_types[player_id] ({"id", "name"}: 직전 시즌 투수 유형) 또는 None(유형 없음). 키는 항상 있다."""
     if not announced or announced.get("player_id") is None:
         return None
     season = (line or {}).get("season") or {}
@@ -47,6 +49,7 @@ def _starter(announced: dict | None, line: dict | None) -> dict | None:
         "bb9": _r(season.get("bb9"), 2),
         "ip": _r(season.get("ip"), 1),
         "starts": season.get("starts"),
+        "type": (starter_types or {}).get(announced["player_id"]),
     }
 
 
@@ -79,8 +82,11 @@ def _factors(bundle: dict, X: pd.DataFrame, p: float) -> list[dict]:
     return [{"name": name, "contribution_pp": round(v, 1) + 0.0} for name, v in items[:TOP_FACTORS]]
 
 
-def predict_game(bundle: dict, game: dict, state: LeagueState, starters: dict | None = None) -> dict:
-    """경기 하나 예측. starters = 예고 선발 행(raw_store.load_starters의 값) 또는 None(미발표)."""
+def predict_game(bundle: dict, game: dict, state: LeagueState, starters: dict | None = None,
+                 starter_types: dict[int, dict] | None = None) -> dict:
+    """경기 하나 예측. starters = 예고 선발 행(raw_store.load_starters의 값) 또는 None(미발표).
+    starter_types = 투수 player_id -> {"id", "name"} (직전 시즌 유형, run_pipeline이 clusters.pkl에서 만든다).
+    없거나 그 투수가 없으면 선발 블록의 type은 None. 예측 확률·요인에는 영향이 없다 (표시용)."""
     f = game_features(game, state, starters)
     X = pd.DataFrame([{n: f[n] for n in bundle["features"]}])
     p = float(predict_proba(bundle, X)[0])
@@ -94,9 +100,9 @@ def predict_game(bundle: dict, game: dict, state: LeagueState, starters: dict | 
         "round": "regular" if is_regular(season, _date.fromisoformat(game["date"]), game["game_id"]) else "postseason",
         "status": game["status"],
         "home": _side(game["home"], game["home_code"], f["home_line"],
-                      _starter(announced.get("home"), f["home_starter"])),
+                      _starter(announced.get("home"), f["home_starter"], starter_types)),
         "away": _side(game["away"], game["away_code"], f["away_line"],
-                      _starter(announced.get("away"), f["away_starter"])),
+                      _starter(announced.get("away"), f["away_starter"], starter_types)),
         "home_win_prob": round(p, 4),
         "factors": _factors(bundle, X, p),
         "starter_known": bool(f["starter_known"]),
