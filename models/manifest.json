@@ -1,6 +1,6 @@
 {
-  "commit_sha": "60d867dcb328c7fdffebd8d5bf0d1ac71c489dcb",
-  "generated_at": "2026-10-29T20:38:20+09:00",
+  "commit_sha": "388d371c290ed08aab4139ecf678e61eb1f47189",
+  "generated_at": "2026-10-29T22:21:12+09:00",
   "models": {
     "clusters": {
       "fit_seasons": [
@@ -17,26 +17,58 @@
         2025
       ],
       "path": "models/clusters.pkl",
+      "seasons": [
+        2015,
+        2016,
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+        2025,
+        2026
+      ],
       "sha256": "7d78bf0333db225b000d99a2f2cf86c2c705b2af06baad7e8ebd9aaf1e26c53f",
       "types_sha256": "d44f1f371f312ded8f360a232df8cd1965ae1c4f02789a7471d9df7620860531",
       "version": "clusters-2026"
     },
     "live": {
+      "features_fingerprint": "752b43190545bbe609bab02591e42cd4752ea86b425e06f07169b7a84416bce1",
       "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
       "path": "models/win_model.pkl",
       "sha256": "48b18dbb31706193b0be87832f762f485883ebb4a7d82dd98a1e62ff205b2af5",
       "version": "v0.2"
     },
     "report": {
+      "features_fingerprint": "752b43190545bbe609bab02591e42cd4752ea86b425e06f07169b7a84416bce1",
       "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
+      "matchup_fingerprint": "3419c8c1d944f32b23a214b88d864c0782fd4bc25c031ec8e5b0c0581cd3475b",
       "matchup_sha256": "c13c19b8bb2e965a8752a5946c8bf34088f0bbdfd8eebd536926263621aaeeb6",
       "path": "models/report-2026.pkl",
-      "sha256": "19c07570a738d274b2189b53dab7e4dbf744c53765023e13f1c7c1af203cfada",
+      "sha256": "6a5e5b16f4af2180525f28c16f748ca28419ddef3dbd78718071fbc091bfd1b6",
       "version": "report-2026"
     },
     "team": {
+      "features_fingerprint": "752b43190545bbe609bab02591e42cd4752ea86b425e06f07169b7a84416bce1",
       "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
       "path": "models/team-2026.pkl",
+      "seasons": [
+        2015,
+        2016,
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+        2025,
+        2026
+      ],
       "sha256": "078668817b84ec40cb6f285298ca65f9cd7f57d8be10570e14f1d2e6159cd8a4",
       "version": "team-2026"
     }

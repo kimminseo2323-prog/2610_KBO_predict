@@ -373,7 +373,7 @@
     },
     "version": "clusters-2026"
   },
-  "commit_sha": "19828b934759bbb2bf3cf624e8546adc1c4db07c",
+  "commit_sha": "388d371c290ed08aab4139ecf678e61eb1f47189",
   "feature_importance": [
     {
       "importance": 0.10649089124682375,
@@ -506,8 +506,9 @@
       "name": "starter_last3_runs_diff"
     }
   ],
+  "features_fingerprint": "752b43190545bbe609bab02591e42cd4752ea86b425e06f07169b7a84416bce1",
   "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
-  "generated_at": "2026-10-29T20:01:00+09:00",
+  "generated_at": "2026-10-29T22:21:12+09:00",
   "matchup_feature_ablation": {
     "adopt": false,
     "cluster_version": "clusters-2026",
