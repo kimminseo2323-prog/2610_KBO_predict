@@ -3,6 +3,11 @@
     python -X utf8 scripts/check_parity.py            # 전체 (노트북 02~05 실행 포함)
     python -X utf8 scripts/check_parity.py --quick    # 노트북 생략 (ci.yml · weekly_retrain.yml)
 
+얼린 시즌: report-2026 · team-2026 · clusters-2026과 그 하류(players/teams.json · 되감기)는 2015~2026
+(kbo_predict.FROZEN_SEASONS)으로 얼려 둔 산출물이다. 그래서 (1)~(4)의 피처·상성 parquet와 군집은 정확히 그
+시즌만으로 다시 만든다 (features.build_dataset(FROZEN_SEASONS, ...)) — 2027 경기가 data/raw에 쌓여도 이 비교는 깨지지 않는다.
+라이브 모델(win_model.pkl)만 있는 시즌 전부로 만든 parquet를 쓰고, 예측 비교는 커밋된 라이브 번들의 seasons 행에서만 한다.
+
 판정 항목 (모두 같아야 exit 0, 하나라도 다르면 exit 1 + 다른 파일·키 목록):
     (1) 다시 만든 features.parquet · matchup.parquet · 선수 유형 CSV의 SHA256 vs models/manifest.json
         (report·team 항목의 features_sha256, report.matchup_sha256, clusters.types_sha256)
@@ -10,8 +15,9 @@
     (2) train_report 재계산 vs data/public/model_report.json (generated_at · commit_sha · run_url 제외),
         train_team 요약 vs model_report.json의 ablation.no_starter,
         다시 학습한 report-2026 · team-2026 번들의 예측(피처 parquet 전 행) vs 커밋된 pkl (atol 1e-9).
-        win_model.pkl(라이브)은 manifest의 live.features_sha256이 다시 만든 parquet와 같을 때만 같은 방법으로 비교한다
-        (시즌 중에는 매일 경기가 쌓여 라이브 모델이 더 옛 parquet로 학습돼 있는 것이 정상이라 그때는 건너뛴다).
+        win_model.pkl(라이브)은 manifest의 live.features_sha256이 다시 만든 전 시즌 parquet와 같을 때만 같은 방법으로
+        비교한다 — 비교 행 = 커밋된 라이브 번들의 seasons에 든 시즌의 행 (시즌 중에는 매일 경기가 쌓여 라이브 모델이
+        더 옛 parquet로 학습돼 있는 것이 정상이라 그때는 건너뛴다).
     (3) players.json · teams.json 재생성(cluster publish와 같은 함수) vs 커밋본 (generated_at · commit_sha 제외)
     (4) 되감기 샘플 날짜(--rewind-dates) 재생성 vs data/public/rewind/2026/{date}.json (generated_at · commit_sha 제외)
     (5) 노트북 02~05 실행 (오류 출력 0) — --quick이면 건너뛴다. 없는 노트북은 '없음'으로 적고 건너뛴다.
@@ -19,6 +25,10 @@
 입력 규칙: 군집이 들어가는 하류 산출물(상성 parquet · cluster_quality · players/teams.json · 되감기 선발 유형)은 커밋된
 models/clusters.pkl로 만든다 — 커밋된 pkl이 기준이고(다른 BLAS에서는 마지막 자리가 다를 수 있다), 군집을 다시 맞출 수
 있는지는 (1)이 따로 본다. 승패 모델이 들어가는 하류(teams.json의 model_expected · 되감기)는 (2)에서 다시 학습한 번들로 만든다.
+
+실행 순서: 군집 재맞춤(1)은 일부러 맨 마지막에 돈다. cluster._single_thread(threadpool_limits(1))가 끝난 뒤에도 MKL이
+1스레드로 남는 일이 있어(Windows MKL에서 확인), 그 뒤에 같은 프로세스에서 학습하면 로지스틱 회귀(lbfgs)의 마지막 자리가
+커밋본(기본 스레드 수로 학습)과 달라진다. 다른 기계·BLAS의 같은 차이는 보고서 실수 비교의 허용 오차(REPORT_REL_TOL)가 흡수한다.
 
 재생성 산출물은 --out(기본 artifacts/parity/, gitignore)에만 쓴다. 커밋된 파일은 읽기만 한다.
 (노트북 02는 스스로 data/processed/features.parquet를 쓴다 — gitignore 폴더이고, 노트북을 그대로 실행하는 것이 검사다.)
@@ -179,13 +189,14 @@ def _rel(path: Path) -> str:
 # ---------- 항목별 재생성 ----------
 
 def check_features(t: Table, out: Path, manifest: dict) -> dict:
-    """(1) features.parquet · matchup.parquet (커밋된 clusters.pkl의 유형으로 상성 열). 반환: 재생성 경로·해시."""
-    from kbo_predict import cluster, features, raw_store
+    """(1) 얼린 시즌(FROZEN_SEASONS)만의 features.parquet · matchup.parquet (커밋된 clusters.pkl의 유형으로 상성 열).
+    라이브 비교용으로 있는 시즌 전부의 parquet도 만든다 (얼린 시즌과 같으면 같은 파일). 반환: 재생성 경로·해시."""
+    from kbo_predict import FROZEN_SEASONS, cluster, features, raw_store
     from kbo_predict.train_win import _sha256
 
     obj = cluster.load_bundle(CLUSTERS_PKL)
     kb, kp = obj["batter"]["bundle"]["k"], obj["pitcher"]["bundle"]["k"]
-    df = features.build_dataset(raw_store.available_seasons(), types=cluster.types_map(obj), kb=kb, kp=kp)
+    df = features.build_dataset(list(FROZEN_SEASONS), types=cluster.types_map(obj), kb=kb, kp=kp)
     f_path, m_path = out / "features.parquet", out / "matchup.parquet"
     features.save_features(df[features.BASE_COLUMNS], f_path)  # features CLI와 같은 열·같은 저장 함수
     features.save_features(df[["game_id", *features.matchup_feature_names(kb, kp)]], m_path)
@@ -198,15 +209,22 @@ def check_features(t: Table, out: Path, manifest: dict) -> dict:
     want = models.get("report", {}).get("matchup_sha256")
     t.add("matchup.parquet (상성 비교 입력)", _short(want), _short(m_sha), want == m_sha,
           [f"models/manifest.json: models.report.matchup_sha256: {want} != {m_sha}"])
-    return {"features": f_path, "matchup": m_path, "features_sha256": f_sha}
+    live_path, live_sha = f_path, f_sha
+    available = raw_store.available_seasons()
+    if available != list(FROZEN_SEASONS):  # 2027 등 얼린 뒤의 시즌이 있다 → 라이브용 전 시즌 parquet를 따로
+        live_path = out / "features_all.parquet"
+        features.save_features(features.build_dataset(available)[features.BASE_COLUMNS], live_path)
+        live_sha = _sha256(live_path)
+    return {"features": f_path, "matchup": m_path, "features_sha256": f_sha,
+            "live_features": live_path, "live_sha256": live_sha}
 
 
 def check_clusters(t: Table, out: Path, manifest: dict) -> None:
     """(1) 군집을 다시 맞춰 유형 CSV 해시 vs manifest, 중심·라벨 vs 커밋된 clusters.pkl."""
-    from kbo_predict import cluster
+    from kbo_predict import FROZEN_SEASONS, cluster
     from kbo_predict.train_win import _sha256
 
-    obj = cluster.build(cluster.ALL_SEASONS)
+    obj = cluster.build(list(FROZEN_SEASONS))
     cluster.save_bundle(obj, out / "clusters.pkl")
     cluster.write_types_csv(obj, out / "player_types.csv")
     want, got = manifest.get("models", {}).get("clusters", {}).get("types_sha256"), _sha256(out / "player_types.csv")
@@ -235,12 +253,17 @@ def _same_preds(t: Table, item: str, bundle: dict, committed_pkl: Path, df) -> N
            f"(또는 피처 목록이 다름)"])
 
 
+def live_rows(df, live_bundle: dict):
+    """라이브 예측 비교 행: 커밋된 라이브 번들이 학습한 시즌(bundle["seasons"])의 행만."""
+    return df[df["season"].isin([int(s) for s in live_bundle["seasons"]])]
+
+
 def check_models(t: Table, out: Path, manifest: dict, feats: dict) -> dict:
     """(2) 보고서 · 팀 모델(· 라이브) 재학습. 반환: 다시 학습한 report · team 번들 (3)(4)에서 쓴다."""
     from kbo_predict import cluster
     from kbo_predict.features import load_features
     from kbo_predict.publish import _write_json
-    from kbo_predict.train_win import save_bundle, train_live, train_report, train_team
+    from kbo_predict.train_win import load_bundle, save_bundle, train_live, train_report, train_team
 
     df = load_features(feats["features"])
     obj = cluster.load_bundle(CLUSTERS_PKL)  # train_win.main(report --clusters)과 같은 cluster_quality
@@ -270,12 +293,13 @@ def check_models(t: Table, out: Path, manifest: dict, feats: dict) -> dict:
     _same_preds(t, "team-2026.pkl 예측", team_bundle, TEAM_PKL, df)
 
     live_sha = manifest.get("models", {}).get("live", {}).get("features_sha256")
-    if live_sha == feats["features_sha256"]:
-        live = train_live(df, kind=kind, calibration=committed["models"][kind]["calibration"],
+    if live_sha == feats["live_sha256"]:
+        df_all = load_features(feats["live_features"])
+        live = train_live(df_all, kind=kind, calibration=committed["models"][kind]["calibration"],
                           n_estimators=committed["models"]["lgbm"]["best_iteration"], meta=meta)
-        _same_preds(t, "win_model.pkl 예측 (라이브)", live, LIVE_PKL, df)
+        _same_preds(t, "win_model.pkl 예측 (라이브)", live, LIVE_PKL, live_rows(df_all, load_bundle(LIVE_PKL)))
     else:
-        t.add("win_model.pkl 예측 (라이브)", _short(live_sha), _short(feats["features_sha256"]), None,
+        t.add("win_model.pkl 예측 (라이브)", _short(live_sha), _short(feats["live_sha256"]), None,
               note="건너뜀 (라이브는 다른 parquet로 학습됨)")
     return {"report": report_bundle, "team": team_bundle, "report_path": out / "report-2026.pkl"}
 

@@ -28,21 +28,30 @@ jobs:
           --matchup-out data/processed/matchup.parquet --clusters models/clusters.pkl
       - name: Live model (skip if unchanged)
         run: python -m kbo_predict.train_win live --skip-if-same
-      - name: Clusters (refit, compare, publish)
+      - name: Clusters (refit candidate, compare)
         id: clusters
         run: |
           # 후보 묶음을 따로 맞춘다 (manifest·유형 CSV는 artifacts/에만 — 정식 파일은 건드리지 않는다)
           python -m kbo_predict.cluster fit --out models/clusters.new.pkl \
             --types artifacts/parity/types.csv --manifest artifacts/parity/manifest.json
-          if python -m kbo_predict.cluster compare --against models/clusters.pkl --new models/clusters.new.pkl; then
-            # 유형 정의가 같을 때만: 정식 fit(clusters.pkl + manifest 갱신) → 사이트 JSON 재발행
-            mv models/clusters.new.pkl models/clusters.pkl
-            python -m kbo_predict.cluster fit
-            python -m kbo_predict.cluster publish
-          else
+          # compare가 types_changed=0|1을 GITHUB_OUTPUT에 남긴다 (새 유형 CSV 해시 vs models/manifest.json)
+          if ! python -m kbo_predict.cluster compare --against models/clusters.pkl --new models/clusters.new.pkl \
+               --types artifacts/parity/types.csv; then
             echo "::warning::cluster compare failed — keeping committed models/clusters.pkl"
             echo "parity_failed=1" >> "$GITHUB_OUTPUT"
+            rm -f models/clusters.new.pkl
           fi
+      - name: Clusters (official fit + publish)
+        if: steps.clusters.outputs.parity_failed != '1' && steps.clusters.outputs.types_changed == '1'
+        run: |
+          # 유형 정의가 같고(compare 통과) 유형표가 바뀌었을 때만: 정식 fit(clusters.pkl + manifest) → 사이트 JSON 재발행
+          mv models/clusters.new.pkl models/clusters.pkl
+          python -m kbo_predict.cluster fit
+          python -m kbo_predict.cluster publish
+      - name: Clusters unchanged
+        if: steps.clusters.outputs.parity_failed != '1' && steps.clusters.outputs.types_changed != '1'
+        run: |
+          echo "clusters unchanged — skipping official fit and publish"
           rm -f models/clusters.new.pkl
       - name: Parity (quick)
         run: python scripts/check_parity.py --quick

@@ -587,15 +587,18 @@ def _write_json(path: Path, obj) -> None:
 
 
 def write_manifest(path: Path, *, name: str, bundle_path: Path, features_path: Path, meta: dict,
-                   matchup_path: Path | None = None) -> None:
+                   matchup_path: Path | None = None, seasons: list[int] | None = None) -> None:
     """models/manifest.json의 모델 하나(name) 항목만 갱신한다: 모델 파일 SHA256·버전 + 그 모델을 만든 parquet SHA256.
     다른 모델 항목은 기존 manifest에서 그대로 둔다 — 이번에 다시 학습하지 않은 모델 파일에 새 parquet 해시를
     붙이지 않기 위해서다. generated_at·commit_sha는 마지막으로 manifest를 쓴 실행의 값.
-    matchup_path를 주면(보고서의 상성 전후 비교에 쓴 parquet) 그 SHA256도 matchup_sha256으로 적는다."""
+    matchup_path를 주면(보고서의 상성 전후 비교에 쓴 parquet) 그 SHA256도 matchup_sha256으로 적는다.
+    seasons를 주면 그 parquet에 든 시즌 목록도 적는다 (team: 얼려 둔 시즌 범위를 manifest에서 바로 보게)."""
     entry = {"path": Path(bundle_path).as_posix(), "sha256": _sha256(bundle_path),
              "version": load_bundle(bundle_path).get("version"), "features_sha256": _sha256(features_path)}
     if matchup_path is not None:
         entry["matchup_sha256"] = _sha256(matchup_path)
+    if seasons is not None:
+        entry["seasons"] = [int(x) for x in seasons]
     update_manifest(path, name=name, meta=meta, entry=entry)
 
 
@@ -743,7 +746,8 @@ def main(argv: list[str] | None = None) -> None:
     name, bundle_path = {"report": ("report", REPORT_PKL), "live": ("live", LIVE_PKL),
                          "team": ("team", TEAM_PKL)}[args.command]
     write_manifest(MANIFEST, name=name, bundle_path=bundle_path, features_path=features_path, meta=meta,
-                   matchup_path=Path(args.matchup) if args.command == "report" and args.matchup else None)
+                   matchup_path=Path(args.matchup) if args.command == "report" and args.matchup else None,
+                   seasons=sorted(int(x) for x in df["season"].unique()) if args.command == "team" else None)
 
 
 if __name__ == "__main__":

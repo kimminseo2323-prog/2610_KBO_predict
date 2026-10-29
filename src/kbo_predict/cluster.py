@@ -38,13 +38,17 @@ CLI:
                                           [--features data/processed/features.parquet] [--out-dir data/public]
         -> data/public/players.json, data/public/teams.json (사이트 데이터, site_data 모듈 참조)
     python -m kbo_predict.cluster compare --against models/clusters.pkl [--new models/clusters.new.pkl]
+                                          [--types artifacts/parity/types.csv [--manifest models/manifest.json]]
         -> 새로 맞춘 묶음이 기준 묶음과 '같은 유형 정의'인지 검사한다 (주간 재학습이 새 묶음을 받아들일지 정한다):
            두 그룹 모두 표준화 중심이 np.allclose(atol=1e-9)이고 맞춤 시즌(fit_seasons) 행의 유형 라벨이 모두 같으면
            exit 0, 아니면 최대 중심 차이와 다른 라벨 수를 찍고 exit 1. 다른 기계(Linux OpenBLAS 등)에서 맞추면
            마지막 자리가 다를 수 있어 비트 비교 대신 허용 오차를 둔다.
+           --types를 주면 그 CSV의 SHA256을 manifest의 clusters.types_sha256과 비교해 types_changed=0|1을 찍고
+           (GITHUB_OUTPUT이 있으면 Actions 출력으로도 남긴다), 0이면 "clusters unchanged" — 정식 fit·publish 불필요.
 """
 import argparse
 import functools
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -59,14 +63,14 @@ from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import StandardScaler
 from threadpoolctl import threadpool_limits
 
-from . import KST
+from . import FROZEN_SEASONS, KST
 from .player_stats import batting_seasons, korean_names, pitching_seasons
 from .train_win import _commit_sha, _sha256, load_bundle, save_bundle, update_manifest
 
 SEED = 42
 K_RANGE = range(4, 8)
 FIT_SEASONS = list(range(2015, 2026))
-ALL_SEASONS = list(range(2015, 2027))       # CLI가 집계·배정하는 시즌 (2026은 배정만)
+ALL_SEASONS = list(FROZEN_SEASONS)          # CLI가 집계·배정하는 시즌 2015~2026 (2026은 배정만) = 얼린 시즌
 MIN_PA = 200
 MIN_IP_OUTS = 150                           # 50이닝
 MIN_RELIEF_APPS = 30                        # 구원 등판 = games - starts
@@ -515,6 +519,19 @@ def compare(against: dict, new: dict, atol: float = COMPARE_ATOL) -> dict:
     return out
 
 
+def types_changed(types_csv: Path, manifest: Path) -> bool:
+    """새 유형 CSV의 SHA256이 manifest의 models.clusters.types_sha256과 다른가 (manifest·항목이 없으면 True).
+    주간 재학습은 compare를 통과해도 이 값이 False면 정식 fit·publish를 건너뛴다 — 비시즌 주에 시각·커밋 메타만
+    바뀐 manifest·players.json·teams.json 커밋이 생기지 않게 (live --skip-if-same과 같은 생각)."""
+    import json
+
+    try:
+        want = json.loads(Path(manifest).read_text(encoding="utf-8"))["models"]["clusters"]["types_sha256"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return True
+    return _sha256(types_csv) != want
+
+
 # ---------- CLI ----------
 
 def publish_site(clusters_path: Path, report_path: Path, features_path: Path, out_dir: Path,
@@ -544,8 +561,10 @@ def main(argv: list[str] | None = None) -> None:
                                              "compare = 새 묶음이 기준 묶음과 같은 유형 정의인지 검사")
     ap.add_argument("command", choices=["fit", "publish", "compare"])
     ap.add_argument("--out", default=str(CLUSTERS_PKL), help="fit: 군집 묶음 pkl 경로")
-    ap.add_argument("--types", default=str(TYPES_CSV), help="fit: 선수-시즌 유형 csv 경로")
-    ap.add_argument("--manifest", default=str(MANIFEST), help="fit: models/manifest.json 경로")
+    ap.add_argument("--types", help=f"fit: 선수-시즌 유형 csv 경로 (기본 {TYPES_CSV.as_posix()}) / compare: 새 묶음의 "
+                                    "유형 CSV — SHA256이 --manifest의 clusters.types_sha256과 다르면 types_changed=1 "
+                                    "(같으면 0: 정식 fit·publish를 건너뛰어도 된다)")
+    ap.add_argument("--manifest", default=str(MANIFEST), help="fit·compare: models/manifest.json 경로")
     ap.add_argument("--clusters", default=str(CLUSTERS_PKL), help="publish: 군집 묶음 pkl 경로")
     ap.add_argument("--report", default=str(REPORT_PKL), help="publish: 평가 모델 pkl (model_expected용)")
     ap.add_argument("--features", default=str(FEATURES_PARQUET), help="publish: 피처 parquet (model_expected용)")
@@ -560,6 +579,12 @@ def main(argv: list[str] | None = None) -> None:
             print(f"{g}: k {r['k'][0]} vs {r['k'][1]}, max |center diff| = {r['max_center_diff']:.3e} "
                   f"(atol {COMPARE_ATOL:g}), labels differ {r['label_diff']}/{r['n_fit_rows']} fit rows "
                   f"-> {'same' if r['same'] else 'DIFFERENT'}")
+        if args.types:
+            changed = types_changed(Path(args.types), Path(args.manifest))
+            print(f"types_changed={int(changed)}" + ("" if changed else " (clusters unchanged)"))
+            if os.environ.get("GITHUB_OUTPUT"):  # GitHub Actions: 다음 단계의 if:에 쓴다
+                with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+                    f.write(f"types_changed={int(changed)}\n")
         print("same" if res["same"] else "different")
         if not res["same"]:
             raise SystemExit(1)
@@ -573,13 +598,13 @@ def main(argv: list[str] | None = None) -> None:
         print(f"done in {time.time() - t0:.1f}s")
         return
     obj = build(ALL_SEASONS)
-    out, types_csv = Path(args.out), Path(args.types)
+    out, types_csv = Path(args.out), Path(args.types or TYPES_CSV)
     save_bundle(obj, out)
     write_types_csv(obj, types_csv)
     meta = {"generated_at": datetime.now(KST).isoformat(timespec="seconds"), "commit_sha": _commit_sha()}
     update_manifest(Path(args.manifest), name="clusters", meta=meta, entry={
         "path": out.as_posix(), "sha256": _sha256(out), "version": CLUSTER_VERSION,
-        "fit_seasons": obj["fit_seasons"], "types_sha256": _sha256(types_csv)})
+        "fit_seasons": obj["fit_seasons"], "seasons": list(ALL_SEASONS), "types_sha256": _sha256(types_csv)})
     print(profile_table(obj))
     print(f"done in {time.time() - t0:.1f}s")
 

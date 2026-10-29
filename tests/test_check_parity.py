@@ -78,6 +78,35 @@ def test_table_failures_and_skips():
     assert not t.ok and t.rows[-1][-1] == "다름" and "boom" in t.diffs[0]
 
 
+def test_check_features_uses_frozen_seasons(tmp_path, monkeypatch):
+    """(1)~(4)의 parquet는 정확히 FROZEN_SEASONS(2015~2026)로 만든다 — 2027 시즌이 data/raw에 있어도 들어가지 않는다."""
+    from kbo_predict import FROZEN_SEASONS, cluster, features, raw_store
+
+    class Stop(Exception):
+        pass
+
+    calls = []
+
+    def fake_build(seasons, **kw):
+        calls.append(list(seasons))
+        raise Stop
+
+    monkeypatch.setattr(cluster, "load_bundle", lambda p: {"batter": {"bundle": {"k": 3}}, "pitcher": {"bundle": {"k": 4}}})
+    monkeypatch.setattr(cluster, "types_map", lambda obj: {})
+    monkeypatch.setattr(raw_store, "available_seasons", lambda: list(range(2015, 2028)))   # 2027이 쌓인 상황
+    monkeypatch.setattr(features, "build_dataset", fake_build)
+    with pytest.raises(Stop):
+        cp.check_features(cp.Table(), tmp_path, {})
+    assert calls == [list(FROZEN_SEASONS)] and FROZEN_SEASONS == list(range(2015, 2027))
+
+
+def test_live_rows_keeps_only_bundle_seasons():
+    import pandas as pd
+
+    df = pd.DataFrame({"season": [2025, 2026, 2027, 2027], "x": [1, 2, 3, 4]})
+    assert cp.live_rows(df, {"seasons": [2025, 2026]})["x"].tolist() == [1, 2]
+
+
 @pytest.mark.slow
 def test_check_parity_passes_on_committed(tmp_path):
     """실데이터: --quick으로 커밋된 산출물을 모두 다시 만들면 같다 (exit 0). 재생성본은 tmp에만 쓴다."""

@@ -741,7 +741,8 @@ def test_team_cli_writes_manifest_entry_only(tmp_path, monkeypatch):
     assert b["version"] == TEAM_VERSION and b["features"] == list(TEAM_FEATURES)
     assert after["team"] == {"path": "models/team-2026.pkl", "sha256": hashlib.sha256(pkl.read_bytes()).hexdigest(),
                              "version": TEAM_VERSION,
-                             "features_sha256": hashlib.sha256(feats.read_bytes()).hexdigest()}
+                             "features_sha256": hashlib.sha256(feats.read_bytes()).hexdigest(),
+                             "seasons": list(range(2015, 2027))}  # parquet에 든 시즌 (얼린 범위)
 
 
 def test_live_skip_if_same(tmp_path, monkeypatch, capsys):

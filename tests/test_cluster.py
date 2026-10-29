@@ -388,7 +388,8 @@ def test_cli_writes_bundle_csv_and_manifest(tmp_path, monkeypatch, obj):
     assert csv.equals(csv.sort_values(["group", "season", "player_id"]).reset_index(drop=True))
     m = json.loads(manifest.read_text(encoding="utf-8"))["models"]
     assert m["live"] == {"path": "x"} and m["clusters"]["version"] == "clusters-2026"
-    assert set(m["clusters"]) == {"path", "sha256", "version", "fit_seasons", "types_sha256"}
+    assert set(m["clusters"]) == {"path", "sha256", "version", "fit_seasons", "seasons", "types_sha256"}
+    assert m["clusters"]["seasons"] == list(range(2015, 2027))
     first = m["clusters"]["types_sha256"]
     cluster.main(args)
     assert json.loads(manifest.read_text(encoding="utf-8"))["models"]["clusters"]["types_sha256"] == first
@@ -438,3 +439,22 @@ def test_cluster_compare_same_and_different(obj, tmp_path, capsys):
     assert len(rows26) > 0
     later["batter"]["assigned"].loc[rows26, "type"] = (later["batter"]["assigned"].loc[rows26, "type"] + 1) % k
     assert cluster.compare(obj, later)["same"]
+
+
+def test_cluster_compare_types_changed_output(obj, tmp_path, monkeypatch, capsys):
+    """compare --types: 유형 CSV 해시가 manifest의 clusters.types_sha256과 같으면 types_changed=0 (clusters unchanged),
+    다르면 1. GITHUB_OUTPUT이 있으면 그 파일에도 한 줄 남긴다 (주간 재학습이 정식 fit·publish를 건너뛸지 정한다)."""
+    a, csv, man, gh = tmp_path / "a.pkl", tmp_path / "t.csv", tmp_path / "manifest.json", tmp_path / "gh_output"
+    cluster.save_bundle(obj, a)
+    cluster.write_types_csv(obj, csv)
+    sha = cluster._sha256(csv)
+    man.write_text(json.dumps({"models": {"clusters": {"types_sha256": sha}}}), encoding="utf-8")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(gh))
+    args = ["compare", "--against", str(a), "--new", str(a), "--types", str(csv), "--manifest", str(man)]
+    cluster.main(args)
+    assert "types_changed=0 (clusters unchanged)" in capsys.readouterr().out
+    man.write_text(json.dumps({"models": {"clusters": {"types_sha256": "0" * 64}}}), encoding="utf-8")
+    cluster.main(args)
+    assert "types_changed=1" in capsys.readouterr().out
+    assert gh.read_text(encoding="utf-8").splitlines() == ["types_changed=0", "types_changed=1"]
+    assert cluster.types_changed(csv, tmp_path / "missing.json")      # manifest가 없으면 바뀐 것으로 본다
