@@ -221,12 +221,13 @@ def _remaining_regular(games: list[dict], season: int, on: str) -> list[dict]:
 
 
 def _series_wins(games: list[dict], s: dict, on: str) -> tuple[int, int]:
-    """시리즈 전적: start ≤ 날짜 ≤ on인 두 팀 맞대결 FINAL의 (팀0 승, 팀1 승). 무승부는 세지 않는다.
-    on 당일 경기도 이미 FINAL이면 센다 (그날 경기가 끝난 뒤의 전망)."""
+    """시리즈 전적: start ≤ 날짜 < on인 두 팀 맞대결 FINAL의 (팀0 승, 팀1 승). 무승부는 세지 않는다.
+    on 당일 경기는 이미 FINAL이어도 세지 않는다 — 전망은 '그날 경기 전' 카드다 (playoff_race와 같은 기준,
+    리와인드에서 그날 결과가 그날 전망에 새지 않게)."""
     t0, t1 = s["teams"]
     w = [0, 0]
     for g in games:
-        if g["status"] != "FINAL" or not s["start"] <= g["date"] <= on:
+        if g["status"] != "FINAL" or not s["start"] <= g["date"] < on:
             continue
         if {g["home_code"], g["away_code"]} != {t0, t1}:
             continue

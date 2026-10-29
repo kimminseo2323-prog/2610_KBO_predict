@@ -148,15 +148,27 @@ def test_outlook_series_from_config(tmp_yaml, bundle):
     assert 0.0 < out["goes_distance_prob"] < 1.0
 
 
-def test_outlook_series_decided_when_finished(tmp_yaml, bundle):
-    # 당일(10-30) 경기가 이미 FINAL이면 센다 → 그 경기로 시리즈가 끝났으면 끝난 전망
+def test_outlook_series_ignores_final_on_same_day(tmp_yaml, bundle):
+    # 전망은 경기 전 카드: on(10-30) 당일 경기가 이미 FINAL이어도 전적에 넣지 않는다
     games = _postseason_games()
+    games[4] |= {"status": "FINAL", "home_score": 6, "away_score": 0}       # 10-29 HT 승 → SS 1-2
+    games[5] |= {"status": "FINAL", "home_score": 4, "away_score": 3}       # 10-30 HT 승 (당일 — 안 센다)
+    out = outlook_for(2026, "2026-10-30", games, state=LeagueState(), team_bundle=bundle,
+                      ps_config=load_postseason(2026, tmp_yaml))
+    assert out["type"] == "series" and out["wins"] == [1, 2]
+    assert out["games_remaining_max"] == 2 and 0.0 < out["win_prob"][1] < 1.0
+
+
+def test_outlook_series_decided_when_finished(tmp_yaml, bundle):
+    # 시리즈가 전날까지 끝났는데 그날 두 팀 경기(취소된 예비 일정 등)가 남아 있으면 끝난 전망
+    games = _postseason_games() + [g("2026-10-31", 7, "SS", "HT", status="CANCELED")]
     games[4] |= {"status": "FINAL", "home_score": 6, "away_score": 0}       # 10-29 HT 승
     games[5] |= {"status": "FINAL", "home_score": 4, "away_score": 3}       # 10-30 HT 승 → HT 3-1
-    out = outlook_for(2026, "2026-10-30", games, state=LeagueState(), team_bundle=bundle,
+    out = outlook_for(2026, "2026-10-31", games, state=LeagueState(), team_bundle=bundle,
                       ps_config=load_postseason(2026, tmp_yaml))
     assert out["type"] == "series" and out["wins"] == [1, 3]
     assert out["win_prob"] == [0.0, 1.0] and out["games_remaining_max"] == 0
+    assert out["most_common_result"] == "1-3"
 
 
 def test_outlook_fallback_for_unknown_series(tmp_yaml, bundle):
