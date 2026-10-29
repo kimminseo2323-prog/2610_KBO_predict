@@ -9,7 +9,7 @@ import pytest
 from scipy.stats import rankdata
 from sklearn.metrics import log_loss
 
-from kbo_predict import MODEL_VERSION, REPORT_VERSION, train_win
+from kbo_predict import MODEL_VERSION, REPORT_VERSION, TEAM_VERSION, train_win
 from kbo_predict.features import FACTOR_LABELS, FEATURE_NAMES, TEAM_FEATURES, load_features, save_features
 from kbo_predict.train_win import (
     LGBM_PARAMS,
@@ -32,6 +32,7 @@ from kbo_predict.train_win import (
     save_bundle,
     train_live,
     train_report,
+    train_team,
     write_manifest,
 )
 
@@ -698,3 +699,37 @@ def test_validation_scope_wording():
     assert "2024" in real and real.count(".") == 1  # 한 문장
     assert "모두" in train_win._validation_scope(list(range(2015, 2027)), 2025, 2026)
     assert "판정하지 않았다" in train_win._validation_scope(None, 2025, 2026)
+
+
+def test_train_team_matches_report_ablation(small_df):
+    report, _ = train_report(small_df, meta={})
+    summary, bundle = train_team(small_df, kind=report["selected"],
+                                 calibration=report["models"][report["selected"]]["calibration"])
+    assert summary == report["ablation"]["no_starter"]  # 같은 절차 -> 같은 숫자
+    assert bundle["version"] == TEAM_VERSION == "team-2026" and bundle["features"] == list(TEAM_FEATURES)
+    _, b2 = train_team(small_df, kind=report["selected"], calibration=summary["calibration"],
+                       meta={"generated_at": "2026-10-29T00:00:00+09:00"})
+    assert b2["trained_at"] == "2026-10-29T00:00:00+09:00"
+
+
+def test_team_cli_writes_manifest_entry_only(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    feats = _cli_parquet(tmp_path)
+    with pytest.raises(SystemExit):
+        train_win.main(["team"])  # 보고서가 없으면 실패
+    train_win.main(["report"])
+    train_win.main(["live"])
+    rep_path, man_path = tmp_path / "data/public/model_report.json", tmp_path / "models/manifest.json"
+    rep_bytes = rep_path.read_bytes()
+    before = json.loads(man_path.read_text(encoding="utf-8"))["models"]
+    train_win.main(["team"])
+    assert rep_path.read_bytes() == rep_bytes
+    after = json.loads(man_path.read_text(encoding="utf-8"))["models"]
+    assert set(after) == set(before) | {"team"}
+    assert all(after[k] == before[k] for k in before)
+    pkl = tmp_path / "models/team-2026.pkl"
+    b = load_bundle(pkl)
+    assert b["version"] == TEAM_VERSION and b["features"] == list(TEAM_FEATURES)
+    assert after["team"] == {"path": "models/team-2026.pkl", "sha256": hashlib.sha256(pkl.read_bytes()).hexdigest(),
+                             "version": TEAM_VERSION,
+                             "features_sha256": hashlib.sha256(feats.read_bytes()).hexdigest()}

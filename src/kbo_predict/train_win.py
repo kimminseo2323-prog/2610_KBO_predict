@@ -61,7 +61,7 @@ from sklearn.metrics import log_loss
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from . import KST, MODEL_VERSION, REPORT_VERSION
+from . import KST, MODEL_VERSION, REPORT_VERSION, TEAM_VERSION
 from .features import FACTOR_LABELS, FEATURE_NAMES, TEAM_FEATURES, load_features
 
 SEED = 42
@@ -329,22 +329,52 @@ STARTER_SOURCE = {"train_test": "actual (boxscore pitching order 1)", "live": "a
 BASELINE_ORDER = ("home_always", "better_win_pct", "lower_starter_era")  # _baseline_preds 순서 = 동률 순서
 
 
-def _no_starter_ablation(kind: str, calibration: str, train: pd.DataFrame, val: pd.DataFrame,
-                         test: pd.DataFrame, train_seasons: list[int]) -> dict:
-    """선발 없는 변형: 선택된 알고리즘(kind)을 팀 피처 19개(TEAM_FEATURES)만으로 같은 절차로 다시 학습한다.
-    - 트리 수: lgbm이면 19개 피처로 val early stopping을 다시 돌린다 (lr은 해당 없음 → None).
-    - 캘리브레이션: selected와 같은 방법을, train 시즌 LOSO OOF 예측으로 맞춘다 (R7과 같음, val로 맞추지 않음).
-    학습·평가의 선발은 '실제' 선발이므로, 이 변형과의 차이가 '선발을 안다'는 가정이 지표에 얼마나 보태는지 보여 준다."""
+def _split(df: pd.DataFrame, train_seasons: list[int], val_season: int, test_season: int) -> dict:
+    """시즌으로 train/val/test를 나눈다 (비어 있으면 ValueError). train_report와 train_team이 함께 쓴다."""
+    parts = {"train": df[df["season"].isin(train_seasons)], "val": df[df["season"] == val_season],
+             "test": df[df["season"] == test_season]}
+    for name, part in parts.items():
+        if len(part) == 0:
+            wanted = train_seasons if name == "train" else (val_season if name == "val" else test_season)
+            raise ValueError(f"no {name} rows for season(s) {wanted}")
+    return parts
+
+
+def _fit_team(kind: str, calibration: str, train: pd.DataFrame, val: pd.DataFrame, test: pd.DataFrame,
+              train_seasons: list[int], meta: dict | None = None) -> tuple[dict, dict]:
+    """train_team의 본체: 이미 나눈 train/val/test로 (요약 dict, 번들)을 만든다."""
     best_iteration = _early_stopping_rounds(train, val, features=TEAM_FEATURES) if kind == "lgbm" else None
     n_est = best_iteration or 300
-    b = fit_model(train, kind=kind, n_estimators=n_est, version=REPORT_VERSION, seasons=train_seasons,
+    b = fit_model(train, kind=kind, n_estimators=n_est, version=TEAM_VERSION, seasons=train_seasons,
                   features=TEAM_FEATURES)
     if calibration != "none":
         oof = oof_predictions(train, kind=kind, n_estimators=n_est, features=TEAM_FEATURES)
         b.update(calibration=calibration, calibrator=fit_calibrator(calibration, oof, train["y"].to_numpy()))
-    return {"kind": kind, "calibration": calibration, "best_iteration": best_iteration,
-            "features": list(TEAM_FEATURES), "n_features": len(TEAM_FEATURES),
-            "val": evaluate(b, val), "test": evaluate(b, test)}
+    if meta and meta.get("generated_at"):
+        b["trained_at"] = meta["generated_at"]
+    summary = {"kind": kind, "calibration": calibration, "best_iteration": best_iteration,
+               "features": list(TEAM_FEATURES), "n_features": len(TEAM_FEATURES),
+               "val": evaluate(b, val), "test": evaluate(b, test)}
+    return summary, b
+
+
+def train_team(df: pd.DataFrame, *, train_seasons=range(2015, 2025), val_season: int = 2025,
+               test_season: int = 2026, kind: str, calibration: str,
+               meta: dict | None = None) -> tuple[dict, dict]:
+    """선발 없는 팀 모델: 선택된 알고리즘(kind)을 팀 피처 19개(TEAM_FEATURES)만으로 보고서와 같은 절차로 학습한다.
+    - 트리 수: lgbm이면 19개 피처로 val early stopping을 다시 돌린다 (lr은 해당 없음 → None).
+    - 캘리브레이션: 보고서에서 고른 방법을, train 시즌 LOSO OOF 예측으로 맞춘다 (val로 맞추지 않음).
+    반환: (ablation.no_starter에 들어가는 요약 dict, 번들 version=TEAM_VERSION)."""
+    train_seasons = [int(s) for s in train_seasons]
+    parts = _split(df, train_seasons, val_season, test_season)
+    return _fit_team(kind, calibration, parts["train"], parts["val"], parts["test"], train_seasons, meta)
+
+
+def _no_starter_ablation(kind: str, calibration: str, train: pd.DataFrame, val: pd.DataFrame,
+                         test: pd.DataFrame, train_seasons: list[int]) -> dict:
+    """선발 없는 변형의 요약 dict (ablation.no_starter) — train_team과 같은 절차, 번들은 버린다.
+    학습·평가의 선발은 '실제' 선발이므로, 이 변형과의 차이가 '선발을 안다'는 가정이 지표에 얼마나 보태는지 보여 준다."""
+    return _fit_team(kind, calibration, train, val, test, train_seasons)[0]
 
 
 MATCHUP_ADOPT_MARGIN = 0.001  # 상성 피처 채택 기준: val 로그 손실이 이만큼보다 더 줄어야 한다
@@ -455,12 +485,7 @@ def train_report(df: pd.DataFrame, *, train_seasons=range(2015, 2025), val_seaso
     그 dict를 그대로 보고서에 넣는다. 둘 다 본 모델·선택·나머지 지표에는 영향이 없다 (없으면 None).
     반환: (model_report.json 내용, 선택된 번들 version=REPORT_VERSION)."""
     train_seasons = [int(s) for s in train_seasons]
-    parts = {"train": df[df["season"].isin(train_seasons)], "val": df[df["season"] == val_season],
-             "test": df[df["season"] == test_season]}
-    for name, part in parts.items():
-        if len(part) == 0:
-            wanted = train_seasons if name == "train" else (val_season if name == "val" else test_season)
-            raise ValueError(f"no {name} rows for season(s) {wanted}")
+    parts = _split(df, train_seasons, val_season, test_season)
     train, val, test = parts["train"], parts["val"], parts["test"]
 
     best_iteration = _early_stopping_rounds(train, val)
@@ -579,6 +604,7 @@ def _commit_sha() -> str | None:
 REPORT_JSON = Path("data/public/model_report.json")
 REPORT_PKL = Path(f"models/{REPORT_VERSION}.pkl")
 LIVE_PKL = Path("models/win_model.pkl")
+TEAM_PKL = Path(f"models/{TEAM_VERSION}.pkl")
 MANIFEST = Path("models/manifest.json")
 
 
@@ -609,8 +635,8 @@ def _guard_report_blocks(path: Path, *, matchup, clusters, reset: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(description="승패 모델 학습: report(2015~2024 학습/2025 검증/2026 평가) 또는 live(전 시즌)")
-    ap.add_argument("command", choices=["report", "live"])
+    ap = argparse.ArgumentParser(description="승패 모델 학습: report(2015~2024 학습/2025 검증/2026 평가) live(전 시즌) 또는 team(선발 없는 팀 모델 저장)")
+    ap.add_argument("command", choices=["report", "live", "team"])
     ap.add_argument("--features", default="data/processed/features.parquet", help="피처 parquet 경로")
     ap.add_argument("--force", action="store_true", help="report: 이미 있는(얼려 둔) model_report.json을 덮어쓴다")
     ap.add_argument("--matchup", help="report: 상성 피처 parquet (features --matchup-out) → matchup_feature_ablation")
@@ -622,6 +648,8 @@ def main(argv: list[str] | None = None) -> None:
         if not args.force:
             raise SystemExit(f"{REPORT_JSON.name} exists; use --force to overwrite the frozen report")
         _guard_report_blocks(REPORT_JSON, matchup=args.matchup, clusters=args.clusters, reset=args.reset_blocks)
+    if args.command in ("live", "team") and not REPORT_JSON.exists():
+        raise SystemExit(f"{REPORT_JSON} not found — run `python -m kbo_predict.train_win report` first")
     features_path = Path(args.features)
     meta = {"generated_at": datetime.now(KST).isoformat(timespec="seconds"),
             "commit_sha": _commit_sha(), "run_url": os.environ.get("RUN_URL"),
@@ -659,9 +687,17 @@ def main(argv: list[str] | None = None) -> None:
                 print(f"matchup {part}: acc {o['accuracy']:.4f} -> {w['accuracy']:.4f}  "
                       f"log_loss {o['log_loss']:.4f} -> {w['log_loss']:.4f}  brier {o['brier']:.4f} -> {w['brier']:.4f}")
             print(f"matchup McNemar p(test)={mf['mcnemar_p_test']:.4f}  adopt={mf['adopt']}")
+    elif args.command == "team":
+        # 보고서의 selected·calibration만 읽는다. model_report.json은 건드리지 않는다.
+        report = json.loads(REPORT_JSON.read_text(encoding="utf-8"))
+        kind = report["selected"]
+        summary, bundle = train_team(df, kind=kind, calibration=report["models"][kind]["calibration"], meta=meta)
+        save_bundle(bundle, TEAM_PKL)
+        print(f"team {bundle['version']}: {kind} calibration={bundle['calibration']} "
+              f"n_features={summary['n_features']} best_iteration={summary['best_iteration']}")
+        print(f"test: acc={summary['test']['accuracy']:.4f} log_loss={summary['test']['log_loss']:.4f} "
+              f"brier={summary['test']['brier']:.4f}")
     else:
-        if not REPORT_JSON.exists():
-            raise SystemExit(f"{REPORT_JSON} not found — run `python -m kbo_predict.train_win report` first")
         # 보고서에서는 선택 결과 세 가지만 읽는다. parquet 해시는 맞춰 보지 않는다 — 라이브는 새 경기가 쌓인
         # parquet로 다시 학습하는 것이 정상이고, 어떤 parquet로 만들었는지는 manifest의 live 항목에 남는다.
         report = json.loads(REPORT_JSON.read_text(encoding="utf-8"))
@@ -672,7 +708,8 @@ def main(argv: list[str] | None = None) -> None:
         print(f"live {bundle['version']}: {kind} calibration={bundle['calibration']} "
               f"seasons={bundle['seasons'][0]}~{bundle['seasons'][-1]} n={bundle['n_games']}")
     print(f"done in {time.time() - t0:.1f}s")
-    name, bundle_path = ("report", REPORT_PKL) if args.command == "report" else ("live", LIVE_PKL)
+    name, bundle_path = {"report": ("report", REPORT_PKL), "live": ("live", LIVE_PKL),
+                         "team": ("team", TEAM_PKL)}[args.command]
     write_manifest(MANIFEST, name=name, bundle_path=bundle_path, features_path=features_path, meta=meta,
                    matchup_path=Path(args.matchup) if args.command == "report" and args.matchup else None)
 
