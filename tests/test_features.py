@@ -636,3 +636,32 @@ def test_matchup_rejects_type_ids_outside_k():
     s.start_season(2026)
     with pytest.raises(ValueError, match="pitcher type 3 .* kp=3"):
         game_features(mk("2026-04-02", 2), s, {"home": {"player_id": 10}, "away": None})
+
+
+def test_features_fingerprint_is_value_based():
+    """값 지문: 소수 6자리 반올림 → 1e-16 수준 차이·-0.0은 같은 지문, 1e-4 차이·행 순서는 다른 지문. 파일 없이 표만으로."""
+    import numpy as np
+    import pandas as pd
+
+    from kbo_predict.features import features_fingerprint, load_features, parquet_fingerprint, save_features
+
+    df = pd.DataFrame({"game_id": [1, 2, 3], "date": ["2026-04-01"] * 3, "x": [0.1234561, np.nan, 0.0],
+                       "y": [1.0, 2.0, -1e-12]})
+    fp = features_fingerprint(df)
+    assert fp == features_fingerprint(df.assign(x=df["x"] * (1 + 1e-15)))      # 마지막 비트 차이
+    assert fp == features_fingerprint(df.assign(y=[1.0, 2.0, 0.0]))            # -0.000000 → 0.000000
+    assert fp != features_fingerprint(df.assign(x=[0.1235, np.nan, 0.0]))
+    assert fp != features_fingerprint(df.iloc[::-1])
+    assert features_fingerprint(df) == fp                                       # 원본은 바꾸지 않는다
+    assert df["y"].iloc[2] == -1e-12
+
+
+def test_parquet_fingerprint_roundtrip(tmp_path):
+    import pandas as pd
+
+    from kbo_predict.features import features_fingerprint, parquet_fingerprint, save_features
+
+    df = pd.DataFrame({"game_id": [1, 2], "v": [0.5, 0.25]})
+    save_features(df, tmp_path / "f.parquet")
+    assert parquet_fingerprint(tmp_path / "f.parquet") == features_fingerprint(df)
+

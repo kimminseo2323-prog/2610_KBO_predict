@@ -54,8 +54,9 @@ jobs:
           echo "clusters unchanged — skipping official fit and publish"
           rm -f models/clusters.new.pkl
       - name: Parity (quick)
-        run: python scripts/check_parity.py --quick
+        run: python scripts/check_parity.py --quick --require-live   # 방금 라이브를 맞췄으니 라이브 비교도 필수
       - name: Commit results
+        if: github.ref == 'refs/heads/main'   # 다른 브랜치에서 수동 실행하면 커밋하지 않는다
         run: |
           rm -f models/clusters.new.pkl
           git config user.name "github-actions[bot]"
@@ -66,7 +67,7 @@ jobs:
           else
             git commit -m "auto: weekly retrain $(TZ=Asia/Seoul date +%F)"
             git pull --rebase origin main
-            git push
+            git push origin HEAD:main
           fi
       - name: parity-failure issue
         if: failure() || steps.clusters.outputs.parity_failed == '1'

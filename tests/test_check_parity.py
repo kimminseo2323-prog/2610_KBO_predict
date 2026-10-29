@@ -107,6 +107,64 @@ def test_live_rows_keeps_only_bundle_seasons():
     assert cp.live_rows(df, {"seasons": [2025, 2026]})["x"].tolist() == [1, 2]
 
 
+def test_first_diff_rel_tol_has_no_absolute_floor():
+    assert cp.first_diff([1e-12], [2e-12], rel_tol=1e-9) is not None          # 0 근처도 상대 오차로만
+    assert cp.first_diff([0.0], [0.0], rel_tol=1e-9) is None
+
+
+def test_protected_out(tmp_path):
+    repo = tmp_path / "repo"
+    assert cp.protected_out(repo / "data/public", repo) and cp.protected_out(repo / "models/x", repo)
+    assert not cp.protected_out(repo / "artifacts/parity", repo) and not cp.protected_out(tmp_path / "o", repo)
+    with pytest.raises(SystemExit):
+        cp.main(["--repo", str(repo), "--out", str(repo / "data/public/parity")])
+
+
+def test_check_site_wiring_reports_tamper(tmp_path, monkeypatch):
+    """실제 check_site 배선: publish_site가 쓴 파일과 cp.PUBLIC의 커밋본을 비교해 다르면 '다름' 행 + 파일·키."""
+    from kbo_predict import cluster
+
+    pub = tmp_path / "pub"
+    pub.mkdir()
+    shutil.copy(PLAYERS, pub / "players.json")
+    (pub / "teams.json").write_text(json.dumps({"teams": [{"code": "LG", "wins": 80}], "generated_at": "a"}),
+                                    encoding="utf-8")
+
+    def fake_publish(clusters_path, report_path, features_path, out_dir):
+        out_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(PLAYERS, out_dir / "players.json")                       # players는 그대로
+        (out_dir / "teams.json").write_text(json.dumps({"teams": [{"code": "LG", "wins": 81}], "generated_at": "b"}),
+                                            encoding="utf-8")
+
+    monkeypatch.setattr(cp, "PUBLIC", pub)
+    monkeypatch.setattr(cluster, "publish_site", fake_publish)
+    t = cp.Table()
+    cp.check_site(t, tmp_path / "out", {"features": None}, {"report_path": None})
+    assert [r[-1] for r in t.rows] == ["같음", "다름"]
+    assert len(t.diffs) == 1 and "teams.json: teams[0].wins: 80 != 81" in t.diffs[0]
+
+
+def test_check_live_skip_vs_require_live():
+    """라이브 지문이 다르면 건너뜀(판정 없음), --require-live면 실패."""
+    feats = {"live_fingerprint": "b" * 64}
+    manifest = {"models": {"live": {"features_fingerprint": "a" * 64}}}
+    t = cp.Table()
+    cp.check_live(t, manifest, feats, {}, {}, require_live=False)
+    assert t.ok and t.rows[0][-1].startswith("건너뜀")
+    t = cp.Table()
+    cp.check_live(t, manifest, feats, {}, {}, require_live=True)
+    assert not t.ok and "--require-live" in t.diffs[0]
+
+
+def test_required_notebooks_missing_fail(tmp_path, monkeypatch):
+    """노트북 02~04가 없으면 실패, 05는 없어도 건너뜀."""
+    (tmp_path / "notebooks").mkdir()
+    monkeypatch.chdir(tmp_path)
+    t = cp.Table()
+    cp.check_notebooks(t)
+    assert [r[-1] for r in t.rows] == ["다름", "다름", "다름", "없음 (건너뜀)"]
+
+
 @pytest.mark.slow
 def test_check_parity_passes_on_committed(tmp_path):
     """실데이터: --quick으로 커밋된 산출물을 모두 다시 만들면 같다 (exit 0). 재생성본은 tmp에만 쓴다."""

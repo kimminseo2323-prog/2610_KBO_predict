@@ -10,7 +10,8 @@ from scipy.stats import rankdata
 from sklearn.metrics import log_loss
 
 from kbo_predict import MODEL_VERSION, REPORT_VERSION, TEAM_VERSION, train_win
-from kbo_predict.features import FACTOR_LABELS, FEATURE_NAMES, TEAM_FEATURES, load_features, save_features
+from kbo_predict.features import (FACTOR_LABELS, FEATURE_NAMES, TEAM_FEATURES, load_features, parquet_fingerprint,
+                                  save_features)
 from kbo_predict.train_win import (
     LGBM_PARAMS,
     SEED,
@@ -270,7 +271,8 @@ def test_oof_predictions_leave_one_season_out(data):
 
 META = {"generated_at": "2026-10-29T12:00:00+09:00", "commit_sha": "abc123", "run_url": None,
         "features_sha256": "f" * 64}
-REPORT_KEYS = {"model_version", "generated_at", "commit_sha", "run_url", "features_sha256", "train_seasons",
+REPORT_KEYS = {"model_version", "generated_at", "commit_sha", "run_url", "features_sha256", "features_fingerprint",
+               "train_seasons",
                "val_season", "test_season", "n", "models", "selected", "baselines", "significance",
                "calibration_bins", "feature_importance", "matchup_feature_ablation", "cluster_quality",
                "starter_source", "ablation"}
@@ -456,8 +458,8 @@ def test_write_manifest_updates_one_model_and_keeps_others(tmp_path, data):
     """manifest는 모델별로 (파일 해시, 버전, 그 모델을 만든 parquet 해시)를 적는다.
     한 명령은 자기 모델 항목만 갱신하고, 다른 항목은 기존 manifest에서 그대로 둔다."""
     f1, f2 = tmp_path / "f1.parquet", tmp_path / "f2.parquet"
-    f1.write_bytes(b"parquet-1")
-    f2.write_bytes(b"parquet-2")
+    save_features(pd.DataFrame({"game_id": [1], "v": [0.1]}), f1)
+    save_features(pd.DataFrame({"game_id": [1], "v": [0.2]}), f2)
     a, b = tmp_path / "models" / "a.pkl", tmp_path / "models" / "b.pkl"
     save_bundle(_fit(data, "lr"), a)
     save_bundle(_fit(data, "lgbm"), b)
@@ -466,14 +468,16 @@ def test_write_manifest_updates_one_model_and_keeps_others(tmp_path, data):
     text = out.read_text(encoding="utf-8")
     assert text.endswith("}\n")
     entry_a = {"path": a.as_posix(), "sha256": hashlib.sha256(a.read_bytes()).hexdigest(), "version": "v-test",
-               "features_sha256": hashlib.sha256(b"parquet-1").hexdigest()}
+               "features_sha256": hashlib.sha256(f1.read_bytes()).hexdigest(),
+               "features_fingerprint": parquet_fingerprint(f1)}
     assert json.loads(text) == {"generated_at": META["generated_at"], "commit_sha": "abc123",
                                 "models": {"report": entry_a}}
     save_bundle(_fit(data, "lr"), a)  # 디스크의 report pkl이 바뀌어도 live 명령은 report 항목을 건드리지 않는다
     write_manifest(out, name="live", bundle_path=b, features_path=f2, meta={**META, "generated_at": "later"})
     m = json.loads(out.read_text(encoding="utf-8"))
     assert m["generated_at"] == "later" and m["models"]["report"] == entry_a
-    assert m["models"]["live"]["features_sha256"] == hashlib.sha256(b"parquet-2").hexdigest()
+    assert m["models"]["live"]["features_sha256"] == hashlib.sha256(f2.read_bytes()).hexdigest()
+    assert m["models"]["live"]["features_fingerprint"] == parquet_fingerprint(f2) != entry_a["features_fingerprint"]
     assert m["models"]["live"]["sha256"] == hashlib.sha256(b.read_bytes()).hexdigest()
 
 
@@ -742,7 +746,8 @@ def test_team_cli_writes_manifest_entry_only(tmp_path, monkeypatch):
     assert after["team"] == {"path": "models/team-2026.pkl", "sha256": hashlib.sha256(pkl.read_bytes()).hexdigest(),
                              "version": TEAM_VERSION,
                              "features_sha256": hashlib.sha256(feats.read_bytes()).hexdigest(),
-                             "seasons": list(range(2015, 2027))}  # parquet에 든 시즌 (얼린 범위)
+                             "features_fingerprint": parquet_fingerprint(feats),
+                             "seasons": list(range(2015, 2027))}  # 얼린 시즌 FROZEN_SEASONS
 
 
 def test_live_skip_if_same(tmp_path, monkeypatch, capsys):

@@ -64,8 +64,8 @@ from sklearn.metrics import log_loss
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from . import KST, MODEL_VERSION, REPORT_VERSION, TEAM_VERSION
-from .features import FACTOR_LABELS, FEATURE_NAMES, TEAM_FEATURES, load_features
+from . import FROZEN_SEASONS, KST, MODEL_VERSION, REPORT_VERSION, TEAM_VERSION
+from .features import FACTOR_LABELS, FEATURE_NAMES, TEAM_FEATURES, load_features, parquet_fingerprint
 
 SEED = 42
 # 결정성: deterministic + 단일 스레드 + 고정 seed, 배깅(행 샘플링) 없음 → 같은 데이터면 같은 비트.
@@ -514,7 +514,8 @@ def train_report(df: pd.DataFrame, *, train_seasons=range(2015, 2025), val_seaso
         "generated_at": meta.get("generated_at"),
         "commit_sha": meta.get("commit_sha"),
         "run_url": meta.get("run_url"),
-        "features_sha256": meta.get("features_sha256"),
+        "features_sha256": meta.get("features_sha256"),          # 파일 바이트 (같은 플랫폼에서만 재현)
+        "features_fingerprint": meta.get("features_fingerprint"),  # 값 지문 (소수 6자리, 플랫폼 간 재현)
         "train_seasons": train_seasons,
         "val_season": int(val_season),
         "test_season": int(test_season),
@@ -592,11 +593,14 @@ def write_manifest(path: Path, *, name: str, bundle_path: Path, features_path: P
     다른 모델 항목은 기존 manifest에서 그대로 둔다 — 이번에 다시 학습하지 않은 모델 파일에 새 parquet 해시를
     붙이지 않기 위해서다. generated_at·commit_sha는 마지막으로 manifest를 쓴 실행의 값.
     matchup_path를 주면(보고서의 상성 전후 비교에 쓴 parquet) 그 SHA256도 matchup_sha256으로 적는다.
-    seasons를 주면 그 parquet에 든 시즌 목록도 적는다 (team: 얼려 둔 시즌 범위를 manifest에서 바로 보게)."""
+    *_sha256은 파일 바이트(같은 플랫폼에서만 재현), *_fingerprint는 features.features_fingerprint 값 지문(플랫폼 간).
+    seasons를 주면 그 시즌 목록도 적는다 (team: 얼려 둔 시즌 FROZEN_SEASONS를 manifest에서 바로 보게)."""
     entry = {"path": Path(bundle_path).as_posix(), "sha256": _sha256(bundle_path),
-             "version": load_bundle(bundle_path).get("version"), "features_sha256": _sha256(features_path)}
+             "version": load_bundle(bundle_path).get("version"), "features_sha256": _sha256(features_path),
+             "features_fingerprint": parquet_fingerprint(features_path)}
     if matchup_path is not None:
         entry["matchup_sha256"] = _sha256(matchup_path)
+        entry["matchup_fingerprint"] = parquet_fingerprint(matchup_path)
     if seasons is not None:
         entry["seasons"] = [int(x) for x in seasons]
     update_manifest(path, name=name, meta=meta, entry=entry)
@@ -682,7 +686,7 @@ def main(argv: list[str] | None = None) -> None:
     features_path = Path(args.features)
     meta = {"generated_at": datetime.now(KST).isoformat(timespec="seconds"),
             "commit_sha": _commit_sha(), "run_url": os.environ.get("RUN_URL"),
-            "features_sha256": _sha256(features_path)}
+            "features_sha256": _sha256(features_path), "features_fingerprint": parquet_fingerprint(features_path)}
     df = load_features(features_path)
     t0 = time.time()
     if args.command == "report":
@@ -747,7 +751,7 @@ def main(argv: list[str] | None = None) -> None:
                          "team": ("team", TEAM_PKL)}[args.command]
     write_manifest(MANIFEST, name=name, bundle_path=bundle_path, features_path=features_path, meta=meta,
                    matchup_path=Path(args.matchup) if args.command == "report" and args.matchup else None,
-                   seasons=sorted(int(x) for x in df["season"].unique()) if args.command == "team" else None)
+                   seasons=FROZEN_SEASONS if args.command == "team" else None)
 
 
 if __name__ == "__main__":

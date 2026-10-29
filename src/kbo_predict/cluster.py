@@ -599,6 +599,8 @@ def main(argv: list[str] | None = None) -> None:
         return
     obj = build(ALL_SEASONS)
     out, types_csv = Path(args.out), Path(args.types or TYPES_CSV)
+    for parent in {out.parent, types_csv.parent, Path(args.manifest).parent}:  # 예: artifacts/parity/ (주간 재학습)
+        parent.mkdir(parents=True, exist_ok=True)
     save_bundle(obj, out)
     write_types_csv(obj, types_csv)
     meta = {"generated_at": datetime.now(KST).isoformat(timespec="seconds"), "commit_sha": _commit_sha()}

@@ -463,7 +463,31 @@ def load_features(path) -> pd.DataFrame:
 
 
 def features_sha256(path) -> str:
+    """parquet 파일 바이트의 SHA256. 같은 플랫폼에서만 재현된다 — 다른 OS·libm에서는 pow 같은 실수 계산의
+    마지막 비트가 달라 파일 바이트가 달라질 수 있다 (값 비교는 features_fingerprint)."""
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+FINGERPRINT_DIGITS = 6
+
+
+def features_fingerprint(df: pd.DataFrame) -> str:
+    """플랫폼과 무관한 피처 표의 지문: 실수 열을 소수 6자리로 반올림(-0.0은 0.0으로)해
+    to_csv(index=False, lineterminator="\\n", float_format="%.6f")로 쓴 텍스트의 SHA256.
+    OS·BLAS·libm에 따라 1e-16 수준으로 다른 값도 같은 지문이 된다 (바이트 동일성은 같은 플랫폼에서만, 값 동일성은 플랫폼 간).
+    주의(반올림 경계): 어떤 값이 소수 6자리 반올림의 경계(…5)에 1e-16만큼 붙어 있으면 플랫폼마다 반대쪽으로 반올림돼
+    지문이 달라질 수 있다 — 드물지만 0은 아니다. 그때는 parity가 실패하고 그 열을 직접 비교해 봐야 한다.
+    열 순서·행 순서·결측(빈 칸)·정수 값은 그대로 지문에 들어간다."""
+    out = df.copy()
+    floats = out.select_dtypes(include="floating").columns
+    out[floats] = out[floats].round(FINGERPRINT_DIGITS) + 0.0   # + 0.0: -0.0 → 0.0
+    text = out.to_csv(index=False, lineterminator="\n", float_format=f"%.{FINGERPRINT_DIGITS}f")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def parquet_fingerprint(path) -> str:
+    """parquet 파일을 읽어 features_fingerprint (manifest의 features_fingerprint · matchup_fingerprint)."""
+    return features_fingerprint(load_features(path))
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -493,12 +517,12 @@ def main(argv: list[str] | None = None) -> None:
         print(f"  {season}: {n}")
     if args.out:
         save_features(df[BASE_COLUMNS], args.out)  # 상성 열은 빼고 기존 열만 → 유형 유무와 관계없이 같은 바이트
-        print(f"sha256: {features_sha256(args.out)}")
+        print(f"sha256: {features_sha256(args.out)}  fingerprint: {parquet_fingerprint(args.out)}")
     if args.matchup_out:
         names = matchup_feature_names(kb, kp)
         save_features(df[["game_id", *names]], args.matchup_out)
         print(f"matchup: {len(names)} cols, types_known mean={df['types_known'].mean():.3f}  "
-              f"sha256: {features_sha256(args.matchup_out)}")
+              f"sha256: {features_sha256(args.matchup_out)}  fingerprint: {parquet_fingerprint(args.matchup_out)}")
 
 
 if __name__ == "__main__":
