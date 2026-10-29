@@ -1,6 +1,6 @@
 {
-  "commit_sha": "693e7f5e31f52c507e899423e96d9f683f50d127",
-  "generated_at": "2026-10-29T18:17:54+09:00",
+  "commit_sha": "3aaeb14762560438292e80a32a10abecb3ab5f3d",
+  "generated_at": "2026-10-29T18:26:31+09:00",
   "models": {
     "clusters": {
       "fit_seasons": [
@@ -17,8 +17,8 @@
         2025
       ],
       "path": "models/clusters.pkl",
-      "sha256": "7f3eda494f8879231d4122b988596107f3b18adaac570e89f7bdc69944b73b9c",
-      "types_sha256": "ebd7481277da0a5596fbe04b6626420a95bd6290d4703156c324dc895c8dd612",
+      "sha256": "35cb3b6f631a5aefa3190ba3188852f69c7281eecd9b43a8b838e021078dbf55",
+      "types_sha256": "d44f1f371f312ded8f360a232df8cd1965ae1c4f02789a7471d9df7620860531",
       "version": "clusters-2026"
     },
     "live": {
