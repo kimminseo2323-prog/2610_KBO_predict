@@ -336,6 +336,31 @@ def test_starter_features_from_boxscore_order1():
     assert f["home_starter"] == p and f["away_starter"] == q
 
 
+def test_last3_starts_only_cover_previous_and_current_season():
+    """최근 3선발 실점은 직전 시즌 + 당해 시즌 선발만 센다 (R8: 라이브 build_state와 같은 창).
+    투수 101: 2015 선발 3번 → 2016 구원 1번. 투수 201: 2015 선발 3번 → 2016 선발 1번(실점 7)."""
+    s = LeagueState()
+    s.start_season(2015)
+    for i, runs in enumerate((2, 4, 6)):
+        g = mk(f"2015-05-0{i + 1}", 100 + i, hs=3, as_=2)
+        s.update(g, mkbox(g, home_pitchers=[{"order": 1, "player_id": 101, "ip_outs": 18, "r": runs}],
+                          away_pitchers=[{"order": 1, "player_id": 201, "ip_outs": 18, "r": runs + 1}]))
+    s.start_season(2016)
+    # 2016 시즌 중에는 2015(직전 시즌) 선발이 아직 센다
+    assert s.pitcher_line(101)["last3_runs"] == pytest.approx(4.0)
+    g = mk("2016-05-01", 200, hs=1, as_=7)
+    s.update(g, mkbox(g, home_pitchers=[{"order": 1, "player_id": 999, "ip_outs": 18},
+                                        {"order": 2, "player_id": 101, "ip_outs": 3, "r": 9}],
+                      away_pitchers=[{"order": 1, "player_id": 201, "ip_outs": 18, "r": 7}]))
+    assert s.pitcher_line(201)["last3_runs"] == pytest.approx((5 + 7 + 7) / 3)  # 2015의 3, 5, 7 중 뒤 둘 + 2016의 7
+    s.start_season(2017)
+    p101 = s.pitcher_line(101)
+    assert p101 is not None and p101["last3_runs"] is None  # 2016은 구원뿐, 2015 선발은 창 밖
+    assert s.pitcher_line(201)["last3_runs"] == pytest.approx(7.0)  # 2016 선발 하나만
+    s.start_season(2017)  # 같은 시즌 재호출은 아무것도 버리지 않음
+    assert s.pitcher_line(201)["last3_runs"] == pytest.approx(7.0)
+
+
 def test_starter_unknown_sets_flag_zero_and_nan():
     s = LeagueState()
     g = mk("2026-04-01", 1, hs=3, as_=2)

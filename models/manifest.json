@@ -1,17 +1,17 @@
 {
   "commit_sha": null,
   "features_path": "data/processed/features.parquet",
-  "features_sha256": "75c5470ddd17e872227c8ecbeb60cb395688e9e0fb387b2a71da6f9302f8f1f3",
-  "generated_at": "2026-10-29T12:28:57+09:00",
+  "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
+  "generated_at": "2026-10-29T12:45:40+09:00",
   "models": {
     "live": {
       "path": "models/win_model.pkl",
-      "sha256": "16d434a796ec1fa9f4a5463cb226d49a72cef5d65f225471d845e0693cc20f8f",
+      "sha256": "871466203b1566d1c5e8b892c81c99b243e3b3dc3bb4ad10ca75f65581d87616",
       "version": "v0.2"
     },
     "report": {
       "path": "models/report-2026.pkl",
-      "sha256": "eb7c1e4be86b3512f33e9fa3cbb3ca697d0dc29c930f762c49e2e694a9ab3321",
+      "sha256": "7a1105d9cf5984a3f174b96fa1d8831e47203a40e1f9e7922f1a686f31ac2920",
       "version": "report-2026"
     }
   }

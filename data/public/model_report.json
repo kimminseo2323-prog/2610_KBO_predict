@@ -31,42 +31,42 @@
       "hi": 0.3,
       "lo": 0.2,
       "n": 1,
-      "pred_mean": 0.24115430157212692
+      "pred_mean": 0.2406886489029635
     },
     {
       "actual_rate": 0.36666666666666664,
       "hi": 0.4,
       "lo": 0.3,
       "n": 30,
-      "pred_mean": 0.3702810823531666
+      "pred_mean": 0.3703877731262591
     },
     {
-      "actual_rate": 0.3864734299516908,
+      "actual_rate": 0.3875598086124402,
       "hi": 0.5,
       "lo": 0.4,
-      "n": 207,
-      "pred_mean": 0.46147092895073977
+      "n": 209,
+      "pred_mean": 0.46182601268785933
     },
     {
-      "actual_rate": 0.5605633802816902,
+      "actual_rate": 0.5596590909090909,
       "hi": 0.6,
       "lo": 0.5,
-      "n": 355,
-      "pred_mean": 0.5494095136291824
+      "n": 352,
+      "pred_mean": 0.5495202803797702
     },
     {
-      "actual_rate": 0.6224489795918368,
+      "actual_rate": 0.6262626262626263,
       "hi": 0.7,
       "lo": 0.6,
-      "n": 98,
-      "pred_mean": 0.6301464561363008
+      "n": 99,
+      "pred_mean": 0.6298882639575025
     },
     {
       "actual_rate": 0.9090909090909091,
       "hi": 0.8,
       "lo": 0.7,
       "n": 11,
-      "pred_mean": 0.7229015304921383
+      "pred_mean": 0.7228861102695978
     },
     {
       "actual_rate": null,
@@ -87,160 +87,160 @@
   "commit_sha": null,
   "feature_importance": [
     {
-      "importance": 0.10582702557077826,
+      "importance": 0.10649089124682375,
       "label": "피타고리안 기대 승률 차이",
       "name": "pyth_diff"
     },
     {
-      "importance": 0.09442041976503002,
+      "importance": 0.09433316635136485,
       "label": "경기당 득실차",
       "name": "run_diff_diff"
     },
     {
-      "importance": 0.08568717957240785,
+      "importance": 0.08538015509856699,
       "label": "선발 9이닝당 삼진 차이",
       "name": "starter_k9_diff"
     },
     {
-      "importance": 0.08424808136931769,
+      "importance": 0.08414119661972869,
       "label": "선발 FIP 차이",
       "name": "starter_fip_diff"
     },
     {
-      "importance": 0.08251101458471799,
+      "importance": 0.08157486101100554,
       "label": "팀 승률 차이",
       "name": "win_pct_diff"
     },
     {
-      "importance": 0.07402020583963387,
+      "importance": 0.07375855433740819,
       "label": "지난 시즌 승률 차이",
       "name": "prev_season_diff"
     },
     {
-      "importance": 0.06234849890953419,
+      "importance": 0.062372339089840266,
       "label": "선발 누적 이닝 차이",
       "name": "starter_ip_diff"
     },
     {
-      "importance": 0.058231450117247105,
+      "importance": 0.05799200184138761,
       "label": "선발 9이닝당 볼넷 차이",
       "name": "starter_bb9_diff"
     },
     {
-      "importance": 0.056770248182704326,
+      "importance": 0.056511419098289696,
       "label": "타선 홈런 비율 차이",
       "name": "hr_rate_diff"
     },
     {
-      "importance": 0.05539609387476028,
+      "importance": 0.0552107256666441,
       "label": "타선 삼진 비율 차이",
       "name": "k_rate_diff"
     },
     {
-      "importance": 0.035119056188151684,
+      "importance": 0.035007795254820714,
       "label": "휴식일 차이",
       "name": "rest_diff"
     },
     {
-      "importance": 0.0305920670761858,
+      "importance": 0.030230169602665682,
       "label": "홈팀의 홈 경기 승률",
       "name": "home_venue_pct"
     },
     {
-      "importance": 0.026429821408818815,
+      "importance": 0.02631657972786151,
       "label": "최근 3일 불펜 투구수 차이",
       "name": "bullpen3_diff"
     },
     {
-      "importance": 0.022149095807539786,
+      "importance": 0.02199747656306587,
       "label": "투수진 FIP 차이",
       "name": "fip_diff"
     },
     {
-      "importance": 0.019183748461031918,
+      "importance": 0.019134054964608762,
       "label": "시즌 진행도",
       "name": "season_progress"
     },
     {
-      "importance": 0.018134141657949618,
+      "importance": 0.018749069319768483,
       "label": "투수진 평균자책점 차이",
       "name": "era_diff"
     },
     {
-      "importance": 0.01761113878209037,
+      "importance": 0.017725517817649854,
       "label": "투수진 9이닝당 볼넷 차이",
       "name": "bb9_diff"
     },
     {
-      "importance": 0.017398912972122607,
+      "importance": 0.01744662798166295,
       "label": "최근 10경기 흐름",
       "name": "last10_diff"
     },
     {
-      "importance": 0.015548831584116928,
+      "importance": 0.015513088093535183,
       "label": "선발투수 기록 유무",
       "name": "starter_known"
     },
     {
-      "importance": 0.011278077765543348,
+      "importance": 0.011510234656519009,
       "label": "원정팀의 원정 경기 승률",
       "name": "away_venue_pct"
     },
     {
-      "importance": 0.008943045078689106,
+      "importance": 0.009179977854534577,
       "label": "타선 출루율 차이",
       "name": "obp_diff"
     },
     {
-      "importance": 0.005583738386760412,
-      "label": "투수진 9이닝당 삼진 차이",
-      "name": "k9_diff"
-    },
-    {
-      "importance": 0.005417911198530466,
+      "importance": 0.005471225412716794,
       "label": "올 시즌 맞대결 승률",
       "name": "h2h_home_pct"
     },
     {
-      "importance": 0.004549198421099969,
+      "importance": 0.00542137397251613,
+      "label": "투수진 9이닝당 삼진 차이",
+      "name": "k9_diff"
+    },
+    {
+      "importance": 0.004172017958886929,
       "label": "선발 평균자책점 차이",
       "name": "starter_era_diff"
     },
     {
-      "importance": 0.0023737607485993556,
+      "importance": 0.0024497843507051017,
       "label": "타선 볼넷 비율 차이",
       "name": "bb_rate_diff"
     },
     {
-      "importance": 0.00022723667663845291,
+      "importance": 0.0019096961074228024,
       "label": "선발 최근 3경기 실점 차이",
       "name": "starter_last3_runs_diff"
     }
   ],
-  "features_sha256": "75c5470ddd17e872227c8ecbeb60cb395688e9e0fb387b2a71da6f9302f8f1f3",
-  "generated_at": "2026-10-29T12:28:54+09:00",
+  "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
+  "generated_at": "2026-10-29T12:45:37+09:00",
   "matchup_feature_ablation": null,
   "model_version": "report-2026",
   "models": {
     "lgbm": {
-      "best_iteration": 45,
+      "best_iteration": 52,
       "calibration": "platt",
       "calibration_fit": "loso_oof_train",
       "calibration_val_logloss": {
-        "isotonic": 0.6824528275059143,
-        "none": 0.6805673101598311,
-        "platt": 0.6805047768867738
+        "isotonic": 0.6805450405112479,
+        "none": 0.6797173943400054,
+        "platt": 0.6795762112804171
       },
       "test": {
-        "accuracy": 0.5797720797720798,
-        "brier": 0.24059789666488302,
-        "log_loss": 0.6741095862215064,
+        "accuracy": 0.5911680911680912,
+        "brier": 0.24009627974024422,
+        "log_loss": 0.6730542833119562,
         "n": 702
       },
       "val": {
-        "accuracy": 0.5716332378223495,
-        "brier": 0.24372090889057063,
-        "log_loss": 0.6805047768867738,
+        "accuracy": 0.5787965616045845,
+        "brier": 0.24327302589602717,
+        "log_loss": 0.6795762112804171,
         "n": 698
       }
     },
@@ -248,20 +248,20 @@
       "calibration": "platt",
       "calibration_fit": "loso_oof_train",
       "calibration_val_logloss": {
-        "isotonic": 0.6777687717328887,
-        "none": 0.6772150985658068,
-        "platt": 0.677094023802874
+        "isotonic": 0.6781675607220424,
+        "none": 0.6772330991329577,
+        "platt": 0.6771062292097383
       },
       "test": {
         "accuracy": 0.594017094017094,
-        "brier": 0.23928964306457198,
-        "log_loss": 0.6712607960845185,
+        "brier": 0.23927358428788292,
+        "log_loss": 0.6712265100209293,
         "n": 702
       },
       "val": {
-        "accuracy": 0.5687679083094556,
-        "brier": 0.24208141660412236,
-        "log_loss": 0.677094023802874,
+        "accuracy": 0.5730659025787965,
+        "brier": 0.24208719725726602,
+        "log_loss": 0.6771062292097383,
         "n": 698
       }
     }

@@ -144,6 +144,7 @@ def _new_pitcher_totals() -> dict:
 
 
 def _new_pitcher() -> dict:
+    # last3: 최근 선발 3경기의 (시즌, 실점). 시즌을 같이 적어 두어야 start_season에서 오래된 기록을 버릴 수 있다.
     return {"cur": _new_pitcher_totals(), "prev": _new_pitcher_totals(), "last3": deque(maxlen=3)}
 
 
@@ -159,7 +160,9 @@ class LeagueState:
     def start_season(self, season: int) -> None:
         """현재 시즌 누적을 '직전 시즌'으로 넘기고 현재 시즌을 비운다.
         팀은 최종 승률만, 투수는 시즌 합계를 넘긴다 (두 시즌 전 기록은 버린다).
-        투수의 최근 3선발 실점은 시즌을 넘어 그대로 이어진다.
+        투수의 최근 3선발 실점도 같은 창(직전 시즌 + 당해 시즌)만 남긴다 — season-1보다 오래된 선발은 버린다.
+        그래야 직전 시즌부터만 읽는 라이브 상태(run_pipeline.build_state)와 학습 피처가 똑같아진다.
+        (start_season 전에 쌓인 선발은 시즌을 모르므로(None) 그대로 둔다.)
         같은 시즌으로 두 번 불러도 아무 일 없다 (직전 시즌 기록이 지워지지 않게)."""
         if season == self.season:
             return
@@ -171,6 +174,7 @@ class LeagueState:
         self._h2h = defaultdict(int)
         for p in self._p.values():
             p["prev"], p["cur"] = p["cur"], _new_pitcher_totals()
+            p["last3"] = deque(((s, r) for s, r in p["last3"] if s is None or s >= season - 1), maxlen=3)
 
     def update(self, game: dict, box: dict | None = None) -> None:
         """끝난(FINAL, 양 팀 점수 있음) 경기 하나를 반영. box가 없으면 승패·득실·휴식일·맞대결만 갱신한다."""
@@ -216,7 +220,7 @@ class LeagueState:
             p["cur"]["apps"] += 1
             if row.get("order") == 1:
                 p["cur"]["starts"] += 1
-                p["last3"].append(_num(row.get("r")))
+                p["last3"].append((self.season, _num(row.get("r"))))
 
     def team_line(self, code: str, on: str) -> dict:
         """on('YYYY-MM-DD') 경기 직전 시점의 팀 요약. 저장된 상태를 바꾸지 않는다."""
@@ -254,7 +258,7 @@ class LeagueState:
         return {
             **_pitching_rates(both),
             "ip": both["ip_outs"] / 3,
-            "last3_runs": sum(p["last3"]) / len(p["last3"]) if p["last3"] else None,
+            "last3_runs": sum(r for _, r in p["last3"]) / len(p["last3"]) if p["last3"] else None,
             "season": {"era": cur["era"], "k9": cur["k9"], "bb9": cur["bb9"],
                        "ip": p["cur"]["ip_outs"] / 3, "starts": p["cur"]["starts"]},
         }

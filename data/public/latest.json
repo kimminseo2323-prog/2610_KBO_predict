@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-29T12:41:56+09:00",
+  "generated_at": "2026-10-29T12:45:47+09:00",
   "date": "2026-10-29",
   "mode": "live",
   "model_version": "v0.2",
@@ -45,7 +45,7 @@
         "last10": 0.4,
         "run_diff": 0.96
       },
-      "home_win_prob": 0.4463,
+      "home_win_prob": 0.4464,
       "factors": [
         {
           "name": "선발 누적 이닝 차이",
