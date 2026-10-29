@@ -37,3 +37,17 @@ def test_every_game_has_two_starters(real_df):
         boxes = raw_store.load_boxscores(season)
         ids = real_df.loc[real_df.season == season, "game_id"]
         assert all(None not in starter_ids(boxes[g]).values() for g in ids), season
+
+
+def test_records_coverage():
+    # 재파싱 뒤: 정규시즌 FINAL 박스스코어의 99% 이상에 기록표 칸이 있고, 전체 unmatched 항목은 200개 미만
+    from kbo_predict import raw_store
+    missing = unmatched = total = 0
+    for season in sorted(EXPECTED_ROWS):
+        for b in raw_store.load_boxscores(season).values():
+            total += 1
+            rows = b["batting"]["away"] + b["batting"]["home"]
+            missing += rows[0]["doubles"] is None if rows else 1
+            unmatched += len(b.get("records_unmatched", []))
+    print(f"missing={missing} total={total} unmatched={unmatched}")
+    assert missing / total < 0.01 and unmatched < 200

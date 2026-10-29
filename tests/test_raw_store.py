@@ -1,5 +1,5 @@
 from kbo_predict.mykbo_parse import parse_game, parse_week
-from kbo_predict.raw_store import append_boxscores, load_boxscores, load_games, upsert_games
+from kbo_predict.raw_store import append_boxscores, boxscores_dir, rewrite_boxscores, load_boxscores, load_games, upsert_games
 
 
 def test_upsert_games_dedupes_and_sorts(tmp_data_dir, fixture_html):
@@ -91,3 +91,10 @@ def test_upsert_starters_never_downgrades_known_starter(tmp_data_dir):
     assert load_starters(2026)[7] == {"game_id": 7, "date": "2026-10-29", "fetched_at": "t3", "away": a, "home": h}
     assert upsert_starters(2026, [dict(tba, fetched_at="t4")]) == 0  # 둘 다 알려진 뒤의 TBA 재수집도 변경 0
     assert load_starters(2026)[7]["away"] == a and load_starters(2026)[7]["home"] == h
+
+
+def test_rewrite_boxscores_replaces_month_files(tmp_data_dir):
+    append_boxscores(2030, {1: {"game_id": 1, "date": "2030-04-01"}, 2: {"game_id": 2, "date": "2030-05-01"}})
+    assert rewrite_boxscores(2030, {2: {"game_id": 2, "date": "2030-05-01", "x": 1}}) == 1
+    assert load_boxscores(2030) == {2: {"game_id": 2, "date": "2030-05-01", "x": 1}}
+    assert not (boxscores_dir(2030) / "2030-04.jsonl.gz").exists()

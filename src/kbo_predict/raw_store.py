@@ -98,6 +98,22 @@ def append_boxscores(season: int, boxscores: dict[int, dict]) -> int:
     return sum(len(v) for v in by_month.values())
 
 
+def rewrite_boxscores(season: int, boxscores: dict[int, dict]) -> int:
+    """시즌의 월 파일을 모두 지우고 (date, game_id) 순으로 다시 쓴다. 쓴 행 수를 반환."""
+    for path in boxscores_dir(season).glob("*.jsonl.gz"):
+        path.unlink()
+    by_month: dict[str, list[tuple[int, dict]]] = {}
+    for gid, b in sorted(boxscores.items(), key=lambda kv: (kv[1]["date"], kv[0])):
+        by_month.setdefault(b["date"][:7], []).append((gid, b))
+    for month, items in by_month.items():
+        path = boxscores_month_path(season, month)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with gzip.open(path, "wt", encoding="utf-8", newline="\n") as f:
+            for gid, b in items:
+                f.write(_dumps({**b, "game_id": gid}) + "\n")
+    return sum(len(v) for v in by_month.values())
+
+
 def load_starters(season: int) -> dict[int, dict]:
     """예고 선발 행을 game_id -> 행으로 읽는다."""
     path = starters_path(season)
