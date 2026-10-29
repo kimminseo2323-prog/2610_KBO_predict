@@ -377,3 +377,43 @@ def test_training_frame_continues_given_state():
     df = build_training_frame([mk("2026-04-02", 2, hs=1, as_=0)], {}, season=2026, state=s)
     assert df.win_pct_diff.tolist() == [pytest.approx(1.0)]
     assert s.team_line("LG", "2026-04-03")["games"] == 2  # 넘겨준 상태가 이어서 누적됨
+
+
+# ---------- 시즌 연결 데이터셋 + parquet ----------
+
+@pytest.fixture
+def two_season_data(tmp_data_dir):
+    """합성 2시즌을 임시 data 폴더에 저장. 2015: LG 2승 1패(승률 2/3), HH 1승 2패."""
+    from kbo_predict import raw_store
+
+    raw_store.upsert_games(2015, [
+        mk("2015-04-10", 1, hs=5, as_=2), mk("2015-04-11", 2, hs=5, as_=2), mk("2015-04-12", 3, hs=1, as_=2),
+    ])
+    raw_store.upsert_games(2016, [mk("2016-04-10", 11, hs=3, as_=1), mk("2016-04-09", 10, hs=0, as_=4)])
+    return tmp_data_dir
+
+
+def test_build_dataset_links_seasons(two_season_data):
+    from kbo_predict.features import build_dataset
+
+    df = build_dataset([2016, 2015])  # 순서를 섞어 줘도 시즌 오름차순
+    assert df.season.tolist() == [2015, 2015, 2015, 2016, 2016]
+    assert df.game_id.tolist() == [1, 2, 3, 10, 11]  # 시즌 안에서는 (date, game_id)
+    assert df.index.tolist() == list(range(5))
+    assert df.columns.tolist() == ["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES, "y"]
+    first_2016 = df[df.season == 2016].iloc[0]
+    assert first_2016.prev_season_diff == pytest.approx(2 / 3 - 1 / 3)  # 2015 최종 승률 차
+    assert math.isnan(first_2016.win_pct_diff)  # 당해 0경기
+
+
+def test_features_parquet_roundtrip_and_sha(two_season_data, tmp_path):
+    from kbo_predict.features import build_dataset, features_sha256, load_features, save_features
+
+    df = build_dataset([2015, 2016])
+    a, b = tmp_path / "a.parquet", tmp_path / "sub" / "b.parquet"
+    save_features(df, a)
+    save_features(df, b)  # 없는 폴더도 만든다
+    pd.testing.assert_frame_equal(load_features(a), df)
+    assert features_sha256(a) == features_sha256(b) and len(features_sha256(a)) == 64
+    save_features(df.assign(y=1 - df.y), b)
+    assert features_sha256(a) != features_sha256(b)

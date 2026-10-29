@@ -3,12 +3,19 @@
 핵심 규칙: 어떤 경기의 피처는 '그 경기 날짜 전날까지' 끝난 경기로만 만든다.
 그래서 build_training_frame은 하루치 경기의 피처를 모두 계산한 뒤에야 상태를 갱신한다.
 """
+import argparse
+import hashlib
+import time
 from collections import defaultdict, deque
 from datetime import date as _date, timedelta
 from itertools import groupby
+from pathlib import Path
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
+from . import raw_store
 from .seasons import is_regular
 
 TEAM_FEATURES = [
@@ -332,3 +339,53 @@ def build_training_frame(
         for g in day_games:
             state.update(g, boxscores.get(g["game_id"]))
     return pd.DataFrame(rows, columns=["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES, "y"])
+
+
+# ---------- 시즌 연결 데이터셋 + 저장 ----------
+
+def build_dataset(seasons: list[int]) -> pd.DataFrame:
+    """시즌을 오름차순으로 이어 붙인 학습 데이터. 시즌마다 start_season으로 '직전 시즌' 기록을 넘긴다.
+    행 순서는 시즌 → (date, game_id). 저장된 원본(raw_store)을 읽는다."""
+    state = LeagueState()
+    frames = []
+    for season in sorted(set(seasons)):
+        state.start_season(season)
+        frames.append(build_training_frame(
+            raw_store.load_games(season), raw_store.load_boxscores(season), season=season, state=state))
+    return pd.concat(frames, ignore_index=True) if frames else build_training_frame([], {}, season=0)
+
+
+def save_features(df: pd.DataFrame, path) -> None:
+    """parquet(snappy)로 저장. 같은 DataFrame이면 같은 바이트가 나온다 (SHA256 비교용)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.Table.from_pandas(df, preserve_index=False), path, compression="snappy")
+
+
+def load_features(path) -> pd.DataFrame:
+    return pq.read_table(Path(path)).to_pandas()
+
+
+def features_sha256(path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(description="전 시즌 피처 데이터셋을 만들어 parquet로 저장")
+    ap.add_argument("--out", required=True, help="저장할 parquet 경로")
+    ap.add_argument("--seasons", nargs=2, type=int, metavar=("START", "END"), help="시즌 범위 (기본: 있는 시즌 전부)")
+    args = ap.parse_args(argv)
+    seasons = raw_store.available_seasons()
+    if args.seasons:
+        seasons = [s for s in seasons if args.seasons[0] <= s <= args.seasons[1]]
+    t0 = time.time()
+    df = build_dataset(seasons)
+    save_features(df, args.out)
+    print(f"rows: {len(df)}  ({time.time() - t0:.1f}s)")
+    for season, n in df.groupby("season").size().items():
+        print(f"  {season}: {n}")
+    print(f"sha256: {features_sha256(args.out)}")
+
+
+if __name__ == "__main__":
+    main()

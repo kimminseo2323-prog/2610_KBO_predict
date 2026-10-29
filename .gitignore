@@ -21,3 +21,6 @@ Thumbs.db
 # raw html cache
 data/cache/
 logs/
+
+# generated features
+data/processed/
