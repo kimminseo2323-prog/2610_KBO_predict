@@ -2,6 +2,7 @@
 import pytest
 
 from kbo_predict.features import build_dataset, starter_ids
+from kbo_predict.player_stats import batting_seasons, korean_names, pitching_seasons
 
 # = 정규 FINAL − 무승부 (data/raw/{season}/games.jsonl 기준)
 EXPECTED_ROWS = {2015: 715, 2016: 713, 2017: 709, 2018: 714, 2019: 713, 2020: 707,
@@ -56,3 +57,15 @@ def test_records_coverage():
     assert missing / total < 0.01
     assert relevant < 200
     assert total_unmatched < 500  # 실측 457 (E 143, HR off 149, GIDP 38 포함). 회귀 감시용 상한
+
+
+def test_player_seasons_real():
+    seasons = sorted(EXPECTED_ROWS)
+    bat, pit = batting_seasons(seasons), pitching_seasons(seasons)
+    qual_bat = (bat.pa >= 200).groupby(bat.season).sum()
+    qual_pit = ((pit.ip_outs >= 150) | (pit.games - pit.starts >= 30)).groupby(pit.season).sum()
+    print("batters pa>=200:", qual_bat.to_dict(), "pitchers:", qual_pit.to_dict(),
+          "names:", len(korean_names(seasons)))
+    assert qual_bat.between(90, 200).all()   # 실측 107~117 (10개 팀 x ~11명), 브리프의 하한 120은 과대      # 시즌당 규정급 타자 수 상식 범위
+    assert qual_pit.between(100, 200).all()
+    assert len(korean_names(seasons)) > 1500
