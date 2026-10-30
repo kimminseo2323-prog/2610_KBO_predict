@@ -71,7 +71,7 @@ function wilson(p, n) {
   const h = (Z95 * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / d;
   return { lo: c - h, hi: c + h };
 }
-/** 퍼센트포인트 차이 숫자 → "+2.7" (단위는 따로 붙인다). */
+/** 퍼센트포인트 차이 숫자 → "+x.x" 꼴 (단위는 따로 붙인다). */
 const signedPP = (d) => `${d > 0 ? "+" : d < 0 ? "−" : "±"}${Math.abs(d).toFixed(1)}`;
 
 /** 홀드아웃 판정에 쓰는 값 묶음: 무대(장면)와 ① 카드가 같은 값을 쓴다. */
