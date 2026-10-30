@@ -420,7 +420,7 @@ function renderLive() {
   const nDecided = rows.filter((h) => h.status === "FINAL" && (h.correct === 0 || h.correct === 1)).length;
   const full = [...rows].reverse().map((h) => el("tr", {}, [
     el("td", { class: "nowrap" }, fmtDate(h.date)),
-    el("td", { class: "nowrap" }, `${teamName(h.away)} @ ${teamName(h.home)}`),
+    el("td", { class: "nowrap" }, `${teamName(h.away)} vs ${teamName(h.home)}`),
     el("td", { class: "num" }, fmtPct(h.home_win_prob, 1)),
     el("td", {}, h.model_version ?? "—"),
     el("td", { class: "nowrap" }, fmtKST(h.predicted_at)),
@@ -442,7 +442,7 @@ function renderLive() {
     el("details", { class: "live__all" }, [
       el("summary", {}, `전체 기록 보기 (${fmtInt(rows.length)}경기)`),
       el("div", { class: "inset" }, table("라이브 예측 전체 기록 (최근 순)",
-        [["날짜"], ["대진 (원정 @ 홈)"], ["홈 승률", "num"], ["모델"], ["예측 시각"], ["결과"], ["적중", "r"]], full, "live-full")),
+        [["날짜"], ["대진 (원정 vs 홈)"], ["홈 승률", "num"], ["모델"], ["예측 시각"], ["결과"], ["적중", "r"]], full, "live-full")),
     ]),
   );
 }

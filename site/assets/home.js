@@ -59,7 +59,7 @@ const prob = (v) => {
   return fmtPct(x);
 };
 const sign = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%p`;
-const matchLabel = (g) => `${teamName(g.away.code)} @ ${teamName(g.home.code)}`;
+const matchLabel = (g) => `${teamName(g.away.code)} vs ${teamName(g.home.code)}`;
 /** 선발 이름: players.json을 읽었으면 한글 이름(player_id로 찾음), 그 전이나 없으면 데이터의 로마자 이름. */
 const starterName = (s) => state.nameKo?.get(s.player_id) ?? s.name;
 
@@ -736,7 +736,7 @@ function renderRecent() {
     head([["날짜"], ["대진"], ["홈 승률", "num"], ["결과", "hide-sm"], ["적중", "r"]]),
     el("tbody", {}, rows.map((h) => el("tr", {}, [
       el("td", { class: "nowrap" }, fmtDate(h.date).replace(/ \(.\)$/, "")), // 요일은 빼서 좁은 화면에 맞춘다
-      el("td", {}, `${teamName(h.away)} @ ${teamName(h.home)}`),
+      el("td", {}, `${teamName(h.away)} vs ${teamName(h.home)}`),
       el("td", { class: "num" }, fmtPct(h.home_win_prob)),
       el("td", { class: "hide-sm" }, winnerText(h)),
       el("td", { class: "r" }, verdictPill(h)),
