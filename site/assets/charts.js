@@ -152,7 +152,7 @@ export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, l
   const drawRef = hasRef && refY >= lo && refY <= hi;
   return mount(el, (W) => {
     const multi = series.length > 1;
-    const L = 48, R = multi ? (endLabels ? 64 : 12) : 56, T = 10, B = 26, H = height;
+    const L = 48, R = multi ? (endLabels ? 68 : 12) : 56, T = 10, B = 26, H = height;
     const X = (i) => L + (xs.length > 1 ? (i / (xs.length - 1)) * (W - L - R) : (W - L - R) / 2);
     const Y = (v) => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B);
     const svg = svgRoot(W, H, label);
@@ -178,7 +178,7 @@ export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, l
     });
     if (multi && endLabels) {
       // 마지막 유한값 위치 → 이름표 y. 위에서부터 최소 간격(GAP)을 지키며 아래로 밀고, 그림 밖으로 나가면 아래에서부터 다시 위로 민다.
-      const GAP = 14, top = T + 4, bottom = H - B;
+      const GAP = 15, top = T + 4, bottom = H - B;
       const ends = series.map((s) => {
         const i = s.points.map((p) => p.y).findLastIndex(fin);
         return i < 0 ? null : { s, x: X(i), y: Y(Number(s.points[i].y)) };
@@ -189,11 +189,24 @@ export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, l
         if (ends[k].ly > lim) ends[k].ly = lim;
       }
       const lx = W - R + 10;
-      ends.forEach((e) => {
-        svg.append(svgEl("circle", { cx: e.x, cy: e.y, r: 3.5, style: `fill:${cv(e.s.color ?? color)}` }));
-        if (Math.abs(e.ly - e.y) > 2 || lx - e.x > 6) svg.append(svgEl("path", { class: "c-leader", d: `M${(e.x + 4).toFixed(1)},${e.y.toFixed(1)} L${(lx - 3).toFixed(1)},${e.ly.toFixed(1)}`, fill: "none" }));
-        svg.append(svgEl("text", { class: "c-end", x: lx, y: e.ly + 4 }, String(e.s.short ?? e.s.name)));
-      });
+      // 같은 값으로 끝난 줄들(|Δy| < 1px — 가을야구 확률이 100%·0%에 몰린 팀들)은 한 묶음: 점에서 묶음 가운데로 연결선 하나,
+      // 이름표 옆에 세로 괄호 하나. 줄마다 연결선을 그으면 한 점에서 부채꼴로 겹쳐 읽기 어렵다.
+      for (let g = 0; g < ends.length;) {
+        let h = g;
+        while (h + 1 < ends.length && Math.abs(ends[h + 1].y - ends[g].y) < 1) h += 1;
+        const group = ends.slice(g, h + 1);
+        const e0 = group[0], eN = group[group.length - 1];
+        const mid = (e0.ly + eN.ly) / 2;
+        group.forEach((e) => svg.append(svgEl("circle", { cx: e.x, cy: e.y, r: 3.5, style: `fill:${cv(e.s.color ?? color)}` })));
+        if (Math.abs(mid - e0.y) > 2 || lx - e0.x > 6) {
+          svg.append(svgEl("path", { class: "c-leader", d: `M${(e0.x + 4).toFixed(1)},${e0.y.toFixed(1)} L${(lx - 4).toFixed(1)},${mid.toFixed(1)}`, fill: "none" }));
+        }
+        if (group.length > 1) {
+          svg.append(svgEl("path", { class: "c-leader", d: `M${(lx - 4).toFixed(1)},${(e0.ly - 4).toFixed(1)} V${(eN.ly + 4).toFixed(1)}`, fill: "none" }));
+        }
+        group.forEach((e) => svg.append(svgEl("text", { class: "c-end", x: lx, y: e.ly + 4 }, String(e.s.short ?? e.s.name))));
+        g = h + 1;
+      }
     }
     if (series.length === 1) {
       const pts = series[0].points;
@@ -227,7 +240,14 @@ export function scatter(el, points, { colorKey = "color", onSelect, selectedId, 
   // 지금 선택된 점 id. 점을 고르면 바뀌고, 너비가 바뀌어 다시 그릴 때(ResizeObserver)도 이 값을 쓴다.
   let current = selectedId;
   return mount(el, (W) => {
-    const H = height ?? Math.round(Math.min(480, Math.max(260, W * 0.72)));
+    // height: 숫자 | "fill"(부모가 flex로 늘려 준 높이를 채운다 — 홈 틸 카드의 미니 지도. 늘려 준 높이가 없으면 240) | 없음(너비 비례)
+    let H;
+    if (height === "fill") {
+      el.replaceChildren(); // 이전 그림의 높이가 아니라 레이아웃이 준 높이를 잰다
+      H = Math.max(240, Math.round(el.clientHeight || 0));
+    } else {
+      H = height ?? Math.round(Math.min(480, Math.max(260, W * 0.72)));
+    }
     const P = 14;
     const X = (v) => P + ((v - xl) / (xh - xl || 1)) * (W - 2 * P);
     const Y = (v) => P + (1 - (v - yl) / (yh - yl || 1)) * (H - 2 * P);

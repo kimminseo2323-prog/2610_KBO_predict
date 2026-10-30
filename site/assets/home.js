@@ -807,7 +807,7 @@ function renderTypeMap() {
   const chart = el("div");
   body.replaceChildren(el("div", { class: "inset" }, chart), counts);
   scatter(chart, bat.map((p) => ({ id: p.player_id, x: p.x, y: p.y, label: `${p.name_ko ?? p.name} · ${teamName(p.team)}`, type: p.type })), {
-    colorKey: (p) => typeColor("batter", p.type?.id), typeLabel: (p) => p.type?.name ?? "—", height: 210,
+    colorKey: (p) => typeColor("batter", p.type?.id), typeLabel: (p) => p.type?.name ?? "—", height: "fill",
     label: `${season} 타자 유형 지도 (점 하나가 한 선수)`,
   });
 }

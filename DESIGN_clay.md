@@ -339,6 +339,7 @@ Component voltage comes from **saturated single-color feature cards** in a 6-col
 - **Muted** (`{colors.muted}` — #6a6a6a): Sub-headings, breadcrumbs, footer body.
 - **Muted Soft** (`{colors.muted-soft}` — #9a9a9a): Captions, fine-print.
 - **On Primary / On Dark** (`{colors.on-primary}` — #ffffff): Text on primary buttons + dark feature cards (teal).
+- **Project rule — text on brand-pink (KBO Predict):** white on #ff4d8b is only 3.1:1, so white is reserved for display text of 24px+ (or 19px+ at weight 600): team names, big percentages, player names. Everything smaller on pink — leads, captions, pills, table text — uses Ink (6.3:1). Encoded in `site/assets/app.css` (`.card--pink`, `.pill--pink`) and checked by `tests/test_site.py`.
 
 ### Semantic
 - **Success** (`{colors.success}` — #22c55e): Success states.

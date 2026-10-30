@@ -96,7 +96,7 @@
 .type-notes__list dd:last-child { margin-bottom: 0; }
 
 /* ---------- 선수 카드 (핑크) ---------- */
-.pcard__title { font-size: 20px; }  /* 핑크 위 흰 글자는 큰 글자로만 */
+.pcard__title { font-size: 20px; }  /* 핑크 카드: 제목·보조 글자는 잉크(app.css 규칙), 선수 이름(44px+)만 흰색 */
 .pcard-skeleton--name { height: 64px; margin-top: var(--sp-16); background: rgba(255, 255, 255, 0.35); }
 .pcard__type { margin-top: var(--sp-16); }
 .pcard__pill {

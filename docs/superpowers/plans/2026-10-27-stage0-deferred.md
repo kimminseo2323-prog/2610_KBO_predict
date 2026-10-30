@@ -96,10 +96,10 @@
 - **Genspark 제작본 도착 시 교체 판단**: 사용자가 브리프로 만든 zip을 주면 `import_site.py --dry-run` → 반영 → `check_site.py --strict` → 1280px·360px 스크린샷으로 지금 Pages 버전과 비교해 사용자가 정한다. 반영 스크립트는 기존 `site/assets/`를 남겨 두므로(단일 파일 내보내기면 쓰이지 않는 파일이 남음) 교체가 확정되면 안 쓰는 assets 정리와 `check_site`의 상수 검사(`assets/app.js` 기준)가 새 페이지에도 의미가 있는지 다시 본다.
 - **한 달 무인 운영 확인**(스펙 §12 item 6): 일일 2회·주간 재학습·ci·pages 워크플로가 사람 손 없이 도는지, `collect-failure`·`parity-failure` 이슈, 사이트 증거 바의 갱신 시각·실행 번호가 매일 바뀌는지 본다. 주간 재학습 첫 실행은 2026-11-02(위 항목).
 - **Pages 첫 배포**: `pages.yml`의 `enablement: true`가 첫 실행에서 Pages를 켠다. 첫 실행 전에는 URL이 404이고, 실패하면 저장소 Settings → Pages의 source를 "GitHub Actions"로 직접 켠다.
-- **팀 페이지 되감기 차트 끝 이름 겹침**: 가을야구 확률 되감기 선 그래프의 오른쪽 끝 팀 이름이 확률이 비슷한 팀끼리(특히 0%·100% 근처) 겹친다 → 이름 위치를 겹치지 않게 밀거나 범례로.
-- **홈 틸 "선수 유형 지도" 카드의 빈 공간**: 데스크톱 벤토에서 틸 카드 아래쪽이 비어 보인다 → 미니 지도 높이·유형별 인원 배치 조정.
-- **성적표 신뢰도 곡선 캡션(360px)**: 모바일 폭에서 캡션이 길어 줄바꿈이 어색하다 → 짧은 문구 또는 차트 아래 표로.
-- **흰 글자 + 핑크 pill 대비를 시스템 규칙으로**: 핑크(#ff4d8b) 위 흰 작은 글자는 대비가 모자라 페이지마다 ink + 크림 inset으로 피해 갔다(스펙 13절 5단계) → `DESIGN_clay.md`·`tokens.css`·`app.css`에 "핑크 위 14px 이하 글자는 ink" 규칙을 하나로 적고 `test_card_colors_and_text_contrast_rules`에 pill까지 넣는다.
+- ✅ (5단계 뒤 손질) **팀 페이지 되감기 차트 끝 이름 겹침** → `lineChart` endLabels가 같은 값으로 끝난 줄들을 한 묶음으로 묶어 연결선 하나 + 세로 괄호로 그린다(간격 15px, 오른쪽 여백 68px). 원래 항목:: 가을야구 확률 되감기 선 그래프의 오른쪽 끝 팀 이름이 확률이 비슷한 팀끼리(특히 0%·100% 근처) 겹친다 → 이름 위치를 겹치지 않게 밀거나 범례로.
+- ✅ (5단계 뒤 손질) **홈 틸 "선수 유형 지도" 카드의 빈 공간** → `scatter(height: "fill")` + `#typemap-body`·`.inset` flex 열로 지도가 두 줄 높이를 채운다(1280px에서 240 → 375px). 원래 항목:: 데스크톱 벤토에서 틸 카드 아래쪽이 비어 보인다 → 미니 지도 높이·유형별 인원 배치 조정.
+- ✅ (최종 수정 라운드에서 해결, 5단계 뒤 360px 확인) **성적표 신뢰도 곡선 캡션(360px)** → 막대 위 숫자가 없으면 캡션을 "예측 홈 승률"로 줄인다. 원래 항목:: 모바일 폭에서 캡션이 길어 줄바꿈이 어색하다 → 짧은 문구 또는 차트 아래 표로.
+- ✅ (5단계 뒤 손질) **흰 글자 + 핑크 pill 대비를 시스템 규칙으로** → `app.css`: `.card--pink`·`.pill--pink` 기본 글자색 잉크, 24px 이상 표시용 글자만 페이지 CSS가 흰색으로(규칙 주석), `DESIGN_clay.md` Text 절 Project rule, `tokens.css --on-dark` 주석, `test_card_colors_and_text_contrast_rules`가 검사. 원래 항목:: 핑크(#ff4d8b) 위 흰 작은 글자는 대비가 모자라 페이지마다 ink + 크림 inset으로 피해 갔다(스펙 13절 5단계) → `DESIGN_clay.md`·`tokens.css`·`app.css`에 "핑크 위 14px 이하 글자는 ink" 규칙을 하나로 적고 `test_card_colors_and_text_contrast_rules`에 pill까지 넣는다.
 - **`site/_preview.html` 정리**: Task 1의 로컬 미리보기 전용 페이지(gitignore라 배포되지 않음). 사이트가 완성됐으니 지우거나 `scripts/`로 옮긴다.
 
 ## 정리만 하면 되는 것

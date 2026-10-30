@@ -87,11 +87,18 @@ def test_tokens_match_design_md():
 
 
 def test_card_colors_and_text_contrast_rules():
-    """app.css: 카드 6색 변형, 핑크·틸만 흰 글자, 포커스 링, reduced-motion, wrap 1280px."""
+    """app.css: 카드 6색 변형, 틸만 흰 글자(핑크 위 작은 글자·알약은 잉크), 포커스 링, reduced-motion, wrap 1280px."""
     css = (ASSETS / "app.css").read_text(encoding="utf-8")
     for c in ("pink", "teal", "lavender", "peach", "ochre", "cream"):
         assert f".card--{c}" in css
-    assert re.search(r"\.card--pink,\s*\.card--teal\s*\{[^}]*color:\s*var\(--on-dark\)", css)
+    assert re.search(r"\.card--teal\s*\{[^}]*color:\s*var\(--on-dark\)", css)
+    # 핑크 위 흰 글자는 3.1:1 — 핑크 카드·핑크 알약의 기본 글자색은 잉크, 큰 표시용 글자만 페이지 CSS가 흰색으로 되돌린다
+    assert re.search(r"\.card--pink\s*\{[^}]*color:\s*var\(--ink\)", css)
+    assert re.search(r"\.card--pink\s*\{[^}]*--muted:\s*var\(--ink\)", css)
+    assert re.search(r"\.pill--pink\s*\{[^}]*color:\s*var\(--ink\)", css)
+    assert not re.search(r"\.pill--pink\s*\{[^}]*--on-dark", css)
+    home_css = (ASSETS / "home.css").read_text(encoding="utf-8")
+    assert re.search(r"\.side--away\s*\{[^}]*color:\s*var\(--ink\)", home_css)
     assert ":focus-visible" in css and "prefers-reduced-motion" in css
     assert "max-width: 1280px" in css
     assert "box-shadow" not in css  # 그림자 없음 (DESIGN)

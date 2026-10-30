@@ -180,10 +180,14 @@
 .race__all .table { margin-top: var(--sp-8); }
 .race__all tr.is-today td { font-weight: 600; }
 
-/* ⑤ 유형 지도 */
+/* ⑤ 유형 지도 — 카드가 벤토 두 줄을 차지하므로 크림 패널과 지도가 남는 높이를 채운다(scatter height: "fill") */
+#typemap-body { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.b-typemap .inset { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.b-typemap .inset > .chart { flex: 1 1 auto; min-height: 0; }
 .typemap__counts { list-style: none; padding: 0; display: flex; flex-wrap: wrap; align-content: flex-start; gap: var(--sp-8); margin-top: var(--sp-16); min-height: 72px; }
 .typemap__counts b { font-weight: 600; margin-left: 2px; }
 .typemap__link { margin-top: auto; padding-top: var(--sp-24); }
+@media (max-width: 1024px) { .typemap__counts { min-height: 0; } }  /* 한 줄 카드에서는 알약 아래 빈 줄을 두지 않는다 */
 
 /* ⑥ 최근 예측 */
 .recent { margin-top: var(--sp-12); }
