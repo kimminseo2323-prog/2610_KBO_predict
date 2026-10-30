@@ -20,6 +20,9 @@ const REWIND_SEASON = 2026;   // 되감기 파일이 있는 유일한 시즌 (re
 const PLAYOFF_SPOTS = 5;      // 가을야구: 정규시즌 5위까지 (2015년부터 와일드카드 포함)
 const REWIND_STRIDE = 7;      // 되감기 날짜 표본 간격 (매 7번째 날 + 마지막 날 → 최대 25개 파일)
 const LABEL_SHARE = 0.08;     // 로스터 막대 안에 %를 쓰는 최소 비중
+// 정규시즌 승률이 같아 결정전(1위·5위)으로 순위를 정한 시즌: 시즌 → [이긴 팀, 진 팀].
+// 결정전은 정규시즌 경기가 아니라 teams.json에 없으므로 실제 결과를 여기 적어 둔다 (JSON 문법 — tests/test_site.py가 읽는다).
+export const TIEBREAK_GAMES = {"2021": ["KT", "SS"], "2024": ["KT", "SK"]};
 const GROUPS = [["batter", "타자", "팀 타석(PA) 중 그 유형 타자가 선 비중"], ["pitcher", "투수", "팀 이닝(IP) 중 그 유형 투수가 던진 비중"]];
 
 const state = {
@@ -95,21 +98,43 @@ function setupSeasons() {
   }
 }
 
-/** 그 시즌 10팀을 순위 순서로. 승률(반올림 전) → 같으면 상대 전적 → 승수 → 코드. tied = 승률이 같은 팀이 있는 줄. */
+const sameExact = (a, b) => Math.abs(exactPct(a) - exactPct(b)) < 1e-12;
+
+/**
+ * 승률이 같은 두 팀(a, b)의 순서와 그것을 정한 규칙. order < 0이면 a가 위.
+ * 결정전(TIEBREAK_GAMES) → 상대 전적(5할이 아닐 때) → 코드순(임의, 데이터로 가릴 수 없음).
+ */
+function tieRule(a, b, season) {
+  const game = TIEBREAK_GAMES[String(season)];
+  if (game && game.includes(a.code) && game.includes(b.code)) {
+    return { order: game[0] === a.code ? -1 : 1, rule: "결정전 승리(정규시즌 성적 미포함)" };
+  }
+  const h = a.vs?.[b.code];
+  if (fin(h) && Number(h) !== 0.5) return { order: h > 0.5 ? -1 : 1, rule: "상대 전적", h2h: Number(h) };
+  return { order: a.code.localeCompare(b.code), rule: "동률·코드순(임의)" };
+}
+
+/** 그 시즌 10팀을 순위 순서로. 승률(반올림 전) → 같으면 tieRule. tied = 승률이 같은 팀이 있는 줄. */
 function standings(season) {
   const rows = (state.teams?.teams ?? []).filter((t) => t.season === season && TEAMS[t.code]);
   rows.sort((a, b) => {
     const d = exactPct(b) - exactPct(a);
-    if (Math.abs(d) > 1e-12) return d;
-    const h = a.vs?.[b.code];
-    if (fin(h) && h !== 0.5) return h > 0.5 ? -1 : 1;
-    return b.wins - a.wins || a.code.localeCompare(b.code);
+    return Math.abs(d) > 1e-12 ? d : tieRule(a, b, season).order;
   });
-  return rows.map((t, i) => ({
-    ...t,
-    rank: i + 1,
-    tied: rows.some((o) => o !== t && Math.abs(exactPct(o) - exactPct(t)) < 1e-12),
-  }));
+  return rows.map((t, i) => ({ ...t, rank: i + 1, tied: rows.some((o) => o !== t && sameExact(o, t)) }));
+}
+
+/** 동률 메모: 이웃한 동률 두 팀마다 "KT > 삼성 (승률 .563 동률): 결정전 승리(정규시즌 성적 미포함)". */
+function tieNotes(rows, season) {
+  const out = [];
+  rows.forEach((r, i) => {
+    const next = rows[i + 1];
+    if (!next || !sameExact(r, next)) return;
+    const t = tieRule(r, next, season);
+    const why = t.rule === "상대 전적" ? `상대 전적 ${dot(t.h2h)}` : t.rule;
+    out.push(`${shortName(r.code, season)} > ${shortName(next.code, season)} (승률 ${dot(r.win_pct)} 동률): ${why}`);
+  });
+  return out;
 }
 
 function renderAll() {
@@ -142,7 +167,7 @@ function renderStandings(rows) {
 
   const cols = [
     ["순위", "num rank-col"], ["팀"], ["경기", "num"], ["승-패-무", "num"], ["승률", "num"], ["피타고리안", "num"],
-    ...(hasModel ? [[[ "모델 기대 승률", el("span", { class: "th-note" }, `${version} 홀드아웃 예측 평균 · ${REWIND_SEASON}만`)], "num model-col"]] : []),
+    ...(hasModel ? [[[ "모델 기대 승률", el("span", { class: "th-note" }, `${version} 홀드아웃 예측 평균`)], "num model-col"]] : []),
     ["홈 승률", "num"], ["원정 승률", "num"],
   ];
   const tr = (r) => el("tr", { class: r.rank <= PLAYOFF_SPOTS ? "is-playoff" : null }, [
@@ -168,14 +193,15 @@ function renderStandings(rows) {
     hasModel
       ? el("li", {}, `모델 기대 승률: ${version} 모델이 ${season} 경기마다 낸 그 팀의 승리 확률을 평균한 값으로, 승률과 다릅니다. 이 모델은 ${season} 시즌을 학습에 쓰지 않았고(홀드아웃), 확률이 50% 가까이에 모이므로 실제 승률보다 폭이 좁습니다.`)
       : el("li", {}, `모델 기대 승률은 학습에 쓰지 않은 ${REWIND_SEASON} 시즌에만 있습니다. ${season} 시즌은 모델이 학습하거나 검증할 때 본 시즌이라 열을 뺐습니다.`),
-    rows.some((r) => r.tied)
-      ? el("li", {}, "†: 승률이 같은 팀은 상대 전적이 앞선 팀을 위에 두었습니다. 실제 순위는 결정전으로 정해졌을 수 있습니다.")
+    ...tieNotes(rows, season).map((t) => el("li", {}, `†: ${t}`)),
+    TIEBREAK_GAMES[String(season)] && rows.some((r) => r.tied)
+      ? el("li", {}, "결정전은 정규시즌 경기가 아니라 데이터에 없으므로, 실제 결과를 따로 적어 넣었습니다(승패·승률에는 들어가지 않음).")
       : null,
   ];
 
   body.setAttribute("aria-busy", "false");
   body.replaceChildren(
-    el("div", { class: "table-scroll standings-scroll" }, el("table", { class: "table standings" }, [
+    el("div", { class: "table-scroll standings-scroll", tabindex: "0", role: "region", "aria-label": `${season} 순위표 (가로로 넘겨 보기)` }, el("table", { class: "table standings" }, [
       el("caption", { class: "sr-only" }, `${season} 정규시즌 순위표 (위 ${PLAYOFF_SPOTS}팀 가을야구)`),
       el("thead", {}, el("tr", {}, cols.map(([t, c]) => el("th", { scope: "col", class: c ?? null }, t)))),
       el("tbody", {}, bodyRows),
@@ -221,9 +247,13 @@ function renderRoster(rows) {
 
 // ---------- ③ 상대 전적 ----------
 
-/** 승률 → 잉크 투명도. .300은 옅게, .700은 진하게. */
-const inkAlpha = (p) => 0.04 + 0.86 * Math.min(1, Math.max(0, (p - 0.2) / 0.6));
-const DARK_CELL = 0.55; // 이 투명도부터 흰 글자 (양쪽 모두 대비 4.4:1 이상)
+/**
+ * 승률 → 잉크 투명도. 5할에서 끊는다: 5할 아래는 0.04~0.42(잉크 글자), 5할 이상은 0.62~0.90(흰 글자).
+ * 그래서 진한 칸 = 이긴 전적이고, 두 글자색 모두 대비 4.5:1 이상이다.
+ */
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const winning = (p) => p >= 0.5;
+const inkAlpha = (p) => (winning(p) ? 0.62 + 0.28 * clamp01((p - 0.5) / 0.3) : 0.04 + 0.38 * clamp01((p - 0.2) / 0.3));
 
 function renderH2H(rows) {
   const body = $("h2h-body");
@@ -240,8 +270,9 @@ function renderH2H(rows) {
       const v = r.vs?.[c];
       if (!fin(v)) return el("td", { class: "h2h__cell" }, "—");
       const a = inkAlpha(Number(v));
+      const dark = winning(Number(v));
       return el("td", {
-        class: `h2h__cell num${a >= DARK_CELL ? " is-dark" : ""}`,
+        class: `h2h__cell num${dark ? " is-dark" : ""}`,
         style: { background: `rgba(10, 10, 10, ${a.toFixed(2)})` },
       }, dot(v));
     }),
@@ -274,7 +305,7 @@ function renderH2H(rows) {
     ]) : null,
     el("div", { class: "h2h__scale", "aria-hidden": "true" }, [
       el("span", { class: "h2h__ramp" }),
-      el("span", { class: "h2h__ramp-labels" }, [el("span", {}, ".200 적게 이김"), el("span", {}, "많이 이김 .800")]),
+      el("span", { class: "h2h__ramp-labels" }, [el("span", {}, ".200 적게 이김"), el("span", {}, ".500"), el("span", {}, "많이 이김 .800")]),
     ]),
   ]);
   body.setAttribute("aria-busy", "false");
@@ -290,6 +321,16 @@ function renderRewind() {
   const rw = state.rewind;
   if (rw.phase === "idle") { loadRewind(); return; }
   if (rw.phase === "done") drawRewind();
+  else if (rw.phase === "error") showRewindError();
+}
+
+/** 되감기 실패 상자 (다른 시즌을 보는 사이에 실패했어도 2026으로 돌아오면 이것을 보여 준다). */
+function showRewindError() {
+  const rw = state.rewind;
+  const body = $("rewind-body");
+  body.setAttribute("aria-busy", "false");
+  const box = showError(body, rw.error ?? "", () => { rw.phase = "idle"; renderRewind(); });
+  box.querySelector("strong").textContent = "되감기 확률을 불러오지 못했습니다. ";
 }
 
 /** 표본 날짜: 매 STRIDE번째 날 + 마지막 날. */
@@ -326,10 +367,7 @@ async function loadRewind() {
   body.setAttribute("aria-busy", "false");
   if (state.season !== REWIND_SEASON) return; // 받는 사이 시즌을 바꿨으면 다음에 2026을 고를 때 그린다
   if (rw.phase === "done") drawRewind();
-  else {
-    const box = showError(body, rw.error ?? "", () => { rw.phase = "idle"; renderRewind(); });
-    box.querySelector("strong").textContent = "되감기 확률을 불러오지 못했습니다. ";
-  }
+  else showRewindError();
 }
 
 function drawRewind() {

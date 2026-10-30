@@ -551,3 +551,18 @@ def test_check_site_strict_passes_all_pages():
     for check in ("nav", "#evidence", "resources"):
         assert re.search(rf"\| {re.escape(check)}\s+\| teams\.html\s+\| OK", r.stdout), (check, r.stdout)
     assert "| SKIP" not in r.stdout, r.stdout
+
+
+def test_teams_tiebreak_games_are_real_ties():
+    """결정전 표(TIEBREAK_GAMES)의 두 팀은 그 시즌 정규시즌 승률이 정확히 같다 (2021 1위 KT>삼성, 2024 5위 KT>SSG).
+    동률 메모는 순서를 정한 규칙을 그대로 적는다: 결정전 / 상대 전적 / 코드순(임의)."""
+    js = (ASSETS / "teams.js").read_text(encoding="utf-8")
+    games = check_site.parse_js_const(js, "TIEBREAK_GAMES")
+    assert games == {"2021": ["KT", "SS"], "2024": ["KT", "SK"]}
+    teams = json.loads((DATA / "teams.json").read_text(encoding="utf-8"))["teams"]
+    for season, (winner, loser) in games.items():
+        rec = {t["code"]: t for t in teams if t["season"] == int(season)}
+        w, l = rec[winner], rec[loser]
+        assert w["wins"] * (l["wins"] + l["losses"]) == l["wins"] * (w["wins"] + w["losses"]), season
+    for rule in ("결정전 승리(정규시즌 성적 미포함)", "상대 전적", "동률·코드순(임의)"):
+        assert rule in js, rule
