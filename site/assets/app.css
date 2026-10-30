@@ -211,6 +211,8 @@ button.pill { cursor: pointer; min-height: 32px; }
 .chart .c-grid { stroke: currentColor; opacity: 0.15; }
 .chart .c-zero { stroke: currentColor; opacity: 0.5; }
 .chart .c-ref { stroke: currentColor; opacity: 0.55; stroke-dasharray: 4 4; fill: none; }
+.chart .c-end { font-size: 12px; font-weight: 600; }               /* lineChart endLabels: 줄 끝 이름표 */
+.chart .c-leader { stroke: currentColor; opacity: 0.35; stroke-width: 1; }
 .chart .c-point { stroke: var(--canvas); stroke-width: 1.5; }  /* 같은 색 카드 위에서도 점이 보이게 */
 .chart [role="button"].c-point { cursor: pointer; }
 .chart .c-point:focus { outline: none; }
@@ -219,6 +221,7 @@ button.pill { cursor: pointer; min-height: 32px; }
 .chart-legend { list-style: none; padding: 0; margin-top: var(--sp-12); display: flex; flex-wrap: wrap; gap: var(--sp-8) var(--sp-16); font-size: 13px; }
 .chart-legend li { display: inline-flex; align-items: center; gap: 6px; }
 .chart-legend .dot { border: 1.5px solid var(--canvas); width: 12px; height: 12px; }  /* 카드와 같은 색 점도 보이게 */
+.chart-legend .dot--dash { border: 3px dotted; background: transparent; }  /* 점선 줄의 견본 */
 
 /* ---------- 푸터 (크림, 증거 바) ---------- */
 .footer {

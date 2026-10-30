@@ -233,9 +233,9 @@
 | 선수 | 비슷한 선수 | `players.json` | `players[].similar[].player_id`, `players[].similar[].season`, `players[].similar[].similarity`, `players[].group`, `players[].name`, `players[].name_ko`, `players[].team`, `players[].type.id`, `players[].type.name` |
 | 선수 | 유형 모델 요약 | `model_report.json` | `cluster_quality.version`, `cluster_quality.fit_seasons[]`, `cluster_quality.membership_note`, `cluster_quality.batter.k`, `cluster_quality.batter.retention`, `cluster_quality.batter.k_table[].k`, `cluster_quality.batter.k_table[].silhouette`, `cluster_quality.pitcher.k`, `cluster_quality.pitcher.retention`, `cluster_quality.pitcher.k_table[].k`, `cluster_quality.pitcher.k_table[].silhouette` |
 | 선수 | 유형 모델 요약: 메타 | `players.json` | `model_version`, `fit_seasons[]`, `generated_at` |
-| 팀 | 시즌 선택·순위표 | `teams.json` | `note`, `teams[].season`, `teams[].code`, `teams[].games`, `teams[].wins`, `teams[].losses`, `teams[].ties`, `teams[].win_pct`, `teams[].pyth_pct`, `teams[].model_expected`, `teams[].home_pct`, `teams[].away_pct` |
+| 팀 | 시즌 선택·순위표 | `teams.json` | `model_version`, `teams[].season`, `teams[].code`, `teams[].games`, `teams[].wins`, `teams[].losses`, `teams[].ties`, `teams[].win_pct`, `teams[].pyth_pct`, `teams[].model_expected`, `teams[].home_pct`, `teams[].away_pct`, `teams[].vs{}` |
 | 팀 | 로스터 유형 구성 | `teams.json` | `teams[].roster_types.batter{}`, `teams[].roster_types.pitcher{}` |
-| 팀 | 로스터 유형 이름 | `players.json` | `types.batter[].name`, `types.pitcher[].name` |
-| 팀 | 상대 전적 | `teams.json` | `teams[].vs{}` |
+| 팀 | 로스터 유형 이름 | `model_report.json` | `cluster_quality.batter.types[].id`, `cluster_quality.batter.types[].name`, `cluster_quality.pitcher.types[].id`, `cluster_quality.pitcher.types[].name` |
+| 팀 | 상대 전적 | `teams.json` | `teams[].vs{}`, `teams[].code`, `teams[].season` |
 | 팀 | 가을야구 확률 되감기: 날짜 | `rewind/2026/index.json` | `dates[].date` |
-| 팀 | 가을야구 확률 되감기: 값 | `rewind/2026/{date}.json` | `outlook.as_of`, `outlook.teams{}.playoff_prob`, `outlook.teams{}.rank_now` |
+| 팀 | 가을야구 확률 되감기: 값 | `rewind/2026/{date}.json` | `outlook.as_of`, `outlook.teams{}.playoff_prob` |

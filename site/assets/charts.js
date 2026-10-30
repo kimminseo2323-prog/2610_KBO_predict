@@ -8,7 +8,8 @@
 // 그릴 때 el의 실제 너비를 viewBox 너비로 써서 글자가 줄어들지 않게 하고, 너비가 바뀌면 다시 그린다(ResizeObserver).
 
 const NS = "http://www.w3.org/2000/svg";
-const DARK = new Set(["pink", "teal", "ink"]);
+// 흰 글자를 올리는 진한 색. 핑크는 작은 흰 글자 대비가 모자라(≈3.1:1) 잉크 글자를 쓴다 (DESIGN 규칙: 핑크 위 작은 글자는 잉크).
+const DARK = new Set(["teal", "ink"]);
 const MIN_W = 240;
 const fin = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
 const pct = (v) => (fin(v) ? `${Math.round(Number(v) * 100)}%` : "—");
@@ -39,15 +40,17 @@ function srTable(caption, headers, rows) {
   return t;
 }
 
+/** 범례. items = [[이름, 토큰]] 또는 [[이름, 토큰, {dash: true}]](점선 줄은 견본도 테두리만). */
 function legendList(items) {
   const ul = document.createElement("ul");
   ul.className = "chart-legend";
   ul.setAttribute("aria-hidden", "true"); // 같은 내용이 표에 있다
-  items.forEach(([label, token]) => {
+  items.forEach(([label, token, opts]) => {
     const li = document.createElement("li");
     const dot = document.createElement("span");
-    dot.className = "dot";
-    dot.style.background = cv(token);
+    dot.className = opts?.dash ? "dot dot--dash" : "dot";
+    if (opts?.dash) dot.style.borderColor = cv(token);
+    else dot.style.background = cv(token);
     li.append(dot, label);
     ul.append(li);
   });
@@ -133,10 +136,12 @@ export function barChart(el, rows, { valueKey = "value", labelKey = "label", col
 
 /**
  * 꺾은선. points = [{x, y}] 한 줄, 또는 [{name, color, points: [{x, y}]}] 여러 줄(모든 줄의 x가 같다고 본다).
+ * 여러 줄일 때 줄마다 선택: short(오른쪽 끝 이름표 글자, 기본 name), legend(범례 글자, 기본 name), dash(true면 점선).
  * y가 숫자가 아니면 선을 끊는다. options: color="ink", yFormat=pct, yDomain=[lo, hi], label, height=240,
- * refY(점선 기준값 — yDomain이 없으면 범위에 넣고, yDomain 밖이면 그리지 않는다).
+ * refY(점선 기준값 — yDomain이 없으면 범위에 넣고, yDomain 밖이면 그리지 않는다),
+ * endLabels(여러 줄: 각 줄의 마지막 값 옆에 이름표를 단다. 겹치면 위아래로 밀고 짧은 연결선을 긋는다 — 색이 같은 줄을 구분하려고).
  */
-export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, label = "꺾은선 그래프", height = 240, refY } = {}) {
+export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, label = "꺾은선 그래프", height = 240, refY, endLabels = false } = {}) {
   const series = points?.length && points[0].points ? points : [{ name: label, color, points: points ?? [] }];
   const xs = series[0].points.map((p) => p.x);
   const ys = series.flatMap((s) => s.points.map((p) => p.y)).filter(fin).map(Number);
@@ -146,7 +151,8 @@ export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, l
   if (!yDomain) { const pad = (hi - lo) * 0.1 || 0.05; lo -= pad; hi += pad; }
   const drawRef = hasRef && refY >= lo && refY <= hi;
   return mount(el, (W) => {
-    const L = 48, R = series.length > 1 ? 12 : 56, T = 10, B = 26, H = height;
+    const multi = series.length > 1;
+    const L = 48, R = multi ? (endLabels ? 64 : 12) : 56, T = 10, B = 26, H = height;
     const X = (i) => L + (xs.length > 1 ? (i / (xs.length - 1)) * (W - L - R) : (W - L - R) / 2);
     const Y = (v) => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B);
     const svg = svgRoot(W, H, label);
@@ -167,8 +173,28 @@ export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, l
         if (!fin(p.y)) { d += " "; return; }
         d += `${d === "" || d.endsWith(" ") ? "M" : "L"}${X(i).toFixed(1)},${Y(Number(p.y)).toFixed(1)}`;
       });
-      svg.append(svgEl("path", { d: d.trim(), fill: "none", style: `stroke:${cv(s.color ?? color)}`, "stroke-width": 2.5, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+      svg.append(svgEl("path", { d: d.trim(), fill: "none", style: `stroke:${cv(s.color ?? color)}`, "stroke-width": 2.5, "stroke-linejoin": "round", "stroke-linecap": "round",
+        "stroke-dasharray": s.dash ? "6 4" : null }));
     });
+    if (multi && endLabels) {
+      // 마지막 유한값 위치 → 이름표 y. 위에서부터 최소 간격(GAP)을 지키며 아래로 밀고, 그림 밖으로 나가면 아래에서부터 다시 위로 민다.
+      const GAP = 14, top = T + 4, bottom = H - B;
+      const ends = series.map((s) => {
+        const i = s.points.map((p) => p.y).findLastIndex(fin);
+        return i < 0 ? null : { s, x: X(i), y: Y(Number(s.points[i].y)) };
+      }).filter(Boolean).sort((a, b) => a.y - b.y);
+      ends.forEach((e, k) => { e.ly = Math.max(e.y, top, k ? ends[k - 1].ly + GAP : top); });
+      for (let k = ends.length - 1; k >= 0; k--) {
+        const lim = k === ends.length - 1 ? bottom : ends[k + 1].ly - GAP;
+        if (ends[k].ly > lim) ends[k].ly = lim;
+      }
+      const lx = W - R + 10;
+      ends.forEach((e) => {
+        svg.append(svgEl("circle", { cx: e.x, cy: e.y, r: 3.5, style: `fill:${cv(e.s.color ?? color)}` }));
+        if (Math.abs(e.ly - e.y) > 2 || lx - e.x > 6) svg.append(svgEl("path", { class: "c-leader", d: `M${(e.x + 4).toFixed(1)},${e.y.toFixed(1)} L${(lx - 3).toFixed(1)},${e.ly.toFixed(1)}`, fill: "none" }));
+        svg.append(svgEl("text", { class: "c-end", x: lx, y: e.ly + 4 }, String(e.s.short ?? e.s.name)));
+      });
+    }
     if (series.length === 1) {
       const pts = series[0].points;
       const i = pts.map((p) => p.y).findLastIndex(fin);
@@ -177,7 +203,7 @@ export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, l
     }
     const cell = (v) => (fin(v) ? yFormat(Number(v)) : "—");
     const table = srTable(label, ["x", ...series.map((s) => s.name)], xs.map((x, i) => [String(x), ...series.map((s) => cell(s.points[i]?.y))]));
-    return series.length > 1 ? [svg, legendList(series.map((s) => [s.name, s.color])), table] : [svg, table];
+    return multi ? [svg, legendList(series.map((s) => [s.legend ?? s.name, s.color, { dash: s.dash }])), table] : [svg, table];
   });
 }
 
@@ -260,21 +286,23 @@ export function scatter(el, points, { colorKey = "color", onSelect, selectedId, 
 
 /**
  * 100% 누적 가로 막대(팀 로스터 유형 구성). rows = [{label, [key]: 비중}] (빠지거나 숫자가 아닌 값은 0).
- * options: keys(순서), colors({key: 토큰}), labels({key: 이름}), labelKey="label", format=pct, label.
+ * options: keys(순서), colors({key: 토큰}), labels({key: 이름}), labelKey="label", format=pct, label,
+ *          minShare(주면: 비중이 이 값 이상이고 글자가 들어갈 만큼 넓은 칸에만 값을 쓴다. 없으면 38px 넘는 칸에 쓴다).
+ * 막대 높이는 24px(좁은 화면도 같음).
  */
-export function stackedBar(el, rows, { keys, colors, labels = {}, labelKey = "label", format = pct, label = "누적 막대 그래프" } = {}) {
+export function stackedBar(el, rows, { keys, colors, labels = {}, labelKey = "label", format = pct, label = "누적 막대 그래프", minShare } = {}) {
   const val = (r, k) => { const v = r[k] ?? r.values?.[k]; return fin(v) ? Math.max(0, Number(v)) : 0; };
   const shown = (rows ?? []).filter((r) => keys.some((k) => val(r, k) > 0));
   if (!shown.length) return empty(el);
   return mount(el, (W) => {
     const narrow = W < 480;
-    const rowH = narrow ? 44 : 32;
+    const rowH = narrow ? 46 : 32;
     const labelW = narrow ? 0 : Math.min(120, W * 0.2);
     const barW = W - labelW;
     const svg = svgRoot(W, shown.length * rowH + 2, label);
     shown.forEach((r, i) => {
       const top = i * rowH + (narrow ? 18 : 4);
-      const barH = narrow ? 22 : 24;
+      const barH = 24;
       const total = keys.reduce((s, k) => s + val(r, k), 0);
       svg.append(svgEl("text", { class: "c-label", x: narrow ? 0 : labelW - 12, y: narrow ? top - 5 : top + barH / 2 + 4,
         "text-anchor": narrow ? "start" : "end" }, String(r[labelKey] ?? "")));
@@ -284,7 +312,9 @@ export function stackedBar(el, rows, { keys, colors, labels = {}, labelKey = "la
         if (w <= 0) return;
         const tok = colors[k];
         svg.append(svgEl("rect", { x: x.toFixed(1), y: top, width: Math.max(w - 1.5, 0.5).toFixed(1), height: barH, style: `fill:${cv(tok)}` }));
-        if (w > 38) svg.append(svgEl("text", { class: "c-value", x: (x + w / 2).toFixed(1), y: top + barH / 2 + 4, "text-anchor": "middle", style: `fill:${textOn(tok)}` }, format(val(r, k))));
+        const text = format(val(r, k));
+        const fits = fin(minShare) ? val(r, k) / total >= minShare && w >= String(text).length * 8.5 + 6 : w > 38;
+        if (fits) svg.append(svgEl("text", { class: "c-value", x: (x + w / 2).toFixed(1), y: top + barH / 2 + 4, "text-anchor": "middle", style: `fill:${textOn(tok)}` }, text));
         x += w;
       });
     });

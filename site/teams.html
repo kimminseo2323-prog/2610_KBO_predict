@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>팀 · KBO Predict</title>
+<meta name="description" content="KBO 2015~2026 시즌별 순위표, 피타고리안 기대 승률, report-2026 모델 기대 승률, 로스터 유형 구성, 상대 전적, 2026 가을야구 확률 되감기.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/teams.css">
+</head>
+<body>
+<a class="skip-link" href="#main">본문으로 건너뛰기</a>
+<header class="topnav">
+  <div class="topnav__inner wrap">
+    <a class="brand" href="index.html"><i class="brand__mark" aria-hidden="true"></i>KBO Predict</a>
+    <nav aria-label="주 메뉴"><ul>
+      <li><a href="index.html">오늘의 경기</a></li>
+      <li><a href="teams.html" aria-current="page">팀</a></li>
+      <li><a href="players.html">선수</a></li>
+      <li><a href="report.html">모델 성적표</a></li>
+    </ul></nav>
+    <a class="btn" href="https://github.com/kimminseo2323-prog/2610_KBO_predict">GitHub에서 보기</a>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <!-- 머리: 제목 + 리드, 오른쪽에 시즌 고르기 (?season=으로도 열 수 있다) -->
+  <div class="page-head teams-head">
+    <div>
+      <h1 class="display-md">팀</h1>
+      <p class="lead" id="teams-lead">정규시즌 실제 성적과 피타고리안 기대 승률, report-2026 모델의 홀드아웃 기대 승률, 로스터 유형 구성을 시즌별로 봅니다.</p>
+    </div>
+    <div class="season-ctl">
+      <label class="season-ctl__label" for="season-select">시즌</label>
+      <select class="season-ctl__select" id="season-select" disabled>
+        <option value="2026" selected>2026</option>
+      </select>
+    </div>
+  </div>
+  <noscript><p class="error-box">이 페이지는 자바스크립트로 데이터를 읽어 그립니다. 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
+  <p class="sr-only" id="season-status" aria-live="polite"></p>
+
+  <!-- 크림(순위표) → 라벤더(로스터 유형) → 피치(상대 전적) → 오커(가을야구 되감기, 2026만) -->
+  <div class="teams-stack">
+    <section class="card card--cream" id="standings" aria-labelledby="standings-title">
+      <h2 class="card__title" id="standings-title">순위표</h2>
+      <p class="card__lead" id="standings-lead">정규시즌 승률 순서. 무승부는 승률 계산에서 뺍니다.</p>
+      <div id="standings-body" aria-busy="true"><div class="skeleton skel-table"></div></div>
+    </section>
+
+    <section class="card card--lavender" id="roster-types" aria-labelledby="roster-title">
+      <h2 class="card__title" id="roster-title">로스터 유형 구성</h2>
+      <p class="card__lead" id="roster-lead">팀 타석과 이닝을 어떤 유형의 선수가 맡았는지. 팀 순서는 순위표와 같습니다.</p>
+      <div id="roster-body" aria-busy="true">
+        <div class="roster">
+          <div class="inset"><div class="skeleton skel-bars"></div></div>
+          <div class="inset"><div class="skeleton skel-bars"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card card--peach" id="head-to-head" aria-labelledby="h2h-title">
+      <h2 class="card__title" id="h2h-title">상대 전적</h2>
+      <p class="card__lead" id="h2h-lead">가로줄 팀이 세로줄 상대에게 거둔 승률. 진할수록 많이 이겼습니다.</p>
+      <div id="h2h-body" aria-busy="true"><div class="inset"><div class="skeleton skel-grid"></div></div></div>
+    </section>
+
+    <section class="card card--ochre" id="playoff-rewind" aria-labelledby="rewind-title">
+      <h2 class="card__title" id="rewind-title">가을야구 확률 되감기</h2>
+      <p class="card__lead" id="rewind-lead">2026 시즌 동안 5위 안에 들 확률이 어떻게 움직였는지</p>
+      <div id="rewind-body" aria-busy="true"><div class="inset"><div class="skeleton skel-line"></div></div></div>
+    </section>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="footer__inner wrap">
+    <p id="evidence" class="evidence">갱신 정보를 불러오는 중…</p>
+    <p class="footer__note">데이터: MyKBOStats(비공식 팬 사이트)의 박스스코어를 집계했습니다. 개인 학습용 프로젝트이며 베팅 조언이 아닙니다.</p>
+  </div>
+  <div class="footer__mtn" aria-hidden="true"><b></b><b></b><b></b></div>
+</footer>
+<script type="module" src="assets/teams.js"></script>
+</body>
+</html>

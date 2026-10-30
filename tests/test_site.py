@@ -503,3 +503,51 @@ def test_team_name_for_old_names():
     assert "export function teamNameFor" in js
     players = (ASSETS / "players.js").read_text(encoding="utf-8")
     assert "teamNameFor(p.team, p.season, { full: true })" in players and "teamNameFor(e.team, e.season)" in players
+
+
+# ---------- 팀 (teams.html) ----------
+
+TEAMS_SECTIONS = ["standings", "roster-types", "head-to-head", "playoff-rewind"]  # 순서 고정: 크림 → 라벤더 → 피치 → 오커
+
+
+def _teams_soup():
+    from bs4 import BeautifulSoup
+    return BeautifulSoup((SITE / "teams.html").read_text(encoding="utf-8"), "html.parser")
+
+
+def test_teams_markup():
+    """머리 + 시즌 select(#season-select, 보이는 이름표) → 카드 4장(①~④, 색 순서 고정) → #evidence, teams.js 모듈 하나."""
+    soup = _teams_soup()
+    for cid in ("season-select", "standings-body", "roster-body", "h2h-body", "rewind-body", "teams-lead", "evidence"):
+        assert soup.find(id=cid) is not None, cid
+    assert soup.find(id="season-select").name == "select"
+    assert soup.find("label", attrs={"for": "season-select"}) is not None
+    cards = soup.select(".teams-stack > section")
+    assert [c["id"] for c in cards] == TEAMS_SECTIONS
+    colors = [next(k for k in c["class"] if k.startswith("card--")) for c in cards]
+    assert colors == ["card--cream", "card--lavender", "card--peach", "card--ochre"]
+    for c in cards:
+        h2 = c.find("h2")
+        assert h2 is not None and c.get("aria-labelledby") == h2.get("id")
+    html = str(soup)
+    assert html.index('id="season-select"') < html.index('id="standings"')
+    assert soup.find("a", attrs={"aria-current": "page"})["href"] == "teams.html"
+    assert [s["src"] for s in soup.find_all("script", src=True)] == ["assets/teams.js"]
+    assert soup.find("script", src="assets/teams.js").get("type") == "module"
+    js = (ASSETS / "teams.js").read_text(encoding="utf-8")
+    assert 'fetchJSON("teams.json")' in js and 'fetchJSON("model_report.json")' in js
+    assert re.search(r'fetchJSON\((?:"rewind/2026/index\.json"|`rewind/\$\{REWIND_SEASON\}/index\.json`)\)', js)
+    assert "const REWIND_SEASON = 2026;" in js
+    assert "history.replaceState" in js and "teamNameFor" in js
+    assert re.search(r'import\s*\{[^}]*\btypeColor\b[^}]*\}\s*from\s*"\./app\.js"', js)
+    assert not re.search(r"\b(?:const|let|var)\s+(?:TYPE_COLORS|TEAMS)\b", js)  # 색·팀은 app.js 하나뿐
+    assert 'fetchJSON("players.json")' not in js  # 1.77 MB — 유형 이름은 model_report.json에서
+
+
+def test_check_site_strict_passes_all_pages():
+    """페이지 4개가 모두 있으므로 --allow-missing-pages 없이 통과한다."""
+    r = _run_check("--strict")
+    assert r.returncode == 0, r.stdout + r.stderr
+    for check in ("nav", "#evidence", "resources"):
+        assert re.search(rf"\| {re.escape(check)}\s+\| teams\.html\s+\| OK", r.stdout), (check, r.stdout)
+    assert "| SKIP" not in r.stdout, r.stdout
