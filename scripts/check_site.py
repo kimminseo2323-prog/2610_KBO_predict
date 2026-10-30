@@ -112,7 +112,9 @@ _SEG = re.compile(r"^([A-Za-z0-9_]+)?((?:\[\]|\{\})*)$")
 
 
 def key_exists(obj, path: str) -> bool:
-    """점 경로가 obj 안에 하나라도 있는가. `[]` = 배열 각 원소, `{}` = 정해지지 않은 키의 각 값. 값이 null이어도 키가 있으면 참."""
+    """점 경로가 obj 안에 하나라도 있는가. `[]` = 배열 각 원소, `{}` = 정해지지 않은 키의 각 값. 값이 null이어도 키가 있으면 참.
+    경로 중간의 객체가 표본 전부에서 null이면(예: 선발 미발표 `starter: null`뿐인 날의 `starter.name`) 확인할 수 없는 것이지
+    없는 것이 아니므로 참으로 친다(null이 아닌 표본이 하나라도 있으면 그 표본으로 판정) — 계약이 null을 허용한 키 아래 경로가 경기 하나뿐인 날에 실패하지 않게."""
     values = [obj]
     for seg in path.split("."):
         m = _SEG.match(seg)
@@ -120,7 +122,10 @@ def key_exists(obj, path: str) -> bool:
             raise ValueError(f"bad key path segment {seg!r} in {path!r}")
         name, suffix = m.group(1), m.group(2)
         if name is not None:
-            values = [v[name] for v in values if isinstance(v, dict) and name in v]
+            found = [v[name] for v in values if isinstance(v, dict) and name in v]
+            values = [x for x in found if x is not None]
+            if found and not values:   # 키는 있지만 표본이 전부 null → 그 아래 경로는 이 표본으로 확인할 수 없다
+                return True
         for op in re.findall(r"\[\]|\{\}", suffix):
             if op == "[]":
                 values = [x for v in values if isinstance(v, list) for x in v]

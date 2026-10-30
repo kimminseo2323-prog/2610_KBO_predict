@@ -222,15 +222,26 @@ def test_run_uses_previous_season_and_starter_stats(tmp_data_dir, bundle_path, f
     assert g["home"]["win_pct_season"] == 0.5 and g["round"] == "postseason"
 
 
-def test_run_on_empty_day_touches_only_status(tmp_data_dir, bundle_path, fixture_html):
+def test_run_on_empty_day_previews_next_game_day(tmp_data_dir, bundle_path, fixture_html):
+    """경기 없는 날(10-28) 실행 → 3일 안의 다음 경기일(10-29)을 미리 예측해 latest에 그 날짜로 발행한다 (휴식일 미리 보기)."""
+    upsert_games(2026, parse_week(fixture_html("mykbo_week_2026-10-27.html")))
+    out = run(date(2026, 10, 28), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False)
+    latest = _latest(tmp_data_dir)
+    assert latest["date"] == "2026-10-29" and out["games_today"] == len(latest["games"]) > 0
+    assert _status(tmp_data_dir)["next_game_date"] > "2026-10-29"
+    assert "2026-10-29" in (tmp_data_dir / "public/history.csv").read_text(encoding="utf-8")
+
+
+def test_run_on_empty_day_without_near_game_touches_only_status(tmp_data_dir, bundle_path, fixture_html):
+    """3일 안에 예정 경기가 없으면 latest·history는 그대로 두고 status만 쓴다 (비시즌)."""
     upsert_games(2026, parse_week(fixture_html("mykbo_week_2026-10-27.html")))
     run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False)
     before = (tmp_data_dir / "public/latest.json").read_bytes()
     hist_before = (tmp_data_dir / "public/history.csv").read_bytes()
-    run(date(2026, 10, 28), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False)
+    run(date(2026, 10, 20), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False)
     assert (tmp_data_dir / "public/latest.json").read_bytes() == before
     assert (tmp_data_dir / "public/history.csv").read_bytes() == hist_before
-    assert json.loads((tmp_data_dir / "public/status.json").read_text(encoding="utf-8"))["next_game_date"] == "2026-10-29"
+    assert _status(tmp_data_dir)["next_game_date"] == "2026-10-27"   # 픽스처 주간의 첫 경기 (3일 밖이라 미리 보기 없음)
 
 
 def _row(gid, d, status="FINAL", hs=9, as_=0, home=("Kia Tigers", "HT"), away=("Samsung Lions", "SS"), **kw):
@@ -540,12 +551,13 @@ def test_status_mode_ignores_canceled_games(tmp_data_dir, bundle_path):
 
 def test_no_fetch_starters_when_no_games(monkeypatch, tmp_data_dir, bundle_path, fixture_html, fake_fetch_starters,
                                          fake_missing_boxscores):
-    """오늘(10-28) 예정 경기가 없으면 fetch_starters를 부르지 않는다. 빠진 박스스코어 재수집은 그래도 돈다
-    (얼리지 않은 시즌일 때 — 2026은 얼린 시즌이라 여기서는 FROZEN_SEASONS를 비워 둔다)."""
+    """오늘(10-20) 예정 경기가 없고 3일 안에도 없으면(미리 보기 없음) fetch_starters를 부르지 않는다.
+    빠진 박스스코어 재수집은 그래도 돈다 (얼리지 않은 시즌일 때 — 2026은 얼린 시즌이라 여기서는 FROZEN_SEASONS를 비워 둔다).
+    휴식일에 3일 안의 다음 경기일을 미리 볼 때는 그 날 경기의 예고 선발을 받는다 (test_run_on_empty_day_previews_next_game_day)."""
     _seed(fixture_html)
     monkeypatch.setattr(rp, "FROZEN_SEASONS", [])
     monkeypatch.setattr(rp, "collect_range", _no_collect)
-    run(date(2026, 10, 28), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
+    run(date(2026, 10, 20), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
     assert fake_fetch_starters == []
     assert fake_missing_boxscores == [2026]
     run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)

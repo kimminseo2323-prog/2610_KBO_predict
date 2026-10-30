@@ -34,6 +34,8 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 
 ### 로컬 미리보기
 
+경기가 없는 날(포스트시즌 휴식일 등)에 일일 작업이 돌면 3일 안의 다음 경기일을 미리 예측해 그 날짜로 발행합니다(`scripts/run_pipeline.py`의 `LOOKAHEAD_DAYS`). 예고 선발이 아직 없으면 선발 없이 예측하고, 경기 당일 실행이 다시 예측합니다.
+
 원천 데이터를 엑셀로 보려면 `python -X utf8 scripts/export_excel.py --out <폴더>`를 실행합니다(전 시즌 경기 일정·결과 + 팀·선수 시즌 집계 한 파일, 시즌별 박스스코어 파일 12개).
 
 저장소 루트에서 `python -m http.server 8000`을 실행하고 `http://localhost:8000/site/`를 엽니다. localhost에서는 raw URL 대신 저장소의 `data/public/`을 읽습니다. `http://localhost:8000/site/?fixture=edge`는 취소·선발 미정 경기를 그리는 검증 화면, `?date=2026-09-01`은 그 날짜의 되감기입니다.

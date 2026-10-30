@@ -80,6 +80,25 @@ def latest_outlook(team_path: Path, season: int, on: str, games: list[dict], sta
         return next_game_card(on, games)
 
 
+LOOKAHEAD_DAYS = 3   # 경기가 없는 날(휴식일·이동일)에는 이 날수 안의 다음 경기일을 미리 예측해 발행한다
+
+
+def lookahead_target(games: list[dict], target: date) -> tuple[date, str]:
+    """target에 경기 행이 하나도 없으면(취소 경기도 없음) LOOKAHEAD_DAYS 안에서 예정(SCHEDULED) 경기가 있는 가장 가까운
+    날짜로 바꾼다 — 포스트시즌 휴식일에 "다음 경기까지" 대신 다음 경기 예측을 보여 주기 위해. 그 날짜의 예고 선발은
+    아직 없을 수 있다(그러면 선발 없이 예측하고 경기 당일 실행이 다시 예측한다 — history는 경기당 마지막 예측만 남긴다).
+    정산·상태 누적은 바뀐 날짜 기준이지만 정규시즌 FINAL만 세므로 결과가 새지 않는다. 바꿀 날이 없으면 그대로."""
+    iso = target.isoformat()
+    if any(g["date"] == iso for g in games):
+        return target, iso
+    limit = (target + timedelta(days=LOOKAHEAD_DAYS)).isoformat()
+    nxt = sorted(g["date"] for g in games if iso < g["date"] <= limit and g["status"] == "SCHEDULED")
+    if not nxt:
+        return target, iso
+    print(f"[pipeline] no games on {iso}; previewing next game day {nxt[0]}", file=sys.stderr)
+    return date.fromisoformat(nxt[0]), nxt[0]
+
+
 def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bool = True,
         clusters_path: Path = CLUSTERS_PKL, team_path: Path = TEAM_PKL) -> dict:
     data_dir = Path(data_dir)
@@ -95,6 +114,7 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
         try:
             out = collect_range(window_start, target + timedelta(days=14))
             collect_errors += [f"{e['path']}: {e['error']}" for e in out["errors"]]
+            target, iso = lookahead_target(raw_store.load_games(season), target)
             today = [g for g in raw_store.load_games(season) if g["date"] == iso and g["status"] == "SCHEDULED"]
             if today:  # 오늘 예정 경기가 없으면(비시즌·휴식일) 경기 페이지를 요청하지 않는다
                 st = fetch_starters(today, fetched_at=meta["generated_at"])
@@ -122,6 +142,8 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     if season not in seasons.REGULAR_SEASON:
         collect_errors.append(f"season {season} not registered in REGULAR_SEASON; using 03-01..10-31 fallback")
     games = raw_store.load_games(season)
+    if not fetch:
+        target, iso = lookahead_target(games, target)
 
     bundle = load_bundle(model_path)
     meta = {**meta, "model_version": bundle["version"]}

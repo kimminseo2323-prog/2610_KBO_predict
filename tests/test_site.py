@@ -288,6 +288,15 @@ def test_check_site_fixture_mode_needs_real_code(tmp_path):
     assert re.search(r'\| fixture-mode\s+\| index\.html\s+\| FAIL .*=== "edge"', r.stdout), r.stdout
 
 
+def test_key_exists_treats_intermediate_null_as_present():
+    """선발 미발표(starter: null)인 경기만 있는 날에도 starter.* 키 경로는 실패하지 않는다. 키 자체가 없으면 실패."""
+    one = {"games": [{"home": {"code": "SS", "starter": None}}]}
+    assert check_site.key_exists(one, "games[].home.starter.name")
+    assert check_site.key_exists(one, "games[].home.starter.type.name")
+    assert not check_site.key_exists({"games": [{"home": {"code": "SS"}}]}, "games[].home.starter.name")
+    assert not check_site.key_exists(one, "games[].home.nope")
+
+
 def test_contract_keys_exist_in_samples():
     rows = check_site.contract_rows((ROOT / "docs" / "site" / "data-contract.md").read_text(encoding="utf-8"))
     assert len(rows) >= 35
