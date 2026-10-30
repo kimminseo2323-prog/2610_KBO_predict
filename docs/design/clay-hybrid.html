@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KBO Predict — B+A 합본 시안</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0a0a0a; --body:#3a3a3a; --muted:#6a6a6a; --muted-soft:#9a9a9a;
+    --hair:#e5e5e5; --hair-soft:#f0f0f0;
+    --canvas:#fffaf0; --soft:#faf5e8; --card:#f5f0e0; --strong:#ebe6d6;
+    --pink:#ff4d8b; --teal:#1a3a3a; --lav:#b8a4ed; --peach:#ffb084; --ochre:#e8b94a; --mint:#a4d4c5; --coral:#ff6b5a;
+    --r-md:12px; --r-lg:16px; --r-xl:24px;
+    --font:"Inter","Pretendard Variable",Pretendard,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:#efe9da;color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 20px 80px}
+  .intro h1{font-size:40px;font-weight:500;letter-spacing:-1px;line-height:1.1;margin:0 0 8px}
+  .intro p{color:var(--body);margin:0 0 32px;max-width:70ch}
+  .variant{margin:0 0 56px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+  .vhead h2{font-size:24px;font-weight:600;letter-spacing:-.3px;margin:0}
+  .vhead p{margin:4px 0 0;color:var(--muted);font-size:14px}
+  .pick{border:1px solid var(--ink);background:var(--canvas);color:var(--ink);border-radius:var(--r-md);height:44px;padding:0 20px;font:600 14px var(--font);cursor:pointer;white-space:nowrap}
+  .pick.picked{background:var(--ink);color:#fff}
+  .frame{background:var(--canvas);border:1px solid var(--hair);border-radius:var(--r-lg);overflow:hidden}
+
+  .nav{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:var(--canvas)}
+  .nav .brand{font-weight:600;font-size:16px;letter-spacing:-.2px;display:flex;align-items:center;gap:10px}
+  .nav .brand i{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 18%,var(--coral) 20% 100%);display:inline-block}
+  .nav ul{list-style:none;display:flex;gap:28px;margin:0;padding:0;font-size:14px;font-weight:500;color:var(--muted)}
+  .nav ul li.on{color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 20px;border-radius:var(--r-md);font-weight:600;font-size:14px;background:var(--ink);color:#fff;border:0}
+  .btn.sec{background:var(--canvas);color:var(--ink);border:1px solid var(--hair)}
+  .btn.oncolor{background:var(--canvas);color:var(--ink)}
+  .pill{display:inline-block;padding:4px 12px;border-radius:9999px;background:var(--card);font-size:13px;font-weight:500}
+  .pill.lav{background:var(--lav)}.pill.peach{background:var(--peach)}.pill.ochre{background:var(--ochre)}.pill.mint{background:var(--mint)}.pill.white{background:rgba(255,255,255,.9);color:var(--ink)}
+  .foot{background:var(--soft);padding:40px;display:flex;justify-content:space-between;align-items:flex-end;font-size:14px;color:var(--body);position:relative;overflow:hidden}
+  .foot .mtn{position:absolute;right:40px;bottom:-30px;width:260px;height:110px;pointer-events:none}
+  .foot .mtn b{position:absolute;bottom:0;border-radius:50% 50% 0 0;display:block}
+  .foot .mtn b:nth-child(1){left:0;width:140px;height:90px;background:radial-gradient(circle at 40% 20%,#f7d08a,#e8b94a 60%)}
+  .foot .mtn b:nth-child(2){left:90px;width:170px;height:110px;background:radial-gradient(circle at 40% 20%,#ffc9a6,#ffb084 60%)}
+  .foot .mtn b:nth-child(3){left:200px;width:110px;height:70px;background:radial-gradient(circle at 40% 20%,#d4c8f5,#b8a4ed 60%)}
+  .foot u{text-decoration:underline;text-underline-offset:3px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{font-weight:600;color:var(--muted);text-align:left;padding:8px 0;border-bottom:1px solid var(--hair);font-size:13px}
+  td{padding:9px 0;border-bottom:1px solid var(--hair-soft)}
+  .num{font-variant-numeric:tabular-nums}
+  .r{text-align:right}
+
+  /* head */
+  .head{padding:56px 40px 24px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+  .head h1{font-size:40px;font-weight:500;letter-spacing:-1px;line-height:1.1;margin:0}
+  .head p{margin:8px 0 0;color:var(--body)}
+  .datebar{display:flex;gap:8px;align-items:center}
+  .datebar .pill.on{background:var(--ink);color:#fff}
+
+  /* matchup (from A) */
+  .match{margin:0 40px 16px;border-radius:var(--r-xl);overflow:hidden;display:grid;grid-template-columns:58fr 42fr;min-height:280px;position:relative}
+  .side{padding:32px;display:flex;flex-direction:column;justify-content:space-between}
+  .side.lg{background:var(--pink);color:#fff}
+  .side.hh{background:var(--teal);color:#fff;text-align:right;align-items:flex-end}
+  .side .team{font-size:20px;font-weight:600;letter-spacing:-.2px}
+  .side .team small{display:block;font-weight:400;opacity:.9;font-size:14px;margin-top:6px}
+  .side .big{font-size:112px;font-weight:500;letter-spacing:-5px;line-height:1}
+  .side .big small{font-size:20px;letter-spacing:0;font-weight:500;margin-left:6px}
+  .side .sub{font-size:14px;opacity:.9}
+  .match .vs{position:absolute;left:58%;top:50%;transform:translate(-50%,-50%);width:56px;height:56px;border-radius:50%;background:var(--canvas);color:var(--ink);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px}
+  .match .meta{position:absolute;left:50%;top:24px;transform:translateX(-50%)}
+
+  /* bento (from B) */
+  .bento{display:grid;grid-template-columns:repeat(6,1fr);grid-auto-rows:140px;gap:16px;padding:0 40px 40px}
+  .c{border-radius:var(--r-xl);padding:28px;position:relative;overflow:hidden}
+  .c h3{margin:0 0 4px;font-size:18px;font-weight:600}
+  .c p{margin:0;font-size:14px;opacity:.85}
+  .c-why{grid-column:span 3;grid-row:span 2;background:var(--card)}
+  .c-acc{grid-column:span 3;grid-row:span 2;background:var(--lav)}
+  .c-pit{grid-column:span 2;grid-row:span 2;background:var(--peach)}
+  .c-sim{grid-column:span 2;background:var(--ochre)}
+  .c-map{grid-column:span 2;grid-row:span 2;background:var(--teal);color:#fff}
+  .c-log{grid-column:span 2;background:var(--card)}
+  .frag{background:var(--canvas);border-radius:var(--r-lg);padding:14px 16px;font-size:13px;margin-top:14px;color:var(--ink)}
+  .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--hair-soft)}
+  .row:last-child{border-bottom:0}
+  .row b{font-weight:600}
+  .row b.m{color:var(--coral)}
+  .kpi{font-size:64px;font-weight:500;letter-spacing:-2.5px;line-height:1;margin-top:14px}
+  .kpi small{display:block;font-size:14px;letter-spacing:0;opacity:.85;margin-top:6px}
+  .spark{display:flex;align-items:flex-end;gap:4px;height:44px;margin-top:14px}
+  .spark b{flex:1;background:rgba(10,10,10,.28);border-radius:3px 3px 0 0}
+  .spark b.hi{background:var(--ink)}
+  .dots{position:absolute;left:28px;right:28px;bottom:22px;height:80px}
+  .dots b{position:absolute;width:11px;height:11px;border-radius:50%}
+  .roster{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .roster span{font-size:12px;padding:4px 10px;border-radius:9999px;background:rgba(255,255,255,.18)}
+  .pit{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .pit b{font-weight:600}
+
+  /* player page */
+  .pg{display:grid;grid-template-columns:7fr 5fr;gap:16px;padding:0 40px 40px}
+  .map2{background:var(--card);border-radius:var(--r-xl);padding:28px;min-height:420px;position:relative;overflow:hidden}
+  .map2 h3{margin:0 0 4px;font-size:18px;font-weight:600}
+  .map2 p{margin:0;font-size:14px;color:var(--muted)}
+  .map2 .dots{left:28px;right:28px;bottom:60px;height:260px}
+  .map2 .dots b{width:14px;height:14px}
+  .map2 .dots b.me{width:22px;height:22px;border:3px solid var(--ink)}
+  .map2 .tip{position:absolute;background:var(--ink);color:#fff;font-size:12px;padding:4px 10px;border-radius:8px}
+  .legend{position:absolute;left:28px;bottom:22px;display:flex;gap:14px;font-size:13px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .detail{display:grid;grid-template-rows:auto 1fr;gap:16px}
+  .d1{background:var(--pink);color:#fff;border-radius:var(--r-xl);padding:28px}
+  .d1 .nm{font-size:32px;font-weight:500;letter-spacing:-1px;line-height:1.1}
+  .d1 .nm small{display:block;font-size:14px;opacity:.9;letter-spacing:0;margin-top:6px}
+  .d1 .line{display:flex;gap:28px;margin-top:20px;font-size:14px}
+  .d1 .line b{display:block;font-size:24px;font-weight:500;letter-spacing:-.5px}
+  .d2{background:var(--canvas);border:1px solid var(--hair);border-radius:var(--r-lg);padding:24px}
+  .d2 h3{margin:0 0 8px;font-size:18px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="intro">
+    <h1>KBO Predict — B 구조 + A 매치업 카드</h1>
+    <p>B의 벤토 그리드 위에 A의 핑크/틸 양분 매치업 카드를 첫 줄에 통째로 올렸습니다. 매치업 카드가 핑크·틸을 쓰니 아래 카드들은 크림 → 라벤더 → 피치 → 오커 → 틸 → 크림 순으로 돌려 색이 연달아 겹치지 않게 했습니다. 두 번째 프레임은 같은 시스템으로 그린 선수 탐색 페이지입니다.</p>
+  </div>
+
+  <section class="variant">
+    <div class="vhead">
+      <div><h2>홈 — 오늘의 경기</h2><p>첫 줄 매치업 카드, 둘째 줄부터 벤토.</p></div>
+      <button class="pick" data-choice="home-ok">이대로 확정</button>
+    </div>
+    <div class="frame">
+      <div class="nav"><div class="brand"><i></i>KBO Predict</div><ul><li class="on">오늘의 경기</li><li>팀</li><li>선수</li><li>모델 성적표</li></ul><span class="btn">GitHub에서 보기</span></div>
+
+      <div class="head">
+        <div><h1>10월 28일, 한국시리즈 3차전</h1><p>어제 2경기 중 2경기 적중. 시즌 누적 61.4%.</p></div>
+        <div class="datebar"><span class="pill">10-26</span><span class="pill">10-27</span><span class="pill on">10-28</span><span class="pill">달력</span></div>
+      </div>
+
+      <div class="match">
+        <div class="side lg">
+          <div class="team">LG 트윈스<small>홈 · 선발 A투수 <span class="pill white" style="font-size:12px;padding:2px 10px">제구형</span> ERA 3.12</small></div>
+          <div class="big">58<small>%</small></div>
+          <div class="sub">최근 10경기 7승 3패 · 잠실 홈 승률 .571</div>
+        </div>
+        <div class="side hh">
+          <div class="team">한화 이글스<small>원정 · 선발 B투수 <span class="pill white" style="font-size:12px;padding:2px 10px">파워피처</span> ERA 4.05</small></div>
+          <div class="big">42<small>%</small></div>
+          <div class="sub">최근 10경기 5승 5패 · 원정 승률 .522</div>
+        </div>
+        <div class="meta"><span class="pill white">잠실 18:30 · 시리즈 1승 1패</span></div>
+        <div class="vs">VS</div>
+      </div>
+
+      <div class="bento">
+        <div class="c c-why">
+          <h3>승률을 가른 요인</h3><p>SHAP 값으로 분해한 기여도</p>
+          <div class="frag">
+            <div class="row"><span>선발 ERA 차이 3.12 vs 4.05</span><b>+9.2%p</b></div>
+            <div class="row"><span>최근 10경기 7승 vs 5승</span><b>+3.8%p</b></div>
+            <div class="row"><span>홈 어드밴티지</span><b>+2.6%p</b></div>
+            <div class="row"><span>컨택형 타선 vs 파워피처 상성</span><b class="m">−1.4%p</b></div>
+            <div class="row"><span>포스트시즌 보정</span><b class="m">−2.1%p</b></div>
+          </div>
+        </div>
+        <div class="c c-acc">
+          <h3>모델은 얼마나 맞나</h3><p>2026 정규시즌 720경기, 경기 전날 기준</p>
+          <div class="kpi">61.4%<small>베이스라인(승률 높은 팀 승) 55.7% · log loss 0.662</small></div>
+          <div class="spark"><b style="height:40%"></b><b style="height:55%"></b><b style="height:48%"></b><b style="height:70%"></b><b style="height:62%"></b><b style="height:80%"></b><b style="height:66%"></b><b style="height:74%"></b><b style="height:90%"></b><b style="height:72%"></b><b style="height:68%"></b><b class="hi" style="height:78%"></b></div>
+        </div>
+        <div class="c c-pit">
+          <h3>오늘 선발, 어떤 유형?</h3><p>선수 유형 모델이 붙인 태그</p>
+          <div class="frag"><div class="pit"><b>A투수 · LG</b><span class="pill lav" style="font-size:12px;padding:2px 10px">제구형</span></div>K/9 7.1 · BB/9 1.8 · 한화 상대 3경기 ERA 2.40<br><span style="color:var(--muted)">비슷한 투수: 김OO (삼성 2024)</span></div>
+          <div class="frag"><div class="pit"><b>B투수 · 한화</b><span class="pill ochre" style="font-size:12px;padding:2px 10px">파워피처</span></div>K/9 9.8 · BB/9 3.6 · LG 상대 2경기 ERA 5.10<br><span style="color:var(--muted)">LG 타선은 파워피처 상대 타율 .268</span></div>
+        </div>
+        <div class="c c-sim">
+          <h3>시리즈 우승 확률</h3><p>남은 경기 1만 회 시뮬레이션</p>
+          <div style="display:flex;gap:24px;margin-top:8px;font-size:28px;font-weight:500;letter-spacing:-1px"><span>LG 54%</span><span>한화 46%</span></div>
+        </div>
+        <div class="c c-map">
+          <h3>선수 유형 지도</h3><p>타자 124명을 5가지 유형으로</p>
+          <div class="roster"><span>파워형 23</span><span>컨택형 41</span><span>출루형 18</span><span>공수겸장 15</span><span>수비형 27</span></div>
+          <div class="dots">
+            <b style="left:6%;top:30%;background:var(--coral)"></b><b style="left:12%;top:55%;background:var(--coral)"></b><b style="left:18%;top:15%;background:var(--coral)"></b>
+            <b style="left:40%;top:40%;background:var(--mint)"></b><b style="left:48%;top:20%;background:var(--mint)"></b><b style="left:55%;top:60%;background:var(--mint)"></b><b style="left:44%;top:75%;background:var(--mint)"></b>
+            <b style="left:72%;top:35%;background:var(--pink)"></b><b style="left:80%;top:65%;background:var(--pink)"></b>
+            <b style="left:88%;top:15%;background:var(--lav)"></b><b style="left:93%;top:70%;background:var(--lav)"></b><b style="left:30%;top:85%;background:var(--ochre)"></b>
+          </div>
+        </div>
+        <div class="c c-log">
+          <h3>최근 예측</h3>
+          <table style="margin-top:4px"><tr><td>10-27 한화 vs LG</td><td>한화 52%</td><td class="r">적중</td></tr><tr><td>10-26 한화 vs LG</td><td>LG 55%</td><td class="r">적중</td></tr></table>
+        </div>
+      </div>
+      <div class="foot"><div>마지막 갱신 10월 28일 09:02 KST<br>GitHub Actions 실행 <u>#214</u> · 커밋 <u>a1b2c3d</u> · 모델 v0.3</div><div class="mtn"><b></b><b></b><b></b></div></div>
+    </div>
+  </section>
+
+  <section class="variant">
+    <div class="vhead">
+      <div><h2>선수 탐색 — 같은 시스템 적용</h2><p>왼쪽 유형 지도(크림 카드), 오른쪽 선택한 선수 카드(핑크) + 유사 선수.</p></div>
+      <button class="pick" data-choice="player-ok">이대로 확정</button>
+    </div>
+    <div class="frame">
+      <div class="nav"><div class="brand"><i></i>KBO Predict</div><ul><li>오늘의 경기</li><li>팀</li><li class="on">선수</li><li>모델 성적표</li></ul><span class="btn">GitHub에서 보기</span></div>
+      <div class="head">
+        <div><h1>선수 유형 지도</h1><p>2026 시즌 타자 124명을 스탯만으로 5가지 유형으로 나눴습니다. 점을 누르면 선수가 열립니다.</p></div>
+        <div class="datebar"><span class="pill on">타자</span><span class="pill">투수</span><span class="pill">2026</span><span class="pill">전체 팀</span></div>
+      </div>
+      <div class="pg">
+        <div class="map2">
+          <h3>유형 지도</h3><p>UMAP 2D · 가까울수록 비슷한 선수</p>
+          <div class="dots">
+            <b style="left:10%;top:20%;background:var(--coral)"></b><b style="left:16%;top:34%;background:var(--coral)"></b><b style="left:6%;top:42%;background:var(--coral)"></b><b style="left:22%;top:14%;background:var(--coral)"></b><b style="left:14%;top:52%;background:var(--coral)"></b>
+            <b style="left:52%;top:18%;background:var(--teal)"></b><b style="left:60%;top:30%;background:var(--teal)"></b><b style="left:48%;top:36%;background:var(--teal)"></b><b class="me" style="left:56%;top:24%;background:var(--teal)"></b><b style="left:66%;top:14%;background:var(--teal)"></b><b style="left:44%;top:26%;background:var(--teal)"></b>
+            <b style="left:34%;top:70%;background:var(--ochre)"></b><b style="left:40%;top:80%;background:var(--ochre)"></b><b style="left:28%;top:84%;background:var(--ochre)"></b>
+            <b style="left:78%;top:62%;background:var(--pink)"></b><b style="left:86%;top:52%;background:var(--pink)"></b><b style="left:82%;top:74%;background:var(--pink)"></b>
+            <b style="left:16%;top:78%;background:var(--muted-soft)"></b><b style="left:8%;top:70%;background:var(--muted-soft)"></b><b style="left:70%;top:86%;background:var(--muted-soft)"></b>
+            <span class="tip" style="left:58%;top:8%">홍OO · LG</span>
+          </div>
+          <div class="legend"><span><i style="background:var(--coral)"></i>파워형</span><span><i style="background:var(--teal)"></i>컨택형</span><span><i style="background:var(--ochre)"></i>출루형</span><span><i style="background:var(--pink)"></i>공수겸장</span><span><i style="background:var(--muted-soft)"></i>수비형</span></div>
+        </div>
+        <div class="detail">
+          <div class="d1">
+            <div class="nm">홍OO<small>LG 트윈스 · 외야수 · 컨택형 (소속 확률 82%)</small></div>
+            <div class="line"><span><b>.312</b>타율</span><span><b>.378</b>출루율</span><span><b>.431</b>장타율</span><span><b>21</b>도루</span></div>
+            <div class="frag" style="margin-top:20px">유형 안에서 주루 상위 10%, 장타 하위 30% · 파워피처 상대 .268, 제구형 상대 .331</div>
+          </div>
+          <div class="d2">
+            <h3>비슷한 선수</h3>
+            <table><tr><th>선수</th><th>시즌</th><th class="r">유사도</th></tr>
+              <tr><td>김OO (삼성)</td><td>2026</td><td class="r num">0.94</td></tr>
+              <tr><td>박OO (롯데)</td><td>2024</td><td class="r num">0.91</td></tr>
+              <tr><td>이OO (두산)</td><td>2019</td><td class="r num">0.89</td></tr>
+              <tr><td>정OO (NC)</td><td>2022</td><td class="r num">0.88</td></tr>
+              <tr><td>최OO (KIA)</td><td>2017</td><td class="r num">0.86</td></tr></table>
+          </div>
+        </div>
+      </div>
+      <div class="foot"><div>유형 모델 K=5 · 실루엣 0.41 · 연도 간 유형 유지율 78%<br>재학습: 매주 월요일 GitHub Actions</div><div class="mtn"><b></b><b></b><b></b></div></div>
+    </div>
+  </section>
+</div>
+<script>
+  document.querySelectorAll('.pick').forEach(function(b){
+    b.addEventListener('click',function(){ b.classList.toggle('picked'); b.textContent=b.classList.contains('picked')?'확정됨':'이대로 확정'; });
+  });
+</script>
+</body>
+</html>
