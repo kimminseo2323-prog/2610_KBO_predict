@@ -1,0 +1,140 @@
+/* KBO Predict — 모델 성적표 전용. tokens.css · app.css 다음에 불러온다.
+   한 곳만 크게: ① 홀드아웃 카드의 "+차이%p"와 그 옆 유의성 판정. 좋은 숫자와 한계를 같은 크기로 나란히 둔다.
+   나머지는 표와 짧은 문장으로 조용하게. */
+
+[hidden] { display: none !important; }
+.nowrap { white-space: nowrap; }
+
+/* ---------- 머리: "어느 모델, 어느 기간" 배지 ---------- */
+.report-head { padding-bottom: var(--sp-16); }
+.report-head h1 { max-width: none; }
+.model-badges {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-16);
+  margin-bottom: var(--sp-24);
+}
+.badge-skeleton { height: 150px; }
+.badge {
+  min-width: 0; padding: 20px var(--sp-24);
+  background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--r-lg);
+}
+.badge__top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8) var(--sp-12); }
+.badge__role { font-size: 14px; font-weight: 600; color: var(--body-strong); }
+.badge__note { margin-top: var(--sp-12); font-size: 13px; color: var(--muted); }
+
+/* 시즌 띠: 시즌마다 한 칸. 학습 잉크 · 검증 오커 · 시험 핑크 · 라이브 민트 */
+.strip { list-style: none; padding: 0; display: flex; gap: 3px; margin-top: var(--sp-16); }
+.strip__cell { flex: 1 1 0; min-width: 0; height: 14px; border-radius: 4px; background: var(--ink); }
+.strip__cell--val, .strip-dot--val { background: var(--ochre); }
+.strip__cell--test, .strip-dot--test { background: var(--pink); }
+.strip__cell--live, .strip-dot--live { background: var(--mint); }
+.strip__cell--live { margin-left: 8px; }
+.strip-dot--train { background: var(--ink); }
+.strip-legend {
+  list-style: none; padding: 0; margin-top: 10px;
+  display: flex; flex-wrap: wrap; gap: 4px var(--sp-16); font-size: 13px; color: var(--body-strong);
+}
+.strip-legend li { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.strip-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+/* ---------- 벤토 (3열: ①② / ③④ / ⑤ / ⑥) ---------- */
+.r-holdout, .r-variants { grid-column: span 2; }
+.r-clusters, .r-live { grid-column: 1 / -1; }
+@media (max-width: 1024px) {
+  .r-holdout, .r-variants { grid-column: 1 / -1; }
+}
+
+/* 표 공통: 행 머리(th scope=row)는 본문 글자로 */
+.report-bento .table tbody th {
+  font-size: 14px; font-weight: 400; color: var(--ink); white-space: nowrap;
+  border-bottom: 1px solid var(--hairline-soft); padding: 9px var(--sp-12) 9px 0;
+}
+.report-bento .table tr:last-child th { border-bottom: 0; }
+.report-bento .table tbody td { vertical-align: middle; }
+.report-bento .table th.r { text-align: right; }
+.report-bento .table tr.is-selected th, .report-bento .table tr.is-selected td { font-weight: 600; }
+.holdout__tag { margin-left: var(--sp-8); vertical-align: 1px; }
+
+/* 문장 목록 (주의할 점) */
+.notes { margin-top: var(--sp-16); padding-left: 18px; font-size: 14px; color: var(--body); }
+.notes li + li { margin-top: 6px; }
+.notes--on-dark { color: var(--on-dark); }
+
+/* ---------- ① 홀드아웃 ---------- */
+.holdout__top {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: var(--sp-16) var(--sp-32); margin-bottom: var(--sp-8);
+}
+.holdout__kpi { margin-top: var(--sp-16); }
+.holdout__kpi small { max-width: 30ch; }
+.holdout__verdict { flex: 1 1 260px; max-width: 400px; }
+.verdict {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-12);
+  padding: 12px var(--sp-16); border: 1.5px solid var(--ink); border-radius: var(--r-md);
+}
+.verdict__p { font-size: 15px; font-weight: 500; }
+.verdict__word { font-size: 18px; font-weight: 600; letter-spacing: -0.2px; }
+.holdout__goal { margin-top: var(--sp-8); font-size: 13px; color: var(--body); }
+/* 모델 행과 규칙 행 사이 구분선 */
+.holdout-table tbody tr:not(.is-baseline) + tr.is-baseline th,
+.holdout-table tbody tr:not(.is-baseline) + tr.is-baseline td { border-top: 1px solid var(--hairline); }
+
+/* ---------- ② 신뢰도 곡선 ---------- */
+.calibration__chart { margin-top: var(--sp-16); }
+.calibration__focus { margin-top: var(--sp-12); font-size: 14px; }
+.calibration__focus b { font-weight: 600; }
+
+/* ---------- ③ 피처 중요도 ---------- */
+.importance__chart .chart-legend { margin-top: var(--sp-8); }
+
+/* ---------- ④ 변형 비교 ---------- */
+.variants { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-24); margin-top: var(--sp-16); }
+.variant { min-width: 0; display: flex; flex-direction: column; }
+.variant__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-8); }
+.variant__title { font-size: 16px; font-weight: 600; line-height: 1.4; }
+.variant .inset { margin-top: var(--sp-12); }
+.variant__note { margin-top: var(--sp-12); font-size: 14px; }
+.variant__scope { margin-top: var(--sp-8); font-size: 13px; color: var(--muted); }
+.variant__scope b { font-weight: 600; color: var(--ink); }
+
+/* ---------- ⑤ 선수 유형 품질 (틸 — 표·작은 글자는 크림 패널 안) ---------- */
+.clusters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-16); }
+.cluster { min-width: 0; }
+.cluster__title { font-size: 16px; font-weight: 600; line-height: 1.4; margin-bottom: var(--sp-8); }
+.cluster__sub { font-size: 13px; font-weight: 400; color: var(--muted); }
+.cluster__stats { margin-top: var(--sp-12); font-size: 13px; font-variant-numeric: tabular-nums; }
+.cluster__cap { margin-top: var(--sp-16); font-size: 13px; font-weight: 600; color: var(--muted); }
+.types { list-style: none; padding: 0; margin-top: 6px; }
+.type { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-12); padding: 6px 0; border-bottom: 1px solid var(--hairline-soft); }
+.type:last-child { border-bottom: 0; padding-bottom: 0; }
+.type__pill b { font-weight: 600; margin-left: 2px; }
+.type__ex { font-size: 13px; color: var(--muted); }
+.clusters__link { margin-top: var(--sp-24); }
+
+/* ---------- ⑥ 라이브 기록 ---------- */
+.live {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: var(--sp-16) var(--sp-32);
+  align-items: start; margin-top: var(--sp-16);
+}
+.live__copy p:first-child { font-size: 15px; max-width: 60ch; }
+.live__summary { margin-top: 0; }
+.live__all { margin-top: var(--sp-16); }
+.live__all summary { cursor: pointer; font-size: 14px; font-weight: 600; min-height: 28px; width: fit-content; }
+.live__all .inset { margin-top: var(--sp-8); }
+.live-full td { vertical-align: middle; }
+
+@media (max-width: 1024px) {
+  .live { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 479px) {
+  /* 좁은 화면: 머리글·행 머리를 접어 숫자 칸이 먼저 보이게 (그래도 넘치면 카드 안에서 가로 스크롤) */
+  .report-bento .table thead th, .report-bento .table tbody th { white-space: normal; word-break: keep-all; }
+  .report-bento .table tbody th { min-width: 6em; }
+  .report-bento .table th, .report-bento .table td { padding-right: var(--sp-8); }
+  .report-bento .table tbody th { padding-right: var(--sp-8); }
+  .holdout__tag { display: flex; width: fit-content; margin: 4px 0 0; }
+}
+@media (max-width: 767px) {
+  .model-badges { grid-template-columns: minmax(0, 1fr); }
+  .clusters { grid-template-columns: minmax(0, 1fr); }
+  .holdout__verdict { max-width: none; }
+}

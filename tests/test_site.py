@@ -122,6 +122,14 @@ def test_factor_labels_match_python():
     js = check_site.parse_js_const((ASSETS / "app.js").read_text(encoding="utf-8"), "FACTOR_LABELS")
     assert js == py
     assert len(js) == 27 and js["bias"] == "기본 홈 어드밴티지"
+    # model_report.json의 feature_importance 이름이 모두 한글 표에 있고, 표의 한글은 JSON의 label과 같다
+    report = json.loads((DATA / "model_report.json").read_text(encoding="utf-8"))
+    for f in report["feature_importance"]:
+        assert js[f["name"]] == f["label"], f["name"]
+    # 성적표는 자기 사본 없이 app.js의 표를 import한다
+    text = (ASSETS / "report.js").read_text(encoding="utf-8")
+    assert re.search(r'import\s*\{[^}]*\bFACTOR_LABELS\b[^}]*\}\s*from\s*"\./app\.js"', text)
+    assert not re.search(r"\b(?:const|let|var)\s+FACTOR_LABELS\b", text)
 
 
 def test_type_colors_match_cluster_labels():
@@ -359,3 +367,62 @@ def test_check_site_strict_passes_with_home():
     r = _run_check("--strict", "--allow-missing-pages")
     assert r.returncode == 0, r.stdout + r.stderr
     assert re.search(r"\| fixture-mode\s+\| index\.html\s+\| OK", r.stdout), r.stdout
+
+
+# ---------- 모델 성적표 (report.html) ----------
+
+REPORT_SECTIONS = ["holdout", "calibration", "importance", "variants", "cluster-quality", "live-record"]  # 순서 고정
+
+
+def _report_soup():
+    from bs4 import BeautifulSoup
+    return BeautifulSoup((SITE / "report.html").read_text(encoding="utf-8"), "html.parser")
+
+
+def test_report_markup():
+    """배지 컨테이너(#model-badges)가 벤토보다 앞, 카드 6장(크림·라벤더·피치·오커·틸·크림 순, 같은 색 연속 없음), #evidence, report.js 모듈 하나."""
+    soup = _report_soup()
+    badges = soup.find(id="model-badges")
+    assert badges is not None and badges.get("aria-label")
+    cards = soup.select(".report-bento > section")
+    assert [c["id"] for c in cards] == REPORT_SECTIONS
+    colors = [next(k for k in c["class"] if k.startswith("card--")) for c in cards]
+    assert colors == ["card--cream", "card--lavender", "card--peach", "card--ochre", "card--teal", "card--cream"]
+    for a, b in zip(colors, colors[1:]):
+        assert a != b
+    for c in cards:
+        h2 = c.find("h2")
+        assert h2 is not None and c.get("aria-labelledby") == h2.get("id")
+    html = str(soup)
+    assert html.index('id="model-badges"') < html.index('id="holdout"')
+    assert soup.find(id="evidence") is not None
+    assert soup.find("a", attrs={"aria-current": "page"})["href"] == "report.html"
+    assert [s["src"] for s in soup.find_all("script", src=True)] == ["assets/report.js"]
+    assert soup.find("script", src="assets/report.js").get("type") == "module"
+    # 선수 유형 품질 카드는 선수 페이지로 이어진다
+    assert soup.find(id="cluster-quality").find("a", href="players.html") is not None
+
+
+def test_report_js_uses_shared_constants_and_data():
+    """report.js는 FACTOR_LABELS·TYPE_COLORS를 app.js에서 가져다 쓰고(자기 사본 없음), 숫자는 model_report.json·history.csv에서 읽는다."""
+    js = (ASSETS / "report.js").read_text(encoding="utf-8")
+    imports = re.search(r'import\s*\{([^}]*)\}\s*from\s*"\./app\.js"', js)
+    assert imports and "FACTOR_LABELS" in imports.group(1) and "typeColor" in imports.group(1)
+    assert not re.search(r"\b(?:const|let|var)\s+FACTOR_LABELS\b", js)
+    assert '"pyth_diff"' not in js and "피타고리안" not in js  # 한글 이름 표를 복사하지 않음
+    assert 'fetchJSON("model_report.json")' in js and 'fetchCSV("history.csv")' in js
+    # 유의성 수치는 하드코딩하지 않는다 (+2.7%p, p = .215는 JSON에서 계산)
+    code = re.sub(r"(?m)^\s*//.*$|^\s*\*.*$", "", js)
+    for literal in ("2.7", ".215", "0.215", "0.594", "59.4", ".17", ".20"):
+        assert literal not in code, literal
+    for key in ("significance", "baselines", "calibration_bins", "feature_importance", "matchup_feature_ablation",
+                "validation_scope", "membership_note", "starter_source", "ablation"):
+        assert key in js, key
+
+
+def test_check_site_strict_passes_with_report():
+    r = _run_check("--strict", "--allow-missing-pages")
+    assert r.returncode == 0, r.stdout + r.stderr
+    for check in ("nav", "#evidence", "resources"):
+        assert re.search(rf"\| {re.escape(check)}\s+\| report\.html\s+\| OK", r.stdout), (check, r.stdout)
+    assert "report.html | SKIP" not in r.stdout.replace("  ", " ")
