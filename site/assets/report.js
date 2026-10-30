@@ -38,6 +38,15 @@ const GOAL_PP = 3;             // 설계 목표: 가장 강한 기준선 +3%p �
 const SMALL_BIN = 30;          // 이보다 적은 경기가 든 신뢰도 구간은 "표본 적음"으로 적는다
 const range = (a) => (a?.length ? (a[0] === a.at(-1) ? `${a[0]}` : `${a[0]}~${a.at(-1)}`) : "—");
 const int = (v) => (fin(v) ? Number(v).toLocaleString("ko-KR") : "—");
+/** 받침에 따라 을/를: "로지스틱 회귀를", "LightGBM을". 한글이 아니면 마지막 글자 소리로 어림한다. */
+function eul(word) {
+  const w = String(word ?? "");
+  const c = w.at(-1) ?? "";
+  const code = c.charCodeAt(0);
+  if (code >= 0xac00 && code <= 0xd7a3) return `${w}${(code - 0xac00) % 28 ? "을" : "를"}`;
+  return `${w}${/[0-9lmnLMN]$/.test(c) ? "을" : "를"}`; // LightGBM → 을 (엠)
+}
+const LIVE_SHORT = 30;         // 결과가 난 경기가 이보다 적으면 "아직 짧다"고 적는다
 const signif = (p) => (fin(p) && Number(p) < ALPHA ? "통계적으로 유의함" : "통계적으로 유의하지 않음");
 
 const ALGO = { lr: "로지스틱 회귀", lgbm: "LightGBM" };
@@ -92,7 +101,7 @@ async function init() {
 function renderReport() {
   renderBadges();
   if (!state.report) {
-    showError($("holdout-body"), state.errors.report, async () => { await loadReport(); renderReport(); });
+    showError($("holdout-body"), state.errors.report, async () => { await loadReport(); renderReport(); renderLive(); });
     for (const id of ["calibration-body", "importance-body", "variants-body", "clusters-body"]) {
       $(id).replaceChildren(el("p", { class: "empty" }, "성적표 파일(model_report.json)을 불러오지 못해 비워 두었습니다."));
     }
@@ -120,21 +129,18 @@ function legendItem(role, text) {
 function renderBadges() {
   const box = $("model-badges");
   box.setAttribute("aria-busy", "false");
-  const r = state.report;
-  if (!r) {
-    box.replaceChildren(el("p", { class: "empty" }, "모델 정보를 불러오지 못했습니다."));
-    return;
-  }
+  const r = state.report ?? {};
   const train = r.train_seasons ?? [];
   const first = train[0];
   const all = [];
   if (fin(first) && fin(r.test_season)) for (let y = first; y <= r.test_season; y++) all.push(y);
   const role = (y) => (y === r.test_season ? "test" : y === r.val_season ? "val" : "train");
   const n = r.n ?? {};
-  const report = el("article", { class: "badge" }, [
+  const report = !state.report ? el("div", { class: "badge" }, el("p", { class: "empty" }, "성적표 모델 정보(model_report.json)를 불러오지 못했습니다."))
+  : el("div", { class: "badge" }, [
     el("div", { class: "badge__top" }, [
       el("span", { class: "pill pill--ink" }, r.model_version ?? "report"),
-      el("span", { class: "badge__role" }, "이 성적표 · 2026 되감기"),
+      el("span", { class: "badge__role" }, `이 성적표 · ${r.test_season ?? "시험 시즌"} 되감기`),
     ]),
     seasonStrip(all, role),
     el("ul", { class: "strip-legend" }, [
@@ -147,17 +153,17 @@ function renderBadges() {
   // 라이브 모델: 같은 알고리즘·보정 방법을 첫 학습 시즌부터 시험 시즌까지 전부로 다시 학습한 모델
   const liveVersion = state.status?.model_version ?? state.history?.findLast?.((h) => h.model_version)?.model_version ?? "라이브";
   const nLive = state.history?.length;
-  const live = el("article", { class: "badge" }, [
+  const live = el("div", { class: "badge" }, [
     el("div", { class: "badge__top" }, [
       el("span", { class: "pill pill--ink" }, liveVersion),
       el("span", { class: "badge__role" }, "매일 예측 · 라이브 기록"),
     ]),
-    seasonStrip([...all, "live"], (y) => (y === "live" ? "live" : "train")),
+    all.length ? seasonStrip([...all, "live"], (y) => (y === "live" ? "live" : "train")) : null,
     el("ul", { class: "strip-legend" }, [
-      legendItem("train", `학습 ${all.length ? `${all[0]}~${all.at(-1)}` : "—"} (시험 시즌까지 전부)`),
+      legendItem("train", all.length ? `학습 ${all[0]}~${all.at(-1)} (시험 시즌까지 전부)` : "학습 기간: 성적표 파일을 읽지 못해 표시하지 못함"),
       legendItem("live", `기록 history.csv ${fin(nLive) ? `${nLive}경기` : "—"}`),
     ]),
-    el("p", { class: "badge__note" }, `선발 피처: ${starterText(r.starter_source?.live)} · ${r.test_season}도 학습했으므로 아래 시험 성적은 ${r.model_version ?? "report"} 모델의 것입니다.`),
+    state.report ? el("p", { class: "badge__note" }, `선발 피처: ${starterText(r.starter_source?.live)} · ${r.test_season}도 학습했으므로 아래 시험 성적은 ${r.model_version ?? "report"} 모델의 것입니다.`) : null,
   ]);
   box.replaceChildren(report, live);
 }
@@ -229,8 +235,8 @@ function renderHoldout() {
       "holdout-table",
     )),
     el("ul", { class: "notes" }, [
-      el("li", {}, `log loss와 Brier는 낮을수록 좋습니다. 알고리즘은 ${r.val_season} 검증 log loss가 낮은 ${algoName(sel)}를 골랐습니다. p값은 선택 모델과 각 규칙의 경기별 적중을 견준 McNemar 검정입니다.`),
-      el("li", {}, `${r.test_season} 시즌은 어떤 학습·선택에도 쓰지 않았지만, 개발 중에 ${r.test_season} 지표를 한 번 확인했고 그 뒤 캘리브레이션 선택 절차를 바꿨습니다(R7).`),
+      el("li", {}, `log loss와 Brier는 낮을수록 좋습니다. 알고리즘은 ${r.val_season} 검증 log loss가 낮은 ${eul(algoName(sel))} 골랐습니다. p값은 선택 모델과 각 규칙의 경기별 적중을 견준 McNemar 검정입니다.`),
+      el("li", {}, `${r.test_season} 시즌은 어떤 학습·선택에도 쓰지 않았지만, 개발 중에 ${r.test_season} 지표를 한 번 확인했고 그 뒤 캘리브레이션 선택 절차를 바꿨습니다. 검증 시즌 안에서 보정기를 맞추고 같은 시즌으로 고르면 isotonic이 유리하게 편향되기 때문입니다.`),
       el("li", {}, `백테스트의 선발 피처는 ${starterText(r.starter_source?.train_test)}로 만들었습니다. 라이브는 ${starterText(r.starter_source?.live)}을 쓰므로, 예고와 실제가 다르면 라이브 성적은 이보다 낮을 수 있습니다.`),
     ]),
   );
@@ -272,10 +278,16 @@ function renderImportance() {
   const how = r.selected === "lgbm" ? "LightGBM 분기 이득(gain)" : "로지스틱 회귀 표준화 계수의 크기";
   $("importance-lead").textContent = `${how}를 피처 ${all.length}개의 합이 100%가 되게 나눈 비중, 상위 10개`;
   const body = $("importance-body");
-  const chart = el("div", { class: "inset importance__chart" });
+  // 차트는 패딩 없는 안쪽 div에 그린다(ResizeObserver가 이 div만 다시 그리므로 범례가 지워지지 않고, viewBox = 실제 너비)
+  const chart = el("div");
+  const legend = el("ul", { class: "chart-legend" }, [
+    el("li", {}, [el("span", { class: "dot", style: { background: "var(--pink)" }, "aria-hidden": "true" }), "선발투수 피처"]),
+    el("li", {}, [el("span", { class: "dot", style: { background: "var(--teal)" }, "aria-hidden": "true" }), "팀 피처"]),
+  ]);
+  legend.setAttribute("aria-hidden", "true"); // 막대 색의 뜻 — 표(sr-only)에는 이름이 그대로 있다
   const starters = top.filter((f) => f.name.startsWith("starter_")).length;
   body.replaceChildren(
-    chart,
+    el("div", { class: "inset importance__chart" }, [chart, legend]),
     el("p", { class: "card__foot" },
       `상위 10개 중 ${starters}개가 선발투수 피처입니다. 비중은 크기만 뜻하고 방향(홈에 유리·불리)은 경기마다 다릅니다. 경기별 방향은 홈의 "승률을 가른 요인"에서 볼 수 있습니다.`),
   );
@@ -283,10 +295,6 @@ function renderImportance() {
     valueKey: "importance", labelKey: "label", color: (f) => (f.name.startsWith("starter_") ? "pink" : "teal"),
     format: (v) => fmtPct(v, 1), label: "피처 중요도 상위 10개 (비중)",
   });
-  chart.append(el("ul", { class: "chart-legend" }, [
-    el("li", {}, [el("span", { class: "dot", style: { background: "var(--pink)" }, "aria-hidden": "true" }), "선발투수 피처"]),
-    el("li", {}, [el("span", { class: "dot", style: { background: "var(--teal)" }, "aria-hidden": "true" }), "팀 피처"]),
-  ]));
 }
 
 // ---------- ④ 변형 비교 ----------
@@ -316,7 +324,7 @@ function renderVariants() {
         [`선발 피처 제외 (${ns.n_features ?? "—"}개)`, ns, false],
       ]),
       el("p", { class: "variant__note" },
-        `시험 정확도가 ${pp(sel.test?.accuracy, ns.test?.accuracy).replace(/^[+−±]/, "")} 낮아져 ` +
+        `시험 정확도가 ${pp(sel.test?.accuracy, ns.test?.accuracy).replace(/^[+−±]/, "")} ${sel.test?.accuracy >= ns.test?.accuracy ? "낮아져" : "높아져"} ` +
         `${fmtPct(ns.test?.accuracy, 1)}가 됩니다.` +
         (fin(ns.test?.accuracy) && ns.test.accuracy < r.baselines?.test?.better_win_pct
           ? ` 시즌 승률 규칙(${fmtPct(r.baselines.test.better_win_pct, 1)})보다도 낮아, 성적의 큰 몫이 선발 정보에서 나옵니다.` : "")),
@@ -367,7 +375,7 @@ function clusterGroup(group, q) {
     ]),
     table(`${GROUP[group]} K별 실루엣·유지율·점수`, [["K"], ["실루엣", "num"], ["유지율", "num"], ["점수", "num"]], kRows, "k-table"),
     el("p", { class: "cluster__stats" }, [
-      `실루엣 ${dot(chosen?.silhouette, 2)} · 유지율 ${fmtPct(q.retention)} · GMM 일치율 ${dot(q.gmm_agreement)}`,
+      `실루엣 ${dot(chosen?.silhouette)} · 유지율(전체 ${int(q.n_all)}명 기준) ${dot(q.retention)} · GMM 일치율 ${dot(q.gmm_agreement)}`,
       q.membership_method === "kmeans_softmax" ? " · 소속 확률은 GMM 대신 중심까지 거리로 계산" : "",
     ]),
     el("p", { class: "cluster__cap" }, "유형별 인원과 대표 선수"),
@@ -397,6 +405,7 @@ function renderClusters() {
 // ---------- ⑥ 라이브 기록 ----------
 
 function verdictPill(h) {
+  if (h.status === "CANCELED") return el("span", { class: "pill pill--sm pill--muted" }, "취소");
   if (h.winner === "DRAW") return el("span", { class: "pill pill--sm pill--muted" }, "무승부");
   if (h.correct === 1 || h.correct === true) return el("span", { class: "pill pill--sm pill--ink" }, "적중");
   if (h.correct === 0 || h.correct === false) return el("span", { class: "pill pill--sm pill--coral" }, "미적중");
@@ -407,7 +416,7 @@ function winnerText(h) {
   if (h.winner === "HOME") return `${teamName(h.home)} 승`;
   if (h.winner === "AWAY") return `${teamName(h.away)} 승`;
   if (h.winner === "DRAW") return "무승부";
-  return h.status === "FINAL" ? "—" : "경기 전";
+  return h.status === "FINAL" ? "—" : h.status === "CANCELED" ? "취소" : "경기 전";
 }
 
 function renderLive() {
@@ -449,7 +458,10 @@ function renderLive() {
   body.replaceChildren(
     el("div", { class: "live" }, [
       el("div", { class: "live__copy" }, [
-        el("p", {}, `라이브 기록은 ${fmtDate(first)}, 2026 포스트시즌부터 쌓기 시작했습니다. 결과가 난 경기가 아직 ${int(nDecided)}경기라 위의 ${state.report?.test_season ?? "시험"} 성적과 견주기에는 너무 짧습니다.`),
+        el("p", {}, `라이브 기록은 ${fmtDate(first)}, ${first ? first.slice(0, 4) : ""} 포스트시즌부터 쌓기 시작했습니다. ` +
+          (nDecided < LIVE_SHORT
+            ? `결과가 난 경기가 아직 ${int(nDecided)}경기라 위의 ${state.report?.test_season ?? "시험"} 성적과 견주기에는 너무 짧습니다.`
+            : `지금까지 결과가 난 경기는 ${int(nDecided)}경기입니다.`)),
         el("p", { class: "card__foot" }, "모델 버전이 바뀌면 줄을 나눠 셉니다. '결과'는 결과가 나온 경기 수(무승부 제외)이고, 확률 50% 이상인 쪽을 고른 것으로 봅니다. 표본이 작아 정확도만 적고 log loss는 적지 않습니다."),
       ]),
       el("div", { class: "inset live__summary" }, table("모델 버전별 라이브 기록",

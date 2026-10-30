@@ -90,7 +90,7 @@
 | `home_win_prob` | 소수 | `0.4464` | 경기 전 마지막 예측 |
 | `model_version` | 문자열 | `v0.2` | 예측한 모델 버전 — 적중률은 버전별로 나눠 셈 |
 | `predicted_at` | ISO 시각 | `2026-10-29T14:40:20+09:00` | |
-| `status` | 문자열 | `FINAL` \| `SCHEDULED` | |
+| `status` | 문자열 | `FINAL` \| `SCHEDULED` \| `CANCELED` | 예측 뒤 취소된 경기는 `CANCELED`(winner·correct 빈 칸) |
 | `winner` | `HOME` \| `AWAY` \| `DRAW` | `AWAY` | 정산 전이면 빈 칸(→ null) |
 | `correct` | 0 \| 1 | `1` | 정산 전·무승부면 빈 칸(→ null). 규칙: P(홈) ≥ 0.5면 홈을 고른 것으로 봄 |
 
