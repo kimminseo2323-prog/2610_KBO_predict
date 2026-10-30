@@ -322,11 +322,42 @@ def today_slot_prob(s: dict, on: str, games: list[dict], left: list[str],
     return p if today[0]["home_code"] == s["teams"][0] else 1.0 - p
 
 
+def resolve_undecided(series_list: list[dict], games: list[dict]) -> list[dict]:
+    """설정에 미정(null)으로 남은 팀·시작일을 데이터에서 채운다 (한국시리즈의 플레이오프 승자 등).
+    i번째 시리즈의 팀 한쪽이 None이면 바로 앞 시리즈(i−1)의 승부가 났을 때 그 승자를 넣고,
+    start가 None이면 그 두 팀의 맞대결 중 앞 시리즈 마지막 경기 뒤의 첫 경기(예정 포함, 취소 제외) 날짜를 넣는다.
+    앞 시리즈가 아직 안 끝났거나 맞대결 일정이 아직 없으면 그대로 둔다(active_series가 건너뛴다).
+    입력은 바꾸지 않고 새 목록을 돌려준다. 사람이 YAML에 직접 적은 값은 그대로 둔다."""
+    out: list[dict] = []
+    for i, s in enumerate(series_list):
+        s = {**s, "teams": list(s["teams"])}
+        if None in s["teams"] and i > 0:
+            prev = out[i - 1]
+            if None not in prev["teams"] and prev["start"] is not None:
+                w0, w1, _ = series_record(games, prev, "9999-12-31")
+                if _decided(prev, w0, w1):
+                    winner = prev["teams"][0] if w0 > w1 else prev["teams"][1]
+                    if winner not in s["teams"]:
+                        s["teams"][s["teams"].index(None)] = winner
+        if s["start"] is None and None not in s["teams"] and i > 0:
+            prev = out[i - 1]
+            prev_last = max((g["date"] for g in _pair_games(games, prev) if g["status"] != "CANCELED"), default=None)                 if prev["start"] is not None and None not in prev["teams"] else None
+            pair = set(s["teams"])
+            nxt = sorted(g["date"] for g in games
+                         if {g["home_code"], g["away_code"]} == pair and g["status"] != "CANCELED"
+                         and (prev_last is None or g["date"] > prev_last))
+            if nxt:
+                s["start"] = nxt[0]
+        out.append(s)
+    return out
+
+
 def active_series(season: int, on: str, games: list[dict], ps_config) -> dict | None:
     """on 시점에 진행 중인 등록 시리즈: 두 팀이 정해졌고 start ≤ on이며 on 전날까지 아직 승부가 안 난 것.
-    그날 경기가 없어도(이동일·휴식일) 진행 중이면 고른다. 여럿이면 가장 늦게 시작한 것."""
+    그날 경기가 없어도(이동일·휴식일) 진행 중이면 고른다. 여럿이면 가장 늦게 시작한 것.
+    설정에 미정으로 남은 팀·시작일은 resolve_undecided가 데이터에서 채운다."""
     found = None
-    for s in _series_list(season, ps_config):
+    for s in resolve_undecided(_series_list(season, ps_config), games):
         t0, t1 = s["teams"]
         if t0 is None or t1 is None or s["start"] is None or s["start"] > on:
             continue

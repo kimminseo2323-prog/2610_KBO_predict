@@ -205,6 +205,32 @@ def _postseason_games():
     ]
 
 
+def test_resolve_undecided_fills_korean_series_from_playoff_winner(tmp_yaml):
+    """한국시리즈 [KT, null]·start null: 플레이오프 승자가 나오고 두 팀 맞대결 일정이 잡히면 데이터에서 채운다."""
+    games = _postseason_games()[:8] + [
+        g("2026-10-29", 5, "HT", "SS", 2, 7),                     # SS 승 → 2-1
+        g("2026-10-30", 6, "HT", "SS", 1, 4),                     # SS 승 → 3-1, 플레이오프 끝
+        g("2026-11-04", 20, "KT", "SS", status="SCHEDULED"),     # 한국시리즈 1차전 (KT 홈)
+        g("2026-11-05", 21, "KT", "SS", status="SCHEDULED"),
+    ]
+    ps = load_postseason(2026, tmp_yaml)
+    ks = simulate.resolve_undecided(ps, games)[2]
+    assert ks["teams"] == ["KT", "SS"] and ks["start"] == "2026-11-04"
+    assert simulate.homes(ks) == ["KT", "KT", "SS", "SS", "KT", "SS", "KT"]
+    assert ps[2]["teams"] == ["KT", None] and ps[2]["start"] is None      # 입력은 그대로
+    # 플레이오프가 끝난 뒤 한국시리즈 전까지는 진행 중 시리즈 없음, 1차전 날부터 한국시리즈
+    assert simulate.active_series(2026, "2026-11-02", games, ps) is None
+    assert simulate.active_series(2026, "2026-11-04", games, ps)["name"] == "한국시리즈"
+    assert simulate.active_series(2026, "2026-10-30", games, ps)["name"] == "플레이오프"   # 그날 경기 전엔 2-1
+
+
+def test_resolve_undecided_waits_for_decision(tmp_yaml):
+    """플레이오프가 아직 안 끝났으면(2-1) 한국시리즈는 미정 그대로 — 일정이 미리 잡혀 있어도 팀을 지어내지 않는다."""
+    games = _postseason_games() + [g("2026-11-04", 20, "KT", "SS", status="SCHEDULED")]
+    ks = simulate.resolve_undecided(load_postseason(2026, tmp_yaml), games)[2]
+    assert ks["teams"] == ["KT", None] and ks["start"] is None
+
+
 def test_outlook_series_from_config(tmp_yaml, bundle):
     games = _postseason_games()
     state = LeagueState()
