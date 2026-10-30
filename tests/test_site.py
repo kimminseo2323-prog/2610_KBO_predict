@@ -301,3 +301,59 @@ def test_status_rewind_fixture():
     fx = json.loads((FIX / "status_rewind.json").read_text(encoding="utf-8"))
     assert list(fx) == list(status)
     assert fx["mode"] == "rewind" and fx["run_url"] is None and fx["games_today"] == 0
+
+
+# ---------- 홈 (index.html) ----------
+
+HOME_SECTIONS = ["factors", "accuracy", "starters", "outlook", "type-map", "recent"]  # 벤토 순서 고정
+
+
+def _home_soup():
+    from bs4 import BeautifulSoup
+    return BeautifulSoup((SITE / "index.html").read_text(encoding="utf-8"), "html.parser")
+
+
+def test_home_markup_has_sections():
+    """벤토 6장(크림·라벤더·피치·오커·틸·크림 순), 매치업 컨테이너, 되감기 슬라이더 컨테이너, 푸터 #evidence가 정적으로 있다."""
+    soup = _home_soup()
+    cards = soup.select(".home-bento > section")
+    assert [c["id"] for c in cards] == HOME_SECTIONS
+    colors = [next(k for k in c["class"] if k.startswith("card--")) for c in cards]
+    assert colors == ["card--cream", "card--lavender", "card--peach", "card--ochre", "card--teal", "card--cream"]
+    for a, b in zip(colors, colors[1:]):
+        assert a != b  # 같은 색 연속 금지
+    for c in cards:
+        assert c.find(["h2"]) and c.get("aria-labelledby")
+    assert soup.find(id="matchups") is not None
+    assert soup.find(id="rewind-bar") is not None
+    assert soup.find(id="evidence") is not None
+    # 매치업이 벤토보다 앞, 그 앞에 날짜 칩
+    html = str(soup)
+    assert html.index('id="date-bar"') < html.index('id="matchups"') < html.index('id="factors"')
+    assert [s["src"] for s in soup.find_all("script", src=True)] == ["assets/home.js"]
+    assert soup.find("script", src="assets/home.js").get("type") == "module"
+
+
+def test_home_rewind_mode_markup():
+    """JS 없이 검사할 수 있는 것: 슬라이더(range)·전/후 버튼·라이브로 버튼·되감기 토글이 정적 마크업에 있다."""
+    soup = _home_soup()
+    bar = soup.find(id="rewind-bar")
+    rng = bar.find("input", id="rewind-range")
+    assert rng is not None and rng["type"] == "range"
+    assert bar.find("label", attrs={"for": "rewind-range"}) is not None  # 이름 있는 슬라이더
+    for bid in ("rewind-prev", "rewind-next", "to-live"):
+        btn = bar.find("button", id=bid)
+        assert btn is not None and btn.get("type") == "button", bid
+    toggle = soup.find("button", id="rewind-toggle")
+    assert toggle is not None and toggle.get("aria-controls") == "rewind-bar"
+    js = (ASSETS / "home.js").read_text(encoding="utf-8")
+    # ?date= / ?fixture=edge(로컬만) 처리, 되감기는 index.json 날짜만 이동
+    assert 'params.get("date")' in js and "fixture=edge" in js and "latest_edge.json" in js
+    assert "IS_LOCAL ? params.get(\"fixture\")" in js
+    assert "rewind/2026" in js and "index.json" in js
+
+
+def test_check_site_strict_passes_with_home():
+    r = _run_check("--strict", "--allow-missing-pages")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert re.search(r"\| fixture-mode\s+\| index\.html\s+\| OK", r.stdout), r.stdout

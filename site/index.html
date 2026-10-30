@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>오늘의 경기 · KBO Predict</title>
+<meta name="description" content="KBO 경기 승패 예측: 오늘 경기의 홈팀 승리 확률, 확률을 가른 요인, 선발 유형, 2026 시즌 되감기.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/home.css">
+</head>
+<body>
+<a class="skip-link" href="#main">본문으로 건너뛰기</a>
+<header class="topnav">
+  <div class="topnav__inner wrap">
+    <a class="brand" href="index.html"><i class="brand__mark" aria-hidden="true"></i>KBO Predict</a>
+    <nav aria-label="주 메뉴"><ul>
+      <li><a href="index.html" aria-current="page">오늘의 경기</a></li>
+      <li><a href="teams.html">팀</a></li>
+      <li><a href="players.html">선수</a></li>
+      <li><a href="report.html">모델 성적표</a></li>
+    </ul></nav>
+    <a class="btn" href="https://github.com/kimminseo2323-prog/2610_KBO_predict">GitHub에서 보기</a>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <!-- 날짜 칩: 라이브면 날짜 + "라이브" + 되감기 토글, 되감기면 2026 날짜 슬라이더 + "라이브로" -->
+  <div class="page-head home-head">
+    <div>
+      <h1 class="display-md" id="day-title">오늘의 경기</h1>
+      <p class="lead" id="day-lead">예측을 불러오는 중…</p>
+    </div>
+    <div class="datebar" id="date-bar">
+      <div class="datebar__live" id="live-chip">
+        <span class="pill pill--ink" id="live-pill"><span class="dot live-dot" aria-hidden="true"></span>라이브</span>
+        <button class="btn btn--secondary" type="button" id="rewind-toggle" aria-controls="rewind-bar" aria-expanded="false">2026 시즌 되감기</button>
+      </div>
+      <div class="rewind" id="rewind-bar" hidden>
+        <div class="rewind__row">
+          <button class="btn btn--secondary rewind__step" type="button" id="rewind-prev" aria-label="이전 경기일">‹</button>
+          <label class="rewind__label" for="rewind-range"><span class="sr-only">되감기 날짜 (2026 시즌 경기일)</span><output id="rewind-date" for="rewind-range">—</output></label>
+          <button class="btn btn--secondary rewind__step" type="button" id="rewind-next" aria-label="다음 경기일">›</button>
+          <button class="btn" type="button" id="to-live">라이브로</button>
+        </div>
+        <input class="rewind__range" type="range" id="rewind-range" min="0" max="0" step="1" value="0" aria-describedby="rewind-hint">
+        <p class="rewind__hint" id="rewind-hint">2026 시즌 경기일만 이동합니다. 화살표 키로도 움직일 수 있습니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="fixture-note" id="fixture-note" hidden></p>
+
+  <!-- 매치업 카드: 원정(왼쪽·핑크) | 홈(오른쪽·틸). 첫 경기 크게, 나머지는 반 높이 2열 -->
+  <section id="matchups" class="matchups" aria-label="경기별 승리 확률" aria-live="polite" aria-busy="true">
+    <div class="skeleton matchup-skeleton"></div>
+  </section>
+  <noscript><p class="error-box">이 페이지는 자바스크립트로 데이터를 읽어 그립니다. 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
+
+  <!-- 벤토: 크림 → 라벤더 → 피치 → 오커 → 틸 → 크림 (같은 색 연속 없음) -->
+  <div class="bento home-bento">
+    <section class="card card--cream b-factors" id="factors" aria-labelledby="factors-title">
+      <h2 class="card__title" id="factors-title">승률을 가른 요인</h2>
+      <p class="card__lead" id="factors-lead">홈팀 승률을 올린 요인(+)과 내린 요인(−), 단위 %p</p>
+      <div class="factor-tabs" id="factor-tabs" role="tablist" aria-label="경기 고르기" hidden></div>
+      <div class="inset" id="factors-body" role="tabpanel"><div class="skeleton" style="height:160px"></div></div>
+      <p class="card__foot" id="factors-foot"></p>
+    </section>
+
+    <section class="card card--lavender b-accuracy" id="accuracy" aria-labelledby="accuracy-title">
+      <h2 class="card__title" id="accuracy-title">모델은 얼마나 맞나</h2>
+      <div id="accuracy-body"><div class="skeleton" style="height:180px;margin-top:16px"></div></div>
+    </section>
+
+    <section class="card card--peach b-starters" id="starters" aria-labelledby="starters-title">
+      <h2 class="card__title" id="starters-title">오늘 선발, 어떤 유형?</h2>
+      <p class="card__lead" id="starters-lead">선수 유형 모델이 직전 시즌 기록으로 붙인 유형</p>
+      <div id="starters-body"><div class="skeleton" style="height:180px;margin-top:16px"></div></div>
+    </section>
+
+    <section class="card card--ochre b-outlook" id="outlook" aria-labelledby="outlook-title">
+      <h2 class="card__title" id="outlook-title">전망</h2>
+      <div id="outlook-body"><div class="skeleton" style="height:160px;margin-top:16px"></div></div>
+    </section>
+
+    <section class="card card--teal b-typemap" id="type-map" aria-labelledby="typemap-title">
+      <h2 class="card__title" id="typemap-title">선수 유형 지도</h2>
+      <p class="card__lead" id="typemap-lead">비슷한 기록의 타자끼리 가깝게 놓은 지도</p>
+      <div id="typemap-body"><div class="inset"><div class="skeleton" style="height:200px"></div></div></div>
+      <p class="typemap__link"><a class="btn btn--on-color" href="players.html">선수 페이지에서 보기</a></p>
+    </section>
+
+    <section class="card card--cream b-recent" id="recent" aria-labelledby="recent-title">
+      <h2 class="card__title" id="recent-title">최근 예측</h2>
+      <p class="card__lead" id="recent-lead">경기 전 마지막 예측과 실제 결과</p>
+      <div id="recent-body"><div class="skeleton" style="height:160px;margin-top:16px"></div></div>
+    </section>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="footer__inner wrap">
+    <p id="evidence" class="evidence">갱신 정보를 불러오는 중…</p>
+    <p class="footer__note">데이터: MyKBOStats(비공식 팬 사이트)의 박스스코어를 집계했습니다. 개인 학습용 프로젝트이며 베팅 조언이 아닙니다.</p>
+  </div>
+  <div class="footer__mtn" aria-hidden="true"><b></b><b></b><b></b></div>
+</footer>
+<script type="module" src="assets/home.js"></script>
+</body>
+</html>
