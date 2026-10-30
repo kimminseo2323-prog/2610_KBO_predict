@@ -231,6 +231,8 @@ notebooks/
 - `result`: `{"home_score", "away_score", "winner": "HOME" | "AWAY" | "DRAW", "pick": "HOME" | "AWAY", "correct": true | false | null}`. `pick`은 반올림 전 P(홈 승) `>= 0.5`이면 `HOME`(`train_win._correct`와 같은 규칙), `correct = pick == winner`, 무승부는 `null`. 예: 13572(06-12)는 표시 확률 0.5000이지만 반올림 전 값이 0.5 미만이라 `pick: "AWAY"`.
 - `index.json`의 `accuracy` 0.594 = 417/702 = `model_report.json`의 2026 시험 정확도(테스트로 고정).
 
+## 9. 웹사이트
+
 - **플랫폼 (사용자 결정)**: Genspark로 제작·호스팅하고, **산출 HTML/CSS/JS를 저장소 `site/`에도 커밋해 GitHub Pages로 같이 띄운다.** 정적 사이트, 데이터는 위 JSON을 `fetch()`. Genspark → 저장소 복사는 사용자가 한다(내보내기 다운로드 → 커밋).
 - **사전 확인 (사용자, 1단계 중)**: Genspark가 (a) HTML 파일 내보내기를 지원하는지, (b) 외부 URL `fetch()`가 되는지. (a)가 안 되면 **Genspark는 시안 생성용으로만 쓰고 최종 사이트는 빌더가 `site/`에 직접 만들어 GitHub Pages로 배포**한다. (b)가 안 되면 GitHub Pages 버전이 메인이 된다.
 - 빌더는 Genspark에 넘길 입력물을 만든다: 확정 목업 HTML, 8절 데이터 계약, `DESIGN_clay.md`, 샘플 JSON(`data/public/` 실제 파일).
@@ -240,6 +242,17 @@ notebooks/
 - **되감기 모드**: 경기가 없는 날은 홈 상단 날짜 칩이 2026 시즌 날짜 슬라이더로 바뀌고, `rewind/`에서 읽는다. "이 날 모델은 이렇게 예측했고 결과는 이랬다"를 보여준다.
 - **푸터 증거 바**: "마지막 갱신 {generated_at} KST · Actions 실행 #{run} · 커밋 {sha} · 모델 {version}" — 각각 GitHub 링크.
 - 복수 경기가 있는 날(정규시즌 하루 5경기)은 매치업 카드를 세로로 반복하되 첫 경기만 크게, 나머지는 반 높이.
+
+**→ 확정 사항 (5단계, 2026-10-30)**
+
+- **정적 사이트를 먼저, Genspark는 선택적인 다시 입히기**: 사용자 확인 결과 Genspark는 외부 JSON `fetch`와 HTML 내보내기(CSS·JS가 들어간 단일 파일, Cloudflare beacon 스크립트 1개가 붙음)가 모두 된다. 그래도 제작·피드백에 사용자 시간이 들므로 빌더가 완성된 4페이지를 `site/`에 먼저 만들어 GitHub Pages로 공개하고(`https://kimminseo2323-prog.github.io/2610_KBO_predict/`), Genspark용 브리프(`docs/site/genspark-brief.md`)와 반영 스크립트(`scripts/import_site.py`)를 둔다. Genspark 제작본은 `check_site.py --strict`를 통과하고 사용자가 더 마음에 들 때만 `site/`를 교체한다.
+- **빌드 없는 정적 사이트**: HTML + CSS + 바닐라 ES 모듈. 외부 리소스는 글꼴 CSS(Inter — Google Fonts, Pretendard — jsDelivr `gh/orioncactus/pretendard@`)뿐, 외부 스크립트·트래킹 없음.
+- **차트는 인라인 SVG**(`site/assets/charts.js`): 토큰 색·글꼴을 그대로 쓰고 외부 의존을 0으로. 모든 차트에 `role="img"` + `aria-label`과 화면 낭독기용 표.
+- **2D 지도 표기는 PCA**: 목업의 "UMAP"은 PCA로 바꿔 적는다(3단계에서 UMAP 제외, 13절).
+- **`DATA_BASE` 규칙**: `location.hostname`이 `localhost`/`127.0.0.1`이면 `../data/public`, 아니면 `https://raw.githubusercontent.com/kimminseo2323-prog/2610_KBO_predict/main/data/public`. 모든 요청에 `?v=<Date.now()>`. raw는 `Access-Control-Allow-Origin: *`이라 Pages에서 읽히고, 일일 커밋이 재배포 없이 반영된다(CDN 캐시 최대 5분).
+- **되감기 규칙**: `status.json.mode === "rewind"`이면 홈이 `rewind/2026/index.json`의 마지막 날짜로 열리고 날짜 슬라이더를 보인다. `live`면 `latest.json`을 보이되 "2026 시즌 되감기" 토글을 둔다. `?date=YYYY-MM-DD`는 그 날짜 되감기로 바로 연다.
+- **확정 목업 위치**: `docs/design/clay-hybrid.html`(`.superpowers/` 원본을 복사, `.superpowers/`는 gitignore).
+- **배포**: `.github/workflows/pages.yml`(main의 `site/**` push + 수동 실행, `configure-pages` `enablement: true` → `upload-pages-artifact` `path: site` → `deploy-pages`). `site/`는 일일 커밋 대상이 아니다.
 
 ## 10. 저장소
 
@@ -264,7 +277,7 @@ notebooks/
 2. **피처 + 승패 모델 — 완료 (2026-10-29)**: 예고 선발 파서·수집기(`data/raw/{season}/starters.jsonl`)를 붙이고, 누수 없는 피처 26개(팀 19 + 선발 7, `features.py`)로 2015~2026 정규시즌 8,465경기 데이터셋(`data/processed/features.parquet`, gitignore, SHA256은 `models/manifest.json`)을 만들었다. LR과 LightGBM을 같은 인터페이스로 감싸 Platt/isotonic 캘리브레이션과 요인 분해(LR 계수, LightGBM 내장 TreeSHAP `pred_contrib`)를 붙였고, 2015~2024 학습 / 2025 검증(LightGBM best_iteration 52, 캘리브레이션·알고리즘 선택) / 2026 홀드아웃 평가(학습·선택에 미사용)로 `report-2026`(`models/report-2026.pkl`, `data/public/model_report.json`)을, 같은 알고리즘·방법을 2015~2026 전체로 다시 학습해 라이브 v0.2(`models/win_model.pkl`)를 만들었다. 일일 파이프라인은 예고 선발로 추론하고 `latest.json`에 선발 블록과 요인 상위 5개를 넣는다. 노트북 02·03을 실행 결과와 함께 커밋했고(각각 parquet SHA256, `model_report.json` 일치 확인), 테스트 179개. 결과(2026, 702경기): 선택 모델은 LR + Platt, 정확도 .594 / log loss .671 / Brier .239 (LightGBM .591 / .673 / .240). 베이스라인은 홈팀 승 .514, 승률 높은 팀 .554, 선발 ERA 낮은 팀 .567. 2025에서 미리 정한 비교 대상(선발 ERA) 대비 +2.7%p, McNemar p = .215로 **2절 목표("+3%p, 통계적으로 유의")에는 아직 못 미친다**(홈팀 승 대비 p < .001, 승률 대비 p = .079). 이 지표는 실제 선발을 경기 전에 안다는 가정 위의 값이며, 선발 피처를 뺀 팀 피처 19개 모델은 .547 / .687로 승률·선발 ERA 규칙보다 약하다(홈팀 승 .514보다는 높음). 2026 시즌은 어떤 학습·선택에도 쓰지 않았다. 다만 개발 중에 2026 지표를 확인했고, 캘리브레이션 선택 절차를 한 번 바꿨다(R7: 검증 시즌에서 적합·선택을 함께 하던 방식이 isotonic을 편애하는 표본 내 편향). 이전 절차의 결과는 LightGBM + isotonic, 정확도 .588 / log loss .679(p = .321)였다(커밋 24aff45의 `model_report.json`).
 3. **클러스터링 — 완료 (2026-10-29)**: 경기 페이지 하단 기록표 파서로 로컬 캐시 9,362경기를 재파싱해 박스스코어에 2루타·3루타·도루와 한글 이름을 보탰고(기존 칸 불변, `features.parquet` SHA256 동일; 지표 라벨 미매칭 127건, 별칭 31명), `player_stats.py`가 정규시즌 FINAL을 선수·시즌으로 합산한다. `cluster.py`가 비율 지표(타자 6, 투수 5) → 표준화 → K-means(K=4~7, `실루엣 + 유지율`로 선택) → 소속 확률 → PCA 2D → 코사인 유사 선수 5명을 만들고, 중심은 2015~2025로만 맞춰 2026은 배정만 한다(`models/clusters.pkl`, `clusters-2026`, `types_sha256`은 `models/manifest.json`). 결과: 타자 K=4(실루엣 .1715, 유지율 .6536; 파워형 299·장타 지향형 368·컨택형 456·주루형 204), 투수 K=4(.2045, .5322; 선발형 512·스윙맨형 301·제구 불안 불펜형 368·삼진 불펜형 410), 이름은 사람이 붙여 `config/cluster_labels.yaml`. GMM 일치율(타자 tied .843, 투수 tied .750)이 0.95 미만이라 소속 확률은 두 그룹 모두 중심 거리 소프트맥스(`kmeans_softmax`)다. `cluster publish`가 `players.json`(선수-시즌 2,918개, 압축 1.77 MB)과 `teams.json`(팀-시즌 120개, `model_expected`는 2026만)을 만들고, 일일 파이프라인은 선발 블록에 직전 시즌 투수 유형(`type`)을 넣는다. 직전 시즌 유형으로 만든 상성 피처 9개(`bat_type{t}_diff`, `starter_type{t}_diff`, `types_known`)를 같은 알고리즘·분할로 넣어 본 결과 검증(2025) log loss .67711 → .67783, 시험(2026) 정확도 .594 → .591 / log loss .67123 → .67135, McNemar p = .845로 채택 기준(검증 log loss 0.001 개선)에 못 미쳐 `adopt: false`, 라이브 v0.2는 그대로다(`types_known` 커버리지 26.9%, 2026은 15.5%). 2025 검증 비교는 중심이 2025를 본 전이적 비교이고 2026 시험만 엄밀한 시간 외 비교다(`validation_scope`). `model_report.json`의 `matchup_feature_ablation`·`cluster_quality`를 채웠고(기존 키의 값은 불변), 노트북 04(`notebooks/04_선수_유형_클러스터링.ipynb`, `types_sha256`·`matchup_sha256` 일치 확인)를 실행 결과와 함께 커밋했다. 노트북 03에 상성 전후 비교 절을 더했다. 테스트 261개.
 4. **자동화 완성 + parity — 완료 (2026-10-29)**: 의존성을 `requirements.txt`(런타임)와 `requirements-dev.txt`로 나누고 노트북 실행 테스트에 `slow` 마커를 달아 `ci.yml`(main push·PR: `pytest -m "not slow"` + `check_parity --quick`)을 붙였다. 선발 없는 팀 모델을 `models/team-2026.pkl`(`train_win team`, 팀 피처 19개, `ablation.no_starter`와 같은 모델 — 2026 정확도 .547)로 저장하고, `simulate.py`가 그 확률로 가을야구(5위 이내) 진출 확률과 포스트시즌 시리즈 확률을 몬테카를로 1만 회로 계산한다(`config/postseason.yaml`, seed 42). `scripts/build_rewind.py`가 report-2026으로 2026 정규시즌 165일을 날짜별로 다시 예측해 `data/public/rewind/2026/`(166개 파일, 933,712바이트, 실제 선발, 경기별 `result`, `playoff_race` 전망)을 만들었고, 적중 417/702 = .594가 `model_report.json`과 같다. `run_pipeline`은 `latest.json`에 `outlook`(series / playoff_race / next_game)을 넣고, 시범경기 `round: "preseason"`, 비시즌 `mode: "rewind"`, 공개 파일·`games.jsonl`·`starters.jsonl` 원자적 쓰기, 경기 없는 날 선발 요청 생략, 박스스코어 없는 FINAL 재수집을 더했다. 예(2026-10-29): 플레이오프 SS vs HT 1-1 → SS .5579(오늘 3차전은 선발 포함 .5536, 4·5차전은 팀 모델), 가장 흔한 결말 3-2, 5차전 확률 .5083. `scripts/check_parity.py`가 피처·상성 parquet 값 지문, 유형표 해시와 군집 재적합, 보고서(상대 오차 1e-9), 세 모델의 예측, 사이트 JSON, 되감기 166개 파일을 다시 만들어 비교하고 노트북 02~05를 실행한다(Windows `--quick` 38.6초, 전체 약 90초). Linux ci에서 parquet 파일 바이트가 Windows와 달라 한 번 실패(실행 40879259726)한 뒤 판정을 값 지문(`features_fingerprint` `752b4319…`, `matchup_fingerprint` `3419c8c1…`)으로 바꿔 통과했다(40882643905). `weekly_retrain.yml`(월요일 03:07 KST)이 라이브 재학습(`--skip-if-same`, 예측 + manifest 지문)·군집 재계산 비교(`cluster compare --types`, 유형표가 바뀌면 실패 — 사람이 다시 얼린다)·전체 `check_parity --require-live`(노트북 02~05 포함)를 돌리고 실패하면 `parity-failure` 이슈를 연다. 노트북 05(`notebooks/05_오늘_경기_예측.ipynb`, 41셀, 약 5초)가 2026-10-29 경기 하나를 상태 → 예측·요인 → 시리즈 시뮬레이션 → 되감기 → parity 순으로 따라간다. `model_report.json`의 기존 값과 `report-2026.pkl`의 예측, `clusters.pkl`은 바뀌지 않았다 — 값 지문 키를 넣으려고 보고서를 한 번 다시 만들어(`ace0de5`) `model_report.json`에 `features_fingerprint`가 더해지고 `report-2026.pkl`은 `trained_at` 때문에 바이트만 바뀌었다. 최종 수정 라운드에서 시리즈의 오늘 경기 = 선발 포함 확률(8절), 와일드카드 `head_start`, 노트북 03·04의 플랫폼 간 판정(`kbo_predict.parity`), 정규시즌 기록표만으로 한글 이름 투표, 얼린 시즌 박스스코어 재수집 금지를 더했다. 테스트 337개 + slow 6개. 남은 한계(2027 라이브 팀 모델, 2027 `REGULAR_SEASON` 등록 등)는 이월 문서 "5단계 전에".
-5. **사이트 (2~3일)**: Genspark 입력물 준비 → 사용자가 Genspark로 홈 + 모델 성적표 → 선수 → 팀 제작 → 산출물 `site/` 커밋 + GitHub Pages. 푸터 증거 바. (Genspark 내보내기·fetch 가능 여부는 0단계 중 사용자가 확인.)
+5. **사이트 — 완료 (2026-10-30)**: `data/public/`만 읽는 정적 사이트 4페이지(오늘의 경기 `index.html` / 팀 `teams.html` / 선수 `players.html` / 모델 성적표 `report.html`)를 `site/`에 만들어 GitHub Pages(`https://kimminseo2323-prog.github.io/2610_KBO_predict/`, `pages.yml`)로 공개했다. 공통 레이어는 `site/assets/`의 `tokens.css`(`DESIGN_clay.md` 토큰), `app.css`, `app.js`(데이터 계층 `DATA_BASE`·`fetchJSON`·`fetchCSV`, `TEAMS`·`FACTOR_LABELS`·`TYPE_COLORS`, 내비·증거 바·오류 상자), `charts.js`(인라인 SVG 차트 5종)이고, 페이지마다 CSS·JS 한 쌍이다. 홈은 핑크/틸 매치업 카드 + 벤토 6장(요인·적중률·선발 유형·전망·유형 지도·최근 예측), 비시즌에는 2026 되감기 슬라이더(165일). 팀은 순위표(결정전·상대 전적 동률 규칙)·로스터 유형 구성·상대 전적 격자·가을야구 확률 되감기, 선수는 유형 지도·선수 카드·비슷한 선수·유형 모델, 성적표는 모델·기간 배지·2026 홀드아웃·신뢰도 곡선·중요도·변형 비교·유형 품질·라이브 기록. 페이지 요소별 데이터 키는 `docs/site/data-contract.md` 매핑 표로 고정했고, `scripts/check_site.py --strict`가 페이지 구조(doctype·lang·title·viewport), 메뉴 4개 순서와 `aria-current`, "GitHub에서 보기", 증거 바 `#evidence`, 외부 리소스 허용 목록·트래킹 금지·`assets/` 상대 경로, `TEAMS`·`FACTOR_LABELS`·`TYPE_COLORS`의 파이썬 원본 일치, 매핑 표 키 경로의 실재, 홈 `?fixture=edge` 지원을 검사한다(29항목 OK). Genspark 브리프(`docs/site/genspark-brief.md`: 공통 규칙·페이지별 프롬프트 4개·수락 체크리스트·내보내기 절차)와 반영 스크립트(`scripts/import_site.py`: 백업 → beacon 등 허용 밖 `<script>`·`<link>` 제거 → `file://`·루트 경로 상대화 → `check_site --strict`, 실패 시 복원)를 두었다. 사이트 테스트 30개(`tests/test_site.py`, 페이지·검증 도구 28 + 반영 스크립트 2), 전체 `-m "not slow"` 367개. 홈·성적표·선수·팀 각 태스크는 컨트롤러의 1280px·360px 스크린샷 리뷰를 거쳤다.
 6. **마무리**: README, 배지, 한 달 무인 운영 확인.
 
 ## 13. 빌더에게 맡기는 것
@@ -348,6 +361,41 @@ notebooks/
 - **알려진 한계(8절 대비) → 해결**: 처음 구현은 시리즈 시뮬레이션이 오늘 경기도 선발 없는 팀 모델로 값을 매겼다(2026-10-29 3차전 SS 49.7% vs 예측 카드 55.4%). 최종 수정 라운드에서 위 "시리즈의 오늘 경기 확률" 규칙으로 고쳤다(시리즈 SS .5279 → .5579).
 - **Codex 교차 검토**: `codex exec`(`--sandbox read-only`)로 시뮬레이션 통계·되감기 누수·parity 범위를 검토했다. 누수(`date < on`)·동률 배점·시리즈 종료 처리·417/702는 맞다고 확인했고, 되감기 parity가 3일만 보고 `index.json`을 보지 않는다는 지적을 반영해 시즌 전체 + `index.json`으로 넓혔다. 주간 워크플로 경로 지적은 오독(군집 fit의 **출력** 경로)이었고, 출력 폴더를 `cluster fit`이 만들도록 했다. 보고서 허용 오차는 `abs_tol=0`으로 좁혔다.
 
+구현하며 확정한 규칙(5단계):
+
+계획 시점의 판정(`docs/superpowers/plans/2026-10-30-stage5-site.md`):
+
+- **완성된 `site/`를 먼저, Genspark 브리프는 그 뒤**: Genspark 확인(fetch·내보내기)이 됐으므로 원안대로 Genspark 제작이 목표지만, 사용자 시간이 드는 제작·피드백 전에 참조 구현을 공개해 둔다. 제작본은 검증을 통과하고 더 마음에 들 때만 교체.
+- **차트는 인라인 SVG**: 신뢰도 곡선(막대 + 대각선), 시즌 적중률 누적선, 선수 유형 산점도(PCA x, y), 팀 유형 구성 누적 막대, 요인 막대.
+- **2D 지도는 PCA 좌표**(목업의 "UMAP"은 PCA로 표기).
+- **`DATA_BASE` 자동 선택 + 캐시 버스트**(9절 확정 사항).
+- **되감기 전환**: `mode === "rewind"` → 마지막 날짜 + 슬라이더, `live` → `latest.json` + 되감기 토글.
+- **포스트시즌 보정 항목은 요인 카드에 넣지 않는다**(모델 항이 아님). 요인 카드는 `factors` 5개 그대로.
+- **선수 페이지 기본값**: 가장 최근 시즌(2026), 타자, 팀 전체. 선택은 URL 해시(`#b-2026-2949`, 투수는 `p`)로 공유.
+- **팀 페이지 기본 시즌 2026**, `model_expected`가 null인 시즌은 "—".
+- **라이브 기록 표**는 `history.csv` 전부를 읽어 `model_version`별 적중률. 행이 적으면 "라이브 기록은 2026 포스트시즌부터"를 명시.
+- **Genspark 브리프**는 공통 규칙 + 페이지당 프롬프트 하나 + 수락 체크리스트. `site/` 파일을 참조로 첨부해 "구조·데이터 연결 유지, 완성도 높이기"로 요청.
+- **내보내기 반영**: `import_site.py`가 허용 밖 외부 스크립트(beacon 등)를 지우고 경로를 점검한 뒤 `check_site.py`를 돌린다.
+- **`site/`는 Pages 전용**이며 일일 Actions 커밋 대상이 아니다(`daily.yml`의 `git add data/raw data/public` 그대로).
+
+실행 중 확정한 규칙:
+
+- **핑크 쪽 작은 글자**: 흰 글자 + 핑크(#ff4d8b)는 작은 글씨에서 대비가 모자라므로, 핑크 카드·매치업 핑크 절반의 작은 글자는 ink 글자 + 크림 안쪽 상자(inset)로 쓴다.
+- **취소 경기 카드 색은 `--surface-strong`**(#ebe6d6): 6색 순환 밖의 비활성 서피스라 7번째 색 카드 금지에 걸리지 않는다.
+- **최근 10경기(`last10`)**: 승 ÷ (승+패) 소수라 승-패 수를 알 수 없다. 0.1 단위로 딱 떨어지고 시즌 승률과 같지 않을 때만 "최근 10경기 7승 3패", 아니면 "최근 승률 .xxx"(추측해 만들지 않음).
+- **빈 되감기 목차**: `index.json`의 `dates`가 비어 있으면 화면이 죽지 않고 오류 문구를 보인다. 되감기 날짜 파일을 못 읽으면 그 카드만 오류 + 다시 불러오기.
+- **산점도**: `scatter`에 흐리게(`dim`) 옵션과, 다시 그려도 현재 선택을 잃지 않는 `current` 선택 클로저(화면 크기 변경 뒤 선택 유지).
+- **시즌 당시 팀 이름**: `teamNameFor(code, season)` + `OLD_TEAM_NAMES`(SK는 2020까지 "SK 와이번스", WO는 2018까지 "넥센"). 팀 코드는 현재 코드로 통일돼 있으므로 이름만 시즌에 맞춘다.
+- **순위표 동률 순서**: 코드에 적은 결정전 결과 `TIEBREAK_GAMES`(2021 1위 KT > 삼성, 2024 5위 KT > SSG — 결정전은 정규시즌 성적 미포함, 두 팀 승률이 정확히 같은지 테스트) → 상대 전적(`vs`가 .500이 아닐 때) → 코드순(임의). 어느 규칙으로 정했는지 쌍마다 표 아래 메모로 적는다.
+- **상대 전적 격자 색은 .500에서 나뉜다**(위·아래 두 계열 + 숫자 글자).
+- **모델 기대 승률 열은 2026에만**(2015~2025는 학습·검증 시즌이라 `model_expected` null).
+- **팀 페이지 가을야구 되감기 차트**는 165일 중 7일 간격으로 날짜를 골라(파일 25개 이하) 각 날짜 파일의 `outlook.teams{}.playoff_prob`를 읽는다.
+- **유형 이름은 `model_report.json`의 `cluster_quality`**에서 읽는다(팀 페이지가 1.77 MB `players.json`을 받지 않게). 유형 색은 `app.js`의 `TYPE_COLORS` 하나뿐.
+- **`players.json` 지연 로딩**: 홈은 나머지를 다 그린 뒤 마지막에 한 번, 선수 페이지는 한 번만 받고 재시도 때도 다시 받지 않는다(실패하면 비우고 다시 시도).
+- **`check_site.py` 검사 범위**: 메뉴(4개 순서·이름·`aria-current`)·증거 바·"GitHub에서 보기"·외부 리소스(호스트 정확히 일치 + jsDelivr 경로 접두사, 인라인 `<style>`·`style=`·assets CSS의 `@import`·`url()`, JS `import` 상대 경로, 트래킹 패턴)·상수(파이썬 원본과 같음)·데이터 계약 키 경로·`?fixture=edge`.
+- **사이트의 parity — 숫자는 직접 쓰지 않는다**: 노트북과 py가 바이트가 아니라 값으로 같아야 하듯(6절), 사이트의 모든 숫자·연도는 공개 JSON에서 읽고 HTML에 직접 쓰지 않는다. 팀 이름·요인 이름·유형 번호는 파이썬 원본과의 일치를 `check_site.py`가 검사한다.
+- **Genspark 내보내기 반영 규칙**(`import_site.py`): zip·폴더·단일 HTML을 받고, 파일 이름 → `<title>` 낱말(성적표·선수·오늘의 경기·팀) → `--as`로 페이지를 정한다. 지금 `site/`를 `artifacts/site-backup-<시각>/`(gitignore)에 백업한 뒤 덮어쓰고(내보내기에 없는 `assets/` 등은 유지), 허용 밖 외부 `<script>`·`<link>`·트래킹 인라인 스크립트를 지우며, `file://`·`/`로 시작하는 경로를 상대 경로로 바꾼다(Pages는 하위 경로 `/2610_KBO_predict/`). `.json` 등 사이트 파일이 아닌 것은 반영하지 않는다. `check_site --strict`가 실패하면 백업으로 복원(`--keep`이면 남김), `--dry-run`은 임시 복사본에서만.
+
 ## 14. 열린 위험
 
 | 위험 | 대응 |
@@ -356,7 +404,9 @@ notebooks/
 | MyKBOStats 박스스코어에 2B/3B/SB 없음 | **해결 (2026-10-29)**: 경기 페이지 하단 기록표에서 읽어 박스스코어 타자 행에 보탰다(로컬 캐시 9,362경기 재파싱, 기존 칸 불변). 남은 위험: 지표 라벨 미매칭 127건, 캐시 없는 18경기는 None. |
 | 선수 한글 이름 소스 없음 (MyKBOStats는 로마자만) | **해결 (2026-10-29)**: 기록표의 한글 `title` 속성 + 시즌별 투표(3표 이상인 가장 최근 시즌의 60% 다수 이름 — 개명 선수는 최근 이름; 1,604명), 개명 선수는 별칭 추론(31명, `data/raw/name_aliases.json`). 남은 위험: 일일 수집은 한글 이름 힌트·별칭 없이 파싱한다. |
 | 경기 전 예상 선발 소스 없음 | **해결 (2026-10-29)**: MyKBOStats 예정 경기 페이지의 "Starting pitchers" 섹션. 남은 위험: 정규시즌 예정 경기 페이지에도 같은 섹션이 있는지는 2027 개막 전 확인 필요(확인한 픽스처는 포스트시즌 페이지). |
-| Genspark가 외부 JSON fetch를 막음 | GitHub Pages로 같은 정적 사이트 호스팅. |
+| Genspark가 외부 JSON fetch를 막음 | **해결 (2026-10-30)**: 사용자가 Genspark의 외부 JSON `fetch`와 HTML 내보내기를 확인했다. 그래도 빌더가 만든 `site/`가 GitHub Pages로 먼저 공개돼 있고, Genspark 제작본은 `import_site.py` + `check_site.py --strict`를 통과할 때만 교체한다. 남은 위험: 내보내기에 붙는 Cloudflare beacon 같은 외부 스크립트(반영 스크립트가 지움), 트래킹이 아닌 외부 파일(예: Tailwind CDN)을 지우면 스타일이 깨질 수 있어 화면 확인 필요. |
+| raw.githubusercontent.com CDN 캐시(최대 5분) | 사이트는 모든 요청에 `?v=<Date.now()>`를 붙이고, 푸터 증거 바는 `status.json` 기준, 홈 카드는 `latest.json`의 `generated_at`을 작게 함께 적는다. 일일 실행 직후 몇 분은 파일끼리 시각이 어긋나거나 이전 값이 보일 수 있다. |
+| GitHub Pages가 저장소에서 아직 꺼져 있음 | `pages.yml`의 `configure-pages`에 `enablement: true` — 첫 실행(`site/**` push 또는 수동 실행)이 Pages를 켜고(source = GitHub Actions) 배포한다. 첫 실행이 성공하기 전에는 URL이 404. |
 | 포스트시즌이 곧 끝나 라이브 데이터가 거의 없음 | 0단계 수직 슬라이스로 남은 경기라도 기록. 되감기 모드가 비시즌 메인 콘텐츠, 라이브는 "증거" 역할. |
 | v0.1 급조 모델의 예측이 공개 히스토리에 남음 | `history.csv`에 `model_version` 컬럼. 성적표는 버전별로 분리 표시. README에 개선 이력. |
 | 노트북 실행 시간이 길어 CI가 느림 | 노트북은 `data/processed/` 스냅샷을 읽도록 하고, 수집 노트북(01)은 parity 대상에서 제외하거나 샘플 날짜만 실행. **→ 4단계**: 노트북 실행 테스트는 `slow` 마커, ci는 `check_parity --quick`(노트북 제외, Windows 약 37초)이고 노트북 02~05는 주간 재학습의 전체 `check_parity`(약 100초, Linux)와 `pytest -m slow`로 돌린다. 01은 parity에서 뺐다. |

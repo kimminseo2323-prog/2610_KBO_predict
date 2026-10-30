@@ -13,9 +13,9 @@
 ## 2단계(모델 고도화) 전에
 - ✅ (5435ed1, f3210bf) 요인 분해 합 항등식 테스트 추가 (Σfactors ≈ logit(p)·p(1−p)·100) — SHAP로 교체 시 함께. → `explain`이 보정 전 로그 오즈를 정확히 나누는지(`contrib.sum + base == logit(p_raw)`) LR·LightGBM 각각 검사하고(`test_explain_identity_lr/lgbm`), pp 변환이 Platt 기울기를 반영하는지도 검사한다(`test_factor_pp_applies_platt_slope_exactly`).
 - ✅ (5435ed1, 24aff45) `train_win` CLI·분할 경계 테스트, 빈 테스트 프레임에 친절한 에러. → CLI는 `python -m kbo_predict.train_win report|live`로 바뀌었고 `test_cli_report_then_live`가 돌린다. 빈 학습·보정 프레임과 빠진 시즌은 `ValueError`로 거절한다.
-- (유지 → 5단계 사이트) `latest.json`의 CANCELED 항목은 `home/away`에 `code`만 있고 `round`가 없음 → 사이트 구현 시 선택 필드로 처리하거나 정상 항목과 모양 통일.
+- ✅ (39754b5, 53e7cdb) `latest.json`의 CANCELED 항목은 `home/away`에 `code`만 있고 `round`가 없음 → 사이트 구현 시 선택 필드로 처리하거나 정상 항목과 모양 통일. → 모양은 그대로 두고 사이트가 선택 필드로 처리한다: 취소 카드(`--surface-strong`, "취소" + `status_note`, 확률·요인 없음), 검증 fixture `tests/fixtures/site/latest_edge.json`(정상·선발 미정·취소)과 홈의 `?fixture=edge`.
 - (유지) 재편성(같은 game_id로 날짜 변경) 시 history 행의 date 미갱신 — 현재 데이터상 재편성은 새 id를 받으므로 보류.
-- (유지 → 5단계 절의 **필수 관문**) `seasons.REGULAR_SEASON`에 2027 시즌 범위 등록 (2027-03 개막 전; 미등록이면 폴백 + collect-failure 이슈로 알림)
+- (유지 → "6단계 전에"의 **필수 관문**) `seasons.REGULAR_SEASON`에 2027 시즌 범위 등록 (2027-03 개막 전; 미등록이면 폴백 + collect-failure 이슈로 알림)
 
 ## 3단계(클러스터링) 전에
 - (유지) 2015~2018 일부 박스스코어에서 타자 득점 합/투수 실점 합이 팀 점수와 1 차이 (예: 2016 4292, 2017 5302, 2018 6069/6161/6605) — 사이트 원본 문제; 집계 전 검증 규칙 필요. → 3단계 유형 군집은 비율 지표(K%·BB%·HR%·ISO·BABIP·도루율 / 선발 비중)만 쓰고 득점·실점을 쓰지 않아 영향이 없다. 득점·실점을 쓰는 지표가 생기면 다시 본다.
@@ -66,24 +66,40 @@
 
 4단계 실행·리뷰에서 나온 항목. 사이트가 읽는 데이터 계약(스펙 §8)과 무인 운영에 걸리는 것부터.
 
-- **필수 관문 — 2027-03 전에 `seasons.REGULAR_SEASON[2027]` 등록(미등록이면 10월 포스트시즌이 정규시즌으로 집계됨).** 미등록 시즌은 03-01~10-31 폴백이라 개막 전 시범경기와 10월 포스트시즌 경기가 정규시즌으로 들어가 상태·학습·`playoff_race`·한글 이름 투표가 오염된다. 개막일·종료일이 정해지면 바로 넣고, `round`(시범경기 `preseason`)도 함께 확인한다.
+5단계 완료(2026-10-30, `docs/superpowers/plans/2026-10-30-stage5-site.md`, 20d5e78 … 8a03e8b): 처리한 항목은 ✅, 남은 항목은 (유지) — 6단계에 걸리는 것은 아래 "6단계 전에"로 옮겼다.
+
+- (유지 → "6단계 전에") **필수 관문 — 2027-03 전에 `seasons.REGULAR_SEASON[2027]` 등록(미등록이면 10월 포스트시즌이 정규시즌으로 집계됨).** 미등록 시즌은 03-01~10-31 폴백이라 개막 전 시범경기와 10월 포스트시즌 경기가 정규시즌으로 들어가 상태·학습·`playoff_race`·한글 이름 투표가 오염된다. 개막일·종료일이 정해지면 바로 넣고, `round`(시범경기 `preseason`)도 함께 확인한다.
 - ✅ (최종 수정 라운드) 오늘 경기의 선발 포함 확률을 시리즈 시뮬레이션에 반영 → `predict.raw_prob`(예측 항목·되감기 판정과 같은 함수)를 `run_pipeline`이 `outlook_for(today_probs=…)`로 넘기고, 첫 남은 경기(홈 일치 확인)만 그 확률로 굴린다. 카드에 `today_game_prob_source`. 10-29: 시리즈 SS .5279 → .5579(오늘 3차전 SS .5536).
 - ✅ (최종 수정 라운드) 와일드카드 1승 어드밴티지 → `postseason.yaml`의 `head_start: [h0, h1]`(전적에 더하고 `homes`는 실제 경기만). 2026 와일드카드 = `best_of: 3, head_start: [1, 0], homes: [LG, LG]`. 처음 설정(`best_of: 1`)은 5위가 1차전을 이기면 바로 끝나 틀렸다.
 - ✅ (최종 수정 라운드) 노트북 05 다듬기: 셀 40 "작성 시점에는", 셀 6 "우천"·"대구" → "취소 사유는 데이터에 없음"·"삼성 홈", 셀 33 "59~61%", 셀 20은 공개 함수(`simulate.active_series`·`series_record`·`left_homes`·`series_probs`)만 쓴다. `check_parity.REQUIRED_NOTEBOOKS = ("02", "03", "04", "05")`.
 - ✅ (최종 수정 라운드) 노트북 03·04의 동일성 assert가 비트 비교(Windows에서만 통과)였고 ci `--quick`은 노트북을 돌리지 않았다 → 03·04는 `kbo_predict.parity`(값 지문, 실수 상대 1e-9, 예측 `atol 1e-9`)로 판정하고, `weekly_retrain.yml`이 전체 parity(노트북 포함, `--require-live`)를 돌린다.
 - ✅ (최종 수정 라운드) `live --skip-if-same`은 예측이 같아도 manifest의 `live.features_fingerprint`가 다르면 다시 쓴다. `train_win._write_json`은 원자적(`publish._write_json`, 바이트 동일). `check_parity --repo`·`build_rewind` 기본 경로는 저장소 루트 기준. `test_rewind_matches_report_model`은 `build_dataset([2025, 2026])`으로 ci에서도 돈다.
 - 주간 재학습 첫 실행 확인(2026-11-02 월 03:07 KST): 전체 parity(노트북 02~05, Linux)가 처음으로 Actions에서 돈다 — 노트북 실행 시간·한글 폰트 경고와 통과 여부를 본다. `types_changed=1`(이제 명시적 실패) 경로는 Actions에서 아직 돈 적이 없다(지금 데이터로는 유형표가 그대로). `workflow_dispatch`로 한 번 돌려 보고, Actions에서 만든 manifest·pkl의 `commit_sha`가 채워지는지도 본다.
-- `history.csv`는 지금 1행(2026-10-29 14050, v0.2, 정산 전)뿐이다 → 라이브 적중률은 포스트시즌·2027 기록이 쌓인 뒤에 사이트에 보인다.
-- 커밋된 `latest.json`(10-29 14:40 Actions 실행)에는 아직 `outlook`이 없다 → 다음 일일 실행(10-30 09:07)에서 `outlook` 블록이 들어가는지 확인.
-- Genspark 내보내기·외부 `fetch()` 가능 여부 확인(사용자, 스펙 §9). 안 되면 `site/`를 직접 만들어 GitHub Pages로.
+- (유지) `history.csv`는 지금 1행(2026-10-29 14050, v0.2, 정산 전)뿐이다 → 라이브 적중률은 포스트시즌·2027 기록이 쌓인 뒤에 사이트에 보인다. 사이트(홈 적중률 카드·성적표 라이브 기록)는 행이 적으면 "라이브 기록은 2026 포스트시즌부터 쌓여 아직 표본이 적습니다"를 적는다.
+- ✅ (91f78bd) 커밋된 `latest.json`(10-29 14:40 Actions 실행)에는 아직 `outlook`이 없다 → 다음 일일 실행(10-30 09:07)에서 `outlook` 블록이 들어가는지 확인. → 10-30 00:12 실행의 `latest.json`에 `outlook`(`type: "series"`)이 있고 홈 전망 카드가 그린다.
+- ✅ Genspark 내보내기·외부 `fetch()` 가능 여부 확인(사용자, 스펙 §9). 안 되면 `site/`를 직접 만들어 GitHub Pages로. → 둘 다 된다(내보내기는 CSS·JS가 들어간 단일 HTML + Cloudflare beacon 스크립트 1개, 캐시 버스트 `fetch`). 그래도 `site/`를 먼저 직접 만들어 Pages로 공개했고, Genspark는 브리프(`docs/site/genspark-brief.md`) + 반영 스크립트(`scripts/import_site.py`)로 선택적 교체.
 - 2027 라이브 팀 모델: 라이브 `outlook`도 `team-2026`(2015~2024 학습)을 쓴다. 2027 시즌 전에 2015~2026으로 학습한 라이브 팀 모델을 주간 재학습에 넣는다(되감기는 `team-2026` 그대로).
-- 시뮬레이션 상태 갱신 없음: 남은 경기를 모두 기준 날짜 상태로 계산한다(한 경기 결과가 다음 경기의 승률·최근 10경기·불펜 피로 피처를 바꾸는 효과 무시). 시즌 초 가을야구 확률이 너무 확신에 차 보이는지 사이트에서 보고 필요하면 주 단위 상태 갱신을 검토.
+- (유지) 시뮬레이션 상태 갱신 없음: 남은 경기를 모두 기준 날짜 상태로 계산한다(한 경기 결과가 다음 경기의 승률·최근 10경기·불펜 피로 피처를 바꾸는 효과 무시). 시즌 초 가을야구 확률이 너무 확신에 차 보이는지 사이트에서 보고 필요하면 주 단위 상태 갱신을 검토. → 팀 페이지 "가을야구 확률 되감기"(7일 간격)에서 볼 수 있게 됐다. 판단은 6단계에서.
 - 예고 선발 이력: `starters.jsonl`은 경기당 가장 최근 발표만 남긴다(3단계 항목과 같음). 되감기는 그래서 실제 선발을 쓴다. 2027부터 예고 발표 이력을 따로 쌓으면 "예고 vs 실제" 차이와 라이브 성적 차이를 설명할 수 있다.
 - 6자리 지문 경계 위험: `features_fingerprint`는 실수를 소수 6자리로 반올림하므로, 어떤 값이 반올림 경계에 정확히 걸리면 플랫폼에 따라 지문이 달라져 ci가 실패할 수 있다(지금은 Linux·Windows 같음). 그런 실패가 나면 `assert_frame_equal(rtol=1e-9)` 값 비교로 판정을 옮기는 것을 검토.
 - 박스스코어 재수집 반복 요청: 같은 실행 안의 2중 요청은 수집 창 이전(`before`)으로 잘라 없앴지만(4d1c4f6), 끝내 받을 수 없는 옛 FINAL 경기는 하루 두 번 실행마다 다시 요청된다(최대 20개 × 5초). 실패 횟수 기록·포기 규칙 검토(지금 2026에는 박스스코어 없는 정규시즌 FINAL 0경기). 최종 수정 라운드부터 얼린 시즌(2015~2026)은 재수집하지 않고(얼린 산출물 parity 보호), 수집이 예외로 멈춘 실행도 재수집을 건너뛴다 — 그래서 이 문제는 2027부터 다시 생긴다. 한글 이름 투표는 정규시즌 FINAL 기록표만 센다(`korean_names`).
 - 등록된 포스트시즌 시리즈가 데이터에서 끝나지 않은 채 남으면(예: 마지막 경기가 LIVE로 멈춤) 다음 시리즈가 시작될 때까지 "진행 중" 카드로 보인다.
 - `config/postseason.yaml`은 사람이 갱신한다: 2026 한국시리즈 상대(`teams: [KT, null]`, `start: null`)를 플레이오프가 끝나면 채운다. 2027부터 대진을 데이터에서 도출할 수 있는지 검토.
 - 테스트 소소: 같은 날 2경기(더블헤더) 합성 되감기 테스트, `rewind._raw_prob`와 `predict`의 확률 계산 중복, 쓰기 도중 실패하는 원자적 쓰기 테스트, 등록되지 않은 시즌의 `round` 폴백 테스트.
+
+## 6단계(마무리·무인 운영) 전에
+
+5단계 실행·리뷰에서 나온 항목과 5단계에서 넘어온 관문.
+
+- **필수 관문 — 2027-03 전에 `seasons.REGULAR_SEASON[2027]` 등록**(위 "5단계 전에"의 첫 항목 그대로). 미등록이면 2027 시범경기·10월 포스트시즌이 정규시즌으로 집계된다. 사이트는 되감기 시즌을 코드에 고정했다(홈 `home.js`의 `REWIND = "rewind/2026"`, 팀 `teams.js`의 `REWIND_SEASON = 2026` — 되감기 파일이 2026만 있음). 2027 되감기를 만들면 함께 바꾼다.
+- **Genspark 제작본 도착 시 교체 판단**: 사용자가 브리프로 만든 zip을 주면 `import_site.py --dry-run` → 반영 → `check_site.py --strict` → 1280px·360px 스크린샷으로 지금 Pages 버전과 비교해 사용자가 정한다. 반영 스크립트는 기존 `site/assets/`를 남겨 두므로(단일 파일 내보내기면 쓰이지 않는 파일이 남음) 교체가 확정되면 안 쓰는 assets 정리와 `check_site`의 상수 검사(`assets/app.js` 기준)가 새 페이지에도 의미가 있는지 다시 본다.
+- **한 달 무인 운영 확인**(스펙 §12 item 6): 일일 2회·주간 재학습·ci·pages 워크플로가 사람 손 없이 도는지, `collect-failure`·`parity-failure` 이슈, 사이트 증거 바의 갱신 시각·실행 번호가 매일 바뀌는지 본다. 주간 재학습 첫 실행은 2026-11-02(위 항목).
+- **Pages 첫 배포**: `pages.yml`의 `enablement: true`가 첫 실행에서 Pages를 켠다. 첫 실행 전에는 URL이 404이고, 실패하면 저장소 Settings → Pages의 source를 "GitHub Actions"로 직접 켠다.
+- **팀 페이지 되감기 차트 끝 이름 겹침**: 가을야구 확률 되감기 선 그래프의 오른쪽 끝 팀 이름이 확률이 비슷한 팀끼리(특히 0%·100% 근처) 겹친다 → 이름 위치를 겹치지 않게 밀거나 범례로.
+- **홈 틸 "선수 유형 지도" 카드의 빈 공간**: 데스크톱 벤토에서 틸 카드 아래쪽이 비어 보인다 → 미니 지도 높이·유형별 인원 배치 조정.
+- **성적표 신뢰도 곡선 캡션(360px)**: 모바일 폭에서 캡션이 길어 줄바꿈이 어색하다 → 짧은 문구 또는 차트 아래 표로.
+- **흰 글자 + 핑크 pill 대비를 시스템 규칙으로**: 핑크(#ff4d8b) 위 흰 작은 글자는 대비가 모자라 페이지마다 ink + 크림 inset으로 피해 갔다(스펙 13절 5단계) → `DESIGN_clay.md`·`tokens.css`·`app.css`에 "핑크 위 14px 이하 글자는 ink" 규칙을 하나로 적고 `test_card_colors_and_text_contrast_rules`에 pill까지 넣는다.
+- **`site/_preview.html` 정리**: Task 1의 로컬 미리보기 전용 페이지(gitignore라 배포되지 않음). 사이트가 완성됐으니 지우거나 `scripts/`로 옮긴다.
 
 ## 정리만 하면 되는 것
 - `tests/test_mykbo_parse.py`의 `or len(rows) == 4` 무의미 단언, `test_collect` 중복 조건문, `test_features` unused import, `scaler.transform` 중복 호출, `publish.py` 인라인 import.

@@ -3,14 +3,48 @@
 ![daily](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/workflows/daily.yml/badge.svg)
 ![ci · parity](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/workflows/ci.yml/badge.svg)
 ![weekly retrain](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/workflows/weekly_retrain.yml/badge.svg)
+![pages](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/workflows/pages.yml/badge.svg)
 
 KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 공개 파일로 기록하는 포트폴리오 프로젝트입니다. 선수 유형 클러스터링을 더해 한 저장소에서 예측과 분석을 함께 다룹니다.
 
-**현재 버전: 승패 모델 v0.2 + 선수 유형 `clusters-2026` + 팀 모델 `team-2026` (4단계까지 완료)**. 2015~2026 12개 시즌으로 경기 전 피처 26개(팀 19 + 선발 7)를 만들고, 로지스틱 회귀와 LightGBM을 2015~2024로 학습해 2025로 고른 뒤, 학습·선택에 쓰지 않은 2026 시즌으로 평가했습니다(개발 중 2026 지표를 확인한 뒤 캘리브레이션 절차를 한 번 바꾼 경위는 아래 "해석할 때 주의할 점"에 있습니다). 매일 예측에는 그날 발표된 예고 선발투수를 넣습니다. 0단계의 v0.1(팀 피처 3개, 2026 시즌만 학습)은 v0.2로 교체되었습니다.
+**현재 버전: 승패 모델 v0.2 + 선수 유형 `clusters-2026` + 팀 모델 `team-2026` + 사이트 (5단계까지 완료)**. 2015~2026 12개 시즌으로 경기 전 피처 26개(팀 19 + 선발 7)를 만들고, 로지스틱 회귀와 LightGBM을 2015~2024로 학습해 2025로 고른 뒤, 학습·선택에 쓰지 않은 2026 시즌으로 평가했습니다(개발 중 2026 지표를 확인한 뒤 캘리브레이션 절차를 한 번 바꾼 경위는 아래 "해석할 때 주의할 점"에 있습니다). 매일 예측에는 그날 발표된 예고 선발투수를 넣습니다. 0단계의 v0.1(팀 피처 3개, 2026 시즌만 학습)은 v0.2로 교체되었습니다.
 
 3단계에서는 박스스코어를 선수·시즌 단위로 합산해 타자 4유형, 투수 4유형을 K-means로 나누고(이름은 사람이 붙임), 유사 선수·2D 지도·소속 확률을 [`players.json`](data/public/players.json)으로, 팀별 요약을 [`teams.json`](data/public/teams.json)으로 내보냅니다. "직전 시즌 유형"으로 만든 상성 피처를 승패 모델에 넣어 보았지만 채택 기준에 못 미쳐, 라이브 모델은 v0.2 그대로입니다(아래 "선수 유형" 절).
 
 4단계에서는 저장소가 사람 손 없이 돌아가게 했습니다. GitHub Actions 워크플로 3개가 매일 수집·추론, 매주 재학습·군집 재계산, push·PR마다 테스트와 parity 검사(커밋된 산출물을 원본 데이터로 다시 만들어 값이 같은지)를 맡습니다. 2026 정규시즌 165일을 날짜별로 다시 예측한 되감기 JSON([`rewind/2026/`](data/public/rewind/2026/index.json))과, 가을야구 진출·포스트시즌 시리즈 확률을 몬테카를로로 계산하는 `outlook` 블록도 만들었습니다(아래 "자동화와 되감기" 절). 노트북 05가 오늘 경기 하나를 처음부터 끝까지 따라갑니다.
+
+5단계에서는 이 공개 파일을 읽는 정적 사이트 4페이지를 만들어 GitHub Pages로 띄웠습니다(아래 "사이트" 절).
+
+## 사이트
+
+**https://kimminseo2323-prog.github.io/2610_KBO_predict/**
+
+| 페이지 | 보여 주는 것 |
+| --- | --- |
+| [오늘의 경기](https://kimminseo2323-prog.github.io/2610_KBO_predict/) (`site/index.html`) | 오늘 경기의 홈팀 승리 확률(원정 핑크 / 홈 틸 매치업 카드), 확률을 가른 요인 5개, 모델 적중률, 두 선발의 유형, 시리즈·가을야구 전망, 선수 유형 지도, 최근 예측. 경기가 없는 날(비시즌)에는 2026 시즌 되감기 슬라이더로 열려 "그날 모델의 예측과 실제 결과"를 보여 줍니다 |
+| [팀](https://kimminseo2323-prog.github.io/2610_KBO_predict/teams.html) (`site/teams.html`) | 시즌별 순위표(실제·피타고리안·모델 기대 승률), 로스터 유형 구성, 상대 전적 격자, 2026 가을야구 확률 되감기 |
+| [선수](https://kimminseo2323-prog.github.io/2610_KBO_predict/players.html) (`site/players.html`) | 2015~2026 타자·투수 유형 지도(PCA 2D), 선수 카드(유형·소속 확신도·기록), 비슷한 선수 5명 |
+| [모델 성적표](https://kimminseo2323-prog.github.io/2610_KBO_predict/report.html) (`site/report.html`) | report-2026의 2026 홀드아웃 성적과 기준선·유의성, 신뢰도 곡선, 피처 중요도, 빼고 더해 본 모델, 선수 유형 품질, 라이브 기록 |
+
+- **데이터는 저장소 JSON을 바로 읽습니다.** 페이지는 `https://raw.githubusercontent.com/kimminseo2323-prog/2610_KBO_predict/main/data/public/`의 파일을 `fetch`하므로(raw는 `Access-Control-Allow-Origin: *`), 일일 Actions가 JSON을 커밋하면 사이트를 다시 배포하지 않아도 바뀝니다. raw CDN 캐시 때문에 갱신이 최대 5분 늦게 보일 수 있습니다. 숫자는 HTML에 직접 쓰지 않습니다.
+- 빌드 없는 HTML + CSS + 바닐라 ES 모듈, 차트는 인라인 SVG(외부 라이브러리 없음), 외부 리소스는 글꼴 CSS(Inter, Pretendard)뿐이고 트래킹은 없습니다. 디자인은 [`DESIGN_clay.md`](DESIGN_clay.md)(크림 캔버스, 카드 6색 순환), 확정 목업은 [`docs/design/clay-hybrid.html`](docs/design/clay-hybrid.html).
+- 모든 페이지 아래의 **증거 바**가 `status.json`으로 "마지막 갱신 · Actions 실행 번호 · 커밋 · 모델"을 링크와 함께 보여 줍니다.
+- 페이지 요소별로 어느 파일의 어느 키를 읽는지는 [데이터 계약](docs/site/data-contract.md)에 표로 고정했고, [`scripts/check_site.py`](scripts/check_site.py)가 메뉴·증거 바·외부 리소스·상수·키 경로를 검사합니다.
+- 배포: [`.github/workflows/pages.yml`](.github/workflows/pages.yml)이 main의 `site/**` 변경(또는 수동 실행) 때 `site/`를 GitHub Pages에 올립니다.
+
+### 로컬 미리보기
+
+저장소 루트에서 `python -m http.server 8000`을 실행하고 `http://localhost:8000/site/`를 엽니다. localhost에서는 raw URL 대신 저장소의 `data/public/`을 읽습니다. `http://localhost:8000/site/?fixture=edge`는 취소·선발 미정 경기를 그리는 검증 화면, `?date=2026-09-01`은 그 날짜의 되감기입니다.
+
+### Genspark 제작본 반영
+
+지금 사이트는 Genspark로 다시 만들 수 있는 참조 구현이기도 합니다. 제작본은 검증을 통과하고 더 마음에 들 때만 `site/`를 교체합니다.
+
+1. [Genspark 브리프](docs/site/genspark-brief.md)의 공통 규칙과 페이지별 프롬프트를 붙여 넣고, 해당 `site/*.html` + `site/assets/*`를 참조로 첨부해 페이지를 만듭니다(홈 → 성적표 → 선수 → 팀).
+2. 페이지마다 HTML로 내보내 `index.html`·`teams.html`·`players.html`·`report.html`로 이름을 맞추고 zip으로 묶습니다.
+3. `python -X utf8 scripts/import_site.py genspark.zip --dry-run`으로 미리 확인한 뒤 `python -X utf8 scripts/import_site.py genspark.zip`. 지금 `site/`를 `artifacts/site-backup-<시각>/`에 백업하고, Cloudflare beacon 같은 허용 밖 외부 스크립트를 지우고 `file://` 경로를 상대 경로로 고친 뒤 `site/`에 덮어씁니다.
+4. 스크립트가 `scripts/check_site.py --strict`를 실행합니다(실패하면 백업으로 되돌림, `--keep`이면 남김). 통과하면 로컬 미리보기에서 1280px·360px 화면을 확인합니다.
+5. `site/`를 커밋·push하면 `pages.yml`이 다시 배포합니다.
 
 ## 아키텍처
 
@@ -31,7 +65,7 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
             weekly_retrain.yml  월요일 03:07 KST       라이브 재학습 + 군집 확인(바뀌면 실패) + 전체 parity(노트북 포함)
             ci.yml              push · PR             테스트 + parity (--quick)
           → data/public/*.json, *.csv
-            → 사이트 (5단계)
+            → 사이트 site/ (GitHub Pages, pages.yml) — raw.githubusercontent.com의 JSON을 브라우저에서 fetch
 
     → 선수·시즌 집계 (박스스코어 + 경기 페이지 기록표의 2루타·3루타·도루·한글 이름)
       → 선수 유형 군집 clusters-2026  models/clusters.pkl (2015~2025로 맞추고 2026은 배정만)
@@ -396,6 +430,9 @@ python -m kbo_predict.cluster compare --against models/clusters.pkl --new <새 p
 python scripts/build_rewind.py --season 2026 [--dates YYYY-MM-DD,YYYY-MM-DD]   # 되감기 JSON → data/public/rewind/2026/ (약 15초)
 python scripts/run_pipeline.py [--date YYYY-MM-DD] [--no-fetch]
 python scripts/check_parity.py [--quick] [--require-live] [--out artifacts/parity]   # parity 검사 (약 37초 / 노트북 포함 약 100초)
+python -m http.server 8000             # 사이트 미리보기 → http://localhost:8000/site/
+python scripts/check_site.py --strict  # 사이트 검사 (메뉴·증거 바·외부 리소스·상수·데이터 계약 키)
+python scripts/import_site.py <zip|폴더|html> [--as index.html] [--dry-run] [--keep]   # Genspark 제작본 반영
 ```
 
 - Windows에서는 한글 출력 때문에 `python -X utf8 …`로 실행합니다.
@@ -407,7 +444,7 @@ python scripts/check_parity.py [--quick] [--require-live] [--out artifacts/parit
 - `config/cluster_labels.yaml`(유형 이름)은 패키지 위치 기준으로 찾으므로 어느 폴더에서 실행해도 같은 이름이 나옵니다. 군집은 단일 스레드로 계산해 같은 기계에서는 비트 단위로 재현되지만, 다른 BLAS(예: Linux의 Actions)에서는 마지막 자리가 다를 수 있어 커밋된 `models/clusters.pkl`이 기준입니다. `cluster compare`가 다시 맞춘 군집을 커밋본과 비교하고(중심 차이 1e-9 이내, 맞춤 시즌 라벨 동일), Linux ci에서도 유형표 해시(`types_sha256`)가 같았습니다.
 - `check_parity`는 재생성본을 `--out`(기본 `artifacts/parity/`, gitignore)에만 쓰고 `data/public`·`models` 아래로의 출력은 거부합니다. 노트북 02는 스스로 `data/processed/features.parquet`를 씁니다(gitignore).
 
-테스트는 `python -X utf8 -m pytest -q -m "not slow"`(337개, ci와 같음)이고, `-m slow`로 6개를 더 돌립니다(노트북 01~05 실행 5개 + 실데이터 `check_parity --quick` 1개). 전부 돌리려면 `python -X utf8 -m pytest -q`입니다.
+테스트는 `python -X utf8 -m pytest -q -m "not slow"`(367개, ci와 같음 — 사이트 30개 포함)이고, `-m slow`로 6개를 더 돌립니다(노트북 01~05 실행 5개 + 실데이터 `check_parity --quick` 1개). 전부 돌리려면 `python -X utf8 -m pytest -q`입니다.
 
 ## 데이터 출처
 
@@ -421,13 +458,14 @@ python scripts/check_parity.py [--quick] [--require-live] [--out artifacts/parit
 2. ~~선발투수 정보 소스 확보, 피처 26개, LightGBM, 확률 보정, 요인 분해(SHAP), report/live 두 모델 분리, 노트북 02·03~~ (완료)
 3. ~~선수 유형 클러스터링, 유형 상성 피처 전후 비교, `players.json`·`teams.json`, 노트북 04~~ (완료)
 4. ~~py와 ipynb 결과 동일성 검증(parity), 주간 재학습, 되감기 JSON, 가을야구·시리즈 시뮬레이션(`outlook`), 노트북 05~~ (완료)
-5. Genspark + GitHub Pages 사이트
+5. ~~정적 사이트 4페이지 + GitHub Pages, Genspark 브리프와 제작본 반영 스크립트~~ (완료)
 6. README 정리와 한 달 무인 운영
 
 ## 문서
 
 - 설계 문서: [docs/superpowers/specs/2026-10-27-kbo-predict-design.md](docs/superpowers/specs/2026-10-27-kbo-predict-design.md)
-- 구현 계획: [0단계 수직 슬라이스](docs/superpowers/plans/2026-10-27-stage0-vertical-slice.md), [1단계 백필·노트북 01](docs/superpowers/plans/2026-10-28-stage1-backfill-notebook01.md), [2단계 피처 + 승패 모델](docs/superpowers/plans/2026-10-29-stage2-win-model.md), [3단계 선수 유형 클러스터링](docs/superpowers/plans/2026-10-29-stage3-clustering.md), [4단계 자동화 + parity](docs/superpowers/plans/2026-10-29-stage4-automation.md)
+- 구현 계획: [0단계 수직 슬라이스](docs/superpowers/plans/2026-10-27-stage0-vertical-slice.md), [1단계 백필·노트북 01](docs/superpowers/plans/2026-10-28-stage1-backfill-notebook01.md), [2단계 피처 + 승패 모델](docs/superpowers/plans/2026-10-29-stage2-win-model.md), [3단계 선수 유형 클러스터링](docs/superpowers/plans/2026-10-29-stage3-clustering.md), [4단계 자동화 + parity](docs/superpowers/plans/2026-10-29-stage4-automation.md), [5단계 사이트](docs/superpowers/plans/2026-10-30-stage5-site.md)
+- 사이트: [데이터 계약](docs/site/data-contract.md), [Genspark 브리프](docs/site/genspark-brief.md), [확정 목업](docs/design/clay-hybrid.html)
 - 이월 항목: [docs/superpowers/plans/2026-10-27-stage0-deferred.md](docs/superpowers/plans/2026-10-27-stage0-deferred.md)
 - 데이터 조사: [docs/research/kbo-data-sources.md](docs/research/kbo-data-sources.md)
 - 디자인 시스템: [DESIGN_clay.md](DESIGN_clay.md)
