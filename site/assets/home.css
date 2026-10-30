@@ -137,7 +137,8 @@
 @media (min-width: 768px) {
   .matchup:not(.matchup--canceled) {
     --cut: var(--cut-to, 50%);
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto 1fr auto;
+    /* 열 폭도 경계를 따라간다 — 숫자가 경계 쪽에 붙어 있으므로 열이 50:50이면 경계가 당겨질 때 숫자가 반대 색으로 넘어간다 */
+    display: grid; grid-template-columns: calc(var(--cut) - 3px) minmax(0, 1fr); grid-template-rows: auto 1fr auto;
     /* 경계: 크림색 6px 선이 핑크와 틸을 가른다 */
     background: linear-gradient(90deg, var(--pink) calc(var(--cut) - 3px), var(--canvas) calc(var(--cut) - 3px) calc(var(--cut) + 3px), var(--teal) calc(var(--cut) + 3px));
   }
@@ -152,6 +153,7 @@
 
   /* 큰 경기: 이름·자막은 바깥쪽, 숫자는 경계 쪽에서 마주 본다 */
   .matchup--lg .side { min-height: 420px; padding: var(--sp-16) var(--sp-32) var(--sp-32); }
+  .matchup--lg .side--home { padding-left: calc(var(--sp-32) + 6px); }  /* 경계선 6px만큼 안쪽으로 */
   .matchup--lg .side--home .side__head, .matchup--lg .side--home .side__details { align-self: flex-end; text-align: right; }
   .matchup--lg .side--home .chip__row { justify-content: flex-end; }
   .matchup--lg .side__prob { margin-top: auto; padding-top: var(--sp-32); }
