@@ -1,3 +1,3 @@
 date,game_id,home,away,home_win_prob,model_version,predicted_at,status,winner,correct
 2026-10-29,14050,HT,SS,0.4464,v0.2,2026-10-29T14:40:20+09:00,FINAL,AWAY,1
-2026-10-30,14053,HT,SS,0.5195,v0.2,2026-10-30T14:39:12+09:00,SCHEDULED,,
+2026-10-30,14053,HT,SS,0.5195,v0.2,2026-10-30T14:39:12+09:00,FINAL,HOME,1
