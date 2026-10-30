@@ -29,6 +29,7 @@
 .rewind__range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--ink); border: 4px solid var(--canvas); }
 .rewind__range:focus-visible { outline-offset: 0; border-radius: var(--r-md); }
 
+.rewind-error { width: min(460px, 100%); }
 .fixture-note {
   margin-bottom: var(--sp-16); padding: 10px 14px; border-radius: var(--r-md);
   background: var(--surface-strong); color: var(--body-strong); font-size: 13px;
@@ -58,11 +59,20 @@
   font-size: clamp(72px, 28px + 7.4vw, 136px); font-weight: 500; line-height: 0.82; letter-spacing: -0.055em;
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.side__num small { font-size: 0.26em; font-weight: 500; letter-spacing: 0; margin-left: 0.12em; }
+.side__num small { font-size: max(0.26em, 19px); font-weight: 600; letter-spacing: 0; margin-left: 0.12em; }  /* 19px 굵게 = 큰 글자 기준 */
 .side__who { margin-top: 12px; font-size: 14px; font-weight: 600; }
 .side__starter { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-8); }
 .side__starter b { font-weight: 600; }
-.side__stats, .side__form { font-variant-numeric: tabular-nums; }
+/* 대비: 핑크(#ff4d8b) 위 작은 흰 글자는 3.1:1이라, 핑크 쪽은 팀 이름·큰 숫자만 흰색이고 나머지는 잉크(6.3:1).
+   기록 두 줄은 양쪽 모두 크림 칩에 담아 같은 모양으로 읽힌다. */
+.side--away { color: var(--ink); --muted: var(--ink); }
+.side--away .side__team, .side--away .side__num { color: var(--on-dark); }
+.side__chip {
+  width: fit-content; max-width: 100%; margin-top: var(--sp-8); padding: 8px 12px;
+  border-radius: var(--r-md); background: var(--canvas); color: var(--ink); font-size: 13px; line-height: 1.5;
+  font-variant-numeric: tabular-nums; text-align: left;
+}
+.side--home .side__details { justify-items: end; }
 
 /* 데스크톱 큰 카드: 숫자는 경계 쪽, 이름·기록은 바깥 쪽 */
 .matchup--lg .side { min-height: 260px; }
@@ -80,7 +90,8 @@
 .matchup--sm .side__who { display: none; }  /* 팀 이름이 바로 옆에 있다 */
 .matchup--sm .side__details { margin-top: var(--sp-12); }
 
-/* 취소 경기 */
+/* 취소 경기 — 크림 카드 옆에 크림이 오지 않도록 한 단계 진한 서피스 */
+.matchup--canceled { background: var(--surface-strong); }
 .matchup--canceled .pills { gap: var(--sp-8); }
 .matchup__canceled-title { margin-top: var(--sp-12); font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
 .matchups__rest .matchup--canceled { padding: var(--sp-24); }
@@ -105,6 +116,7 @@
   }
   .matchup--lg .side__prob { margin-top: 0; align-self: start; align-items: flex-end !important; text-align: right !important; }
   .matchup--lg .side--home .side__starter { justify-content: flex-start; }
+  .matchup--lg .side--home .side__details { justify-items: start; }
   .matchup--lg .side__details { margin-top: var(--sp-16); }
   .matchup--lg .side__num { font-size: 64px; }
   .matchup--lg .side__who { margin-top: 8px; font-size: 13px; }
@@ -157,6 +169,7 @@
 .starter__team { font-weight: 400; color: var(--muted); }
 .starter__stats { margin-top: 6px; font-size: 13px; }
 .starter__note { margin-top: 6px; font-size: 13px; color: var(--muted); }
+.starter__blurb { min-height: 3.1em; }  /* 두 줄 자리를 미리 잡는다 (players.json 뒤에 채워짐) */
 
 /* ④ 전망 */
 .race { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-16); margin-top: var(--sp-16); }
@@ -168,7 +181,7 @@
 .race__all tr.is-today td { font-weight: 600; }
 
 /* ⑤ 유형 지도 */
-.typemap__counts { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-8); margin-top: var(--sp-16); }
+.typemap__counts { list-style: none; padding: 0; display: flex; flex-wrap: wrap; align-content: flex-start; gap: var(--sp-8); margin-top: var(--sp-16); min-height: 72px; }
 .typemap__counts b { font-weight: 600; margin-left: 2px; }
 .typemap__link { margin-top: auto; padding-top: var(--sp-24); }
 

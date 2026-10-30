@@ -347,10 +347,12 @@ def test_home_rewind_mode_markup():
     toggle = soup.find("button", id="rewind-toggle")
     assert toggle is not None and toggle.get("aria-controls") == "rewind-bar"
     js = (ASSETS / "home.js").read_text(encoding="utf-8")
-    # ?date= / ?fixture=edge(로컬만) 처리, 되감기는 index.json 날짜만 이동
-    assert 'params.get("date")' in js and "fixture=edge" in js and "latest_edge.json" in js
-    assert "IS_LOCAL ? params.get(\"fixture\")" in js
-    assert "rewind/2026" in js and "index.json" in js
+    code = re.sub(r"(?m)^\s*//.*$|^\s*\*.*$|/\*\*?", "", js)  # 주석 줄은 빼고 코드만 본다
+    # ?date= / ?fixture=edge(로컬에서만) 처리, 되감기는 index.json 날짜만 이동
+    assert 'params.get("date")' in code
+    assert 'FIXTURE === "edge"' in code and 'fetchJSON("latest_edge.json", FIXTURE_BASE)' in code
+    assert 'IS_LOCAL ? params.get("fixture") : null' in code
+    assert 'REWIND = "rewind/2026"' in code and '`${REWIND}/index.json`' in code
 
 
 def test_check_site_strict_passes_with_home():

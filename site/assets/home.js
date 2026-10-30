@@ -40,8 +40,18 @@ const fin = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(
 const num = (v, d = 2) => (fin(v) ? Number(v).toFixed(d) : "—");
 /** 0.589 → ".589" (야구식 승률). */
 const rate3 = (v) => (fin(v) ? Number(v).toFixed(3).replace(/^0/, "") : "—");
-/** 최근 10경기 승률 0.7 → "7승 3패". */
-const last10 = (v) => (fin(v) ? `${Math.round(v * 10)}승 ${10 - Math.round(v * 10)}패` : "—");
+/**
+ * 최근 경기 흐름. last10 = 최근 최대 10경기의 승 ÷ (승+패) (무승부 제외, 시즌 초에는 10경기 미만).
+ * ×10이 정수일 때만 "최근 10경기 7승 3패"로 쓰고, 아니면 "최근 승률 .667" (경기 수를 지어내지 않는다).
+ * 시즌 승률과 같으면 아직 10경기가 안 됐을 수 있으므로(예: 4경기 2승 = 0.5) 승률로만 쓴다.
+ */
+function recentForm(v, season) {
+  if (!fin(v)) return "최근 10경기 —";
+  const x = Number(v) * 10;
+  const maybeShort = fin(season) && Math.abs(Number(season) - Number(v)) < 0.0005;
+  if (!maybeShort && Math.abs(x - Math.round(x)) < 0.01) return `최근 10경기 ${Math.round(x)}승 ${10 - Math.round(x)}패`;
+  return `최근 승률 ${rate3(v)}`;
+}
 /** 이닝 103.3(= 103⅓, 소수로 저장) → "103⅓". */
 function innings(v) {
   if (!fin(v)) return "—";
@@ -123,6 +133,10 @@ async function init() {
   renderNav("index.html");
   $("matchups").setAttribute("aria-busy", "true");
   await loadCore();
+  if (state.index && !state.index.dates?.length) { // 목차가 비었으면 되감기를 쓸 수 없다
+    state.errors.index = "되감기 목차(rewind/2026/index.json)에 날짜가 없습니다.";
+    state.index = null;
+  }
   renderFooter(state.status);
   if (FIXTURE) {
     const note = $("fixture-note");
@@ -140,6 +154,7 @@ async function init() {
     for (const id of ["factors-body", "starters-body", "outlook-body"]) {
       $(id).replaceChildren(el("p", { class: "empty" }, "경기 데이터를 불러오지 못해 비워 두었습니다."));
     }
+    bindControls(); // 되감기 버튼은 목차 오류와 다시 불러오기를 보여 준다
     loadPlayersLater();
     return;
   }
@@ -150,7 +165,8 @@ async function init() {
     if (state.index.dates[i].date !== want) state.snappedFrom = want; // 경기 없는 날 → 그 앞(없으면 첫) 경기일
     await openRewind(i);
   }
-  else if (!liveAvailable() && state.index) await openRewind(state.index.dates.length - 1);
+  // 비시즌 자동 되감기는 주소를 바꾸지 않는다(사용자가 고르거나 ?date=로 열었을 때만 ?date=를 쓴다)
+  else if (!liveAvailable() && state.index) await openRewind(state.index.dates.length - 1, { writeURL: false });
   else showLive();
   bindControls();
   loadPlayersLater();
@@ -185,26 +201,55 @@ function showLive() {
 }
 
 let loadToken = 0;
-async function openRewind(i) {
+/** 되감기 날짜 열기. mode·dateIdx는 그날 파일을 받은 뒤에만 바꾼다(실패하면 직전 화면의 날짜 막대를 그대로 둔다). */
+async function openRewind(i, { writeURL = true } = {}) {
+  if (!state.index) {
+    $("rewind-error").hidden = false;
+    showError($("rewind-error"), state.errors.index ?? "되감기 목차를 불러오지 못했습니다.", retryIndex);
+    return;
+  }
   const idx = Math.max(0, Math.min(i, state.index.dates.length - 1));
-  state.mode = "rewind";
-  state.rewindVisited = true;
-  state.dateIdx = idx;
-  syncRewindBar();
+  syncRewindBar(idx);
   const token = ++loadToken;
   $("matchups").setAttribute("aria-busy", "true");
   try {
     const day = await loadDay(idx);
     if (token !== loadToken) return; // 그사이 다른 날짜를 골랐다
+    state.mode = "rewind";
+    state.rewindVisited = true;
+    state.dateIdx = idx;
     state.day = day;
     state.selected = 0;
-    setURL(day.date);
+    if (writeURL) setURL(day.date);
     renderDay();
   } catch (err) {
     if (token !== loadToken) return;
+    if (!state.day) { state.mode = "rewind"; state.dateIdx = idx; } // 처음 연 날짜부터 실패: 슬라이더는 그 날짜로
     $("matchups").setAttribute("aria-busy", "false");
+    renderDateBar();
     showError($("matchups"), err.message, () => openRewind(idx));
+    for (const id of ["factors-body", "starters-body", "outlook-body"]) {
+      $(id).replaceChildren(el("p", { class: "empty" }, "이 날짜의 경기 데이터를 불러오지 못했습니다. 위에서 다시 불러오기를 눌러 보세요."));
+    }
+    $("factor-tabs").hidden = true;
   }
+}
+
+/** 되감기 목차를 다시 받아 보고, 되면 마지막 날짜를 연다. */
+async function retryIndex() {
+  await settle("index", fetchJSON(`${REWIND}/index.json`));
+  if (state.index && !state.index.dates?.length) {
+    state.errors.index = "되감기 목차(rewind/2026/index.json)에 날짜가 없습니다.";
+    state.index = null;
+  }
+  if (!state.index) {
+    showError($("rewind-error"), state.errors.index, retryIndex);
+    return;
+  }
+  $("rewind-error").hidden = true;
+  $("rewind-error").replaceChildren();
+  renderAccuracy(); // 월별 막대
+  await openRewind(state.index.dates.length - 1);
 }
 
 // ---------- 날짜 칩·되감기 슬라이더 ----------
@@ -215,32 +260,34 @@ function bindControls() {
   const range = $("rewind-range");
   let timer = 0;
   range.addEventListener("input", () => {
-    state.dateIdx = Number(range.value);
-    syncRewindBar();
+    const i = Number(range.value);
+    syncRewindBar(i);
     clearTimeout(timer);
-    timer = setTimeout(() => openRewind(state.dateIdx), 180); // 끌고 있는 동안은 글자만 바꾸고 멈추면 읽는다
+    timer = setTimeout(() => openRewind(i), 180); // 끌고 있는 동안은 글자만 바꾸고 멈추면 읽는다
   });
   range.addEventListener("change", () => { clearTimeout(timer); openRewind(Number(range.value)); });
   $("rewind-prev").addEventListener("click", () => openRewind(state.dateIdx - 1));
   $("rewind-next").addEventListener("click", () => openRewind(state.dateIdx + 1));
   $("rewind-toggle").addEventListener("click", async () => {
+    if (!state.index) return openRewind(0); // 목차가 없으면 그 이유와 다시 불러오기를 보여 준다
     await openRewind(state.rewindVisited ? state.dateIdx : state.index.dates.length - 1);
-    $("rewind-range").focus();
+    if (state.mode === "rewind") $("rewind-range").focus();
   });
   $("to-live").addEventListener("click", () => { showLive(); $("rewind-toggle").focus(); });
 }
 
-function syncRewindBar() {
+/** 슬라이더·날짜 글자·전/후 버튼을 idx(기본: 지금 보이는 날짜)에 맞춘다. */
+function syncRewindBar(idx = state.dateIdx) {
   const dates = state.index?.dates ?? [];
   const range = $("rewind-range");
   range.max = String(Math.max(0, dates.length - 1));
-  range.value = String(state.dateIdx);
-  const d = dates[state.dateIdx];
+  range.value = String(idx);
+  const d = dates[idx];
   const label = d ? fmtDate(d.date) : "—";
   $("rewind-date").textContent = label;
   range.setAttribute("aria-valuetext", label);
-  $("rewind-prev").disabled = state.dateIdx <= 0;
-  $("rewind-next").disabled = state.dateIdx >= dates.length - 1;
+  $("rewind-prev").disabled = idx <= 0;
+  $("rewind-next").disabled = idx >= dates.length - 1;
 }
 
 function renderDateBar() {
@@ -248,23 +295,22 @@ function renderDateBar() {
   $("live-chip").hidden = rewind;
   $("rewind-bar").hidden = !rewind;
   $("rewind-toggle").setAttribute("aria-expanded", String(rewind));
-  $("rewind-toggle").hidden = !state.index;
   $("to-live").hidden = !liveAvailable();
   const hint = $("rewind-hint");
   if (rewind && !liveAvailable()) {
     const next = state.status?.next_game_date;
-    hint.textContent = next
+    hint.textContent = next && next >= todayKST()
       ? `지금은 라이브 예측이 없습니다. 다음 경기는 ${fmtDate(next)}입니다.`
       : "지금은 비시즌이라 라이브 예측이 없습니다. 2026 시즌 경기일을 골라 보세요.";
   } else {
     hint.textContent = "2026 시즌 경기일만 이동합니다. 화살표 키로도 움직일 수 있습니다.";
   }
-  if (!rewind) {
+  if (!rewind && state.day) {
     const fresh = state.day.date === todayKST();
     const pill = $("live-pill");
     pill.className = fresh ? "pill pill--ink" : "pill pill--muted";
     pill.replaceChildren(...(fresh ? [el("span", { class: "dot live-dot", "aria-hidden": "true" }), "라이브"] : ["가장 최근 예측"]));
-  } else {
+  } else if (rewind) {
     syncRewindBar();
   }
 }
@@ -287,8 +333,8 @@ function renderHead() {
     state.snappedFrom = null; // 처음 한 번만 알린다
     $("day-title").textContent = `${fmtDate(day.date)} 되감기`;
     $("day-lead").textContent = snapped + (d && d.decided
-      ? `이날 ${d.decided}경기 중 ${d.correct}경기 적중 · 2026 시즌 전체 ${fmtPct(state.index.accuracy, 1)}. 2026 경기를 학습에 쓰지 않은 ${day.model_version} 모델로 다시 예측했습니다.`
-      : `이날은 적중을 따질 경기가 없습니다(취소·무승부). ${day.model_version} 모델 기준.`);
+      ? `이날 ${d.decided}경기 중 ${d.correct}경기 적중 · 2026 시즌 전체 ${fmtPct(state.index.accuracy, 1)}. 2026 경기를 학습에 쓰지 않은 ${day.model_version ?? "되감기"} 모델로 다시 예측했습니다.`
+      : `이날은 적중을 따질 경기가 없습니다(취소·무승부). ${day.model_version ?? "되감기"} 모델 기준.`);
   }
 }
 
@@ -311,17 +357,21 @@ function sideBlock(g, side, prob, large) {
     el("h3", { class: "side__team" }, teamName(t.code, { full: large })),
   ]);
   const probEl = el("p", { class: "side__prob" }, [
-    el("span", { class: "side__num" }, [String(prob), el("small", {}, "%")]),
+    el("span", { class: "side__num" }, prob === "—" ? "—" : [String(prob), el("small", {}, "%")]),
     el("span", { class: "side__who" }, `${teamName(t.code)} 승리`),
   ]);
   const starter = s
     ? el("p", { class: "side__starter" }, [el("span", {}, ["선발 ", el("b", {}, s.name)]), typePill(s.type, true)])
     : el("p", { class: "side__starter" }, el("span", {}, "선발 미정"));
+  // 기록 두 줄은 크림 칩에 담는다(핑크·틸 위 작은 흰 글자의 대비 부족을 피하고 두 쪽을 같은 모양으로)
+  const stats = !s ? null
+    : fin(s.era) || fin(s.k9) || fin(s.bb9) ? `ERA ${num(s.era)} · K/9 ${num(s.k9)} · BB/9 ${num(s.bb9)}` : "선발 올해 등판 기록 없음";
   const details = el("div", { class: "side__details" }, [
     starter,
-    large && s ? el("p", { class: "side__stats num" },
-      [fin(s.era) || fin(s.k9) || fin(s.bb9) ? `ERA ${num(s.era)} · K/9 ${num(s.k9)} · BB/9 ${num(s.bb9)}` : "올해 등판 기록 없음"]) : null,
-    large ? el("p", { class: "side__form num" }, `최근 10경기 ${last10(t.last10)} · 시즌 승률 ${rate3(t.win_pct_season)}`) : null,
+    large ? el("div", { class: "side__chip num" }, [
+      stats ? el("p", {}, stats) : null,
+      el("p", {}, `${recentForm(t.last10, t.win_pct_season)} · 시즌 승률 ${rate3(t.win_pct_season)}`),
+    ]) : null,
   ]);
   return el("div", { class: `side side--${side}` }, [head, probEl, details]);
 }
@@ -352,9 +402,9 @@ function verdictPill(correct, draw = false) {
 
 function matchupCard(g, large) {
   if (g.status === "CANCELED") {
-    return el("article", { class: `matchup matchup--canceled card card--cream${large ? " matchup--lg" : ""}`, "aria-label": `${matchLabel(g)} 취소` }, [
+    return el("article", { class: `matchup matchup--canceled card${large ? " matchup--lg" : ""}`, "aria-label": `${matchLabel(g)} 취소` }, [
       el("div", { class: "pills" }, [el("span", { class: "pill pill--ink" }, "취소"),
-        g.status_note ? el("span", { class: "pill pill--muted" }, NOTES[g.status_note] ?? g.status_note) : null]),
+        g.status_note ? el("span", { class: "pill pill--white" }, NOTES[g.status_note] ?? g.status_note) : null]),
       el("h3", { class: "matchup__canceled-title" }, matchLabel(g)),
       el("p", { class: "card__lead" }, "경기가 열리지 않아 예측하지 않았습니다."),
     ]);
@@ -362,7 +412,8 @@ function matchupCard(g, large) {
   const p = g.home_win_prob;
   const home = fin(p) ? Math.round(p * 100) : "—";
   const away = fin(p) ? 100 - home : "—";
-  const label = `${matchLabel(g)}: ${teamName(g.home.code)} 홈 승리 확률 ${home}%, ${teamName(g.away.code)} ${away}%`;
+  const pctText = (v) => (v === "—" ? "—" : `${v}%`);
+  const label = `${matchLabel(g)}: ${teamName(g.home.code)} 홈 승리 확률 ${pctText(home)}, ${teamName(g.away.code)} ${pctText(away)}`;
   return el("article", { class: `matchup ${large ? "matchup--lg" : "matchup--sm"}`, "aria-label": label }, [
     el("div", { class: "matchup__meta pills" }, metaPills(g, large)),
     sideBlock(g, "away", away, large),
@@ -392,8 +443,28 @@ function renderMatchups() {
 function renderTabs() {
   const games = playable(state.day);
   const tabs = $("factor-tabs");
+  const body = $("factors-body");
   tabs.hidden = games.length < 2;
-  if (games.length < 2) { tabs.replaceChildren(); return; }
+  if (games.length < 2) { // 탭이 없으면 tabpanel도 아니다
+    tabs.replaceChildren();
+    delete tabs.dataset.key;
+    body.removeAttribute("role");
+    body.removeAttribute("aria-labelledby");
+    return;
+  }
+  body.setAttribute("role", "tabpanel");
+  body.setAttribute("aria-labelledby", `tab-${state.selected}`);
+  const key = `${state.mode}:${state.day.date}:${games.length}`;
+  if (tabs.dataset.key === key) { // 같은 날의 탭이면 속성만 바꾼다(누른 버튼의 포커스를 지킨다)
+    [...tabs.children].forEach((b, i) => {
+      const on = i === state.selected;
+      b.classList.toggle("pill--ink", on);
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+    return;
+  }
+  tabs.dataset.key = key;
   const buttons = games.map((g, i) => el("button", {
     class: `pill tab${i === state.selected ? " pill--ink" : ""}`, type: "button", role: "tab", id: `tab-${i}`,
     "aria-selected": String(i === state.selected), "aria-controls": "factors-body", tabindex: i === state.selected ? 0 : -1,
@@ -407,7 +478,6 @@ function renderTabs() {
     },
   }, matchLabel(g)));
   tabs.replaceChildren(...buttons);
-  $("factors-body").setAttribute("aria-labelledby", `tab-${state.selected}`);
 }
 
 function selectGame(i) {
@@ -452,7 +522,7 @@ function monthBars(index) {
   }
   const rows = [...months].filter(([, v]) => v.decided > 0).map(([m, v]) => ({ m, acc: v.correct / v.decided, n: v.decided }));
   if (!rows.length) return null;
-  const lo = 0.3, hi = 0.8; // 막대 높이 눈금: 30%~80%
+  const lo = 0, hi = 1; // 막대 높이 = 적중률 그대로(0~100%, 축을 자르지 않는다)
   return el("figure", { class: "months" }, [
     el("ol", { class: "months__bars", "aria-hidden": "true" }, rows.map((r) => el("li", {}, [
       el("span", { class: "months__track" }, [
@@ -479,7 +549,7 @@ function liveRecord() {
   const versions = [...new Set(decided.map((h) => h.model_version).filter(Boolean))].join(", ");
   return el("p", { class: "acc__live" }, [
     el("b", {}, "라이브 "), n ? `${versions} 모델 ${n}경기 중 ${c}경기 적중 (${fmtPct(c / n)})` : "아직 결과가 난 경기가 없습니다",
-    n < 10 ? ". 라이브 기록은 10월 말 시작해 아직 표본이 적습니다." : ".",
+    n < 10 ? ". 라이브 기록은 2026 포스트시즌부터 쌓여 아직 표본이 적습니다." : ".",
   ]);
 }
 
@@ -496,9 +566,9 @@ function renderAccuracy() {
   const period = seasons.length ? `학습 ${seasons[0]}–${seasons.at(-1)} · 검증 ${r.val_season} · 시험 ${r.test_season}` : "";
   const base = (label, v) => el("li", {}, [el("span", {}, label), el("b", { class: "num" }, fmtPct(v, 1))]);
   body.replaceChildren(
-    el("p", { class: "card__lead" }, `${r.test_season} 시즌 ${t.n ?? "—"}경기를 경기 전 정보로만 예측`),
+    el("p", { class: "card__lead" }, `${r.test_season ?? "시험"} 시즌 ${t.n ?? "—"}경기를 경기 전 정보로만 예측`),
     el("div", { class: "acc__top" }, [
-      el("p", { class: "kpi" }, [fmtPct(t.accuracy, 1), el("small", {}, `${r.model_version} 모델 적중률 · log loss ${num(t.log_loss, 3)}`)]),
+      el("p", { class: "kpi" }, [fmtPct(t.accuracy, 1), el("small", {}, `${r.model_version ?? "성적표"} 모델 적중률 · log loss ${num(t.log_loss, 3)}`)]),
       monthBars(state.index),
     ]),
     el("div", { class: "inset" }, [
@@ -536,7 +606,8 @@ function starterBlock(g, side) {
   return el("div", { class: "inset starter" }, [
     el("div", { class: "starter__top" }, [el("b", {}, [s.name, el("span", { class: "starter__team" }, ` · ${team} ${role}`)]), typePill(s.type, false)]),
     el("p", { class: "starter__stats num" }, stats),
-    blurb ? el("p", { class: "starter__note" }, blurb) : null,
+    // 유형 설명은 players.json을 읽은 뒤에 채운다 — 자리를 미리 잡아 두어 화면이 밀리지 않게
+    s.type && (blurb || !state.players) ? el("p", { class: "starter__note starter__blurb" }, blurb ?? "") : null,
     !s.type ? el("p", { class: "starter__note" }, "직전 시즌 등판이 적어 유형을 붙이지 않았습니다.") : null,
   ]);
 }
@@ -572,8 +643,9 @@ function renderOutlook() {
   const days = next ? Math.round((Date.parse(next) - Date.parse(todayKST())) / 864e5) : null;
   body.replaceChildren(
     el("p", { class: "card__lead" }, "다음 경기까지"),
-    next ? el("p", { class: "kpi" }, [days > 0 ? `D-${days}` : "오늘", el("small", {}, fmtDate(next))])
-      : el("p", { class: "empty" }, "다음 경기 일정이 아직 없습니다."),
+    !next ? el("p", { class: "empty" }, "다음 경기 일정이 아직 없습니다.")
+      : days < 0 ? el("p", { class: "empty" }, `마지막으로 알려진 경기일(${fmtDate(next)})이 지났습니다. 다음 갱신 때 새 일정으로 바뀝니다.`)
+      : el("p", { class: "kpi" }, [days > 0 ? `D-${days}` : "오늘", el("small", {}, fmtDate(next))]),
   );
 }
 
@@ -700,14 +772,24 @@ function loadPlayersLater() {
   else setTimeout(go, 300);
 }
 
+let playersReq = null; // players.json은 한 번만 받는다(init 재시도 때도 다시 받지 않음, 실패하면 비워 다시 시도)
 async function loadPlayers() {
   const body = $("typemap-body");
-  body.replaceChildren(el("div", { class: "inset" }, [el("div", { class: "skeleton", style: { height: "200px" } }),
-    el("p", { class: "small muted", style: { marginTop: "8px" } }, "선수 데이터(1.8 MB)를 불러오는 중…")]));
-  await settle("players", fetchJSON("players.json"));
   if (!state.players) {
-    showError(body, state.errors.players, loadPlayers);
-    return;
+    body.replaceChildren(
+      el("div", { class: "inset" }, el("div", { class: "skeleton", style: { height: "210px" } })),
+      el("div", { class: "typemap__counts" }, el("p", { class: "small" }, "선수 데이터(1.8 MB)를 불러오는 중…")),
+    );
+    playersReq ??= fetchJSON("players.json");
+    try {
+      state.players = await playersReq;
+      delete state.errors.players;
+    } catch (err) {
+      playersReq = null;
+      state.errors.players = err.message;
+      showError(body, err.message, loadPlayers);
+      return;
+    }
   }
   renderTypeMap();
   if (state.day) renderStarters(); // 유형 설명(blurb)을 덧붙인다
@@ -715,7 +797,12 @@ async function loadPlayers() {
 
 function renderTypeMap() {
   const body = $("typemap-body");
-  const all = state.players.players.filter((p) => p.group === "batter");
+  const all = (state.players.players ?? []).filter((p) => p.group === "batter" && fin(p.season));
+  if (!all.length) {
+    $("typemap-lead").textContent = "비슷한 기록의 타자끼리 가깝게 놓은 지도";
+    body.replaceChildren(el("p", { class: "empty" }, "선수 데이터에 타자가 없습니다. 선수 페이지에서 다른 그룹을 볼 수 있습니다."));
+    return;
+  }
   const season = Math.max(...all.map((p) => p.season));
   const bat = all.filter((p) => p.season === season);
   const types = state.players.types?.batter ?? [];
@@ -734,6 +821,13 @@ function renderTypeMap() {
 
 // ---------- 하루 그리기 ----------
 
+/** 화면 낭독기용 한 줄 요약(aria-live는 이 줄에만). */
+function announce() {
+  const games = state.day?.games ?? [];
+  const what = state.mode === "live" ? "예측" : "되감기";
+  $("day-status").textContent = `${fmtDate(state.day?.date)} ${what}, ${games.length}경기를 표시했습니다.`;
+}
+
 function renderDay() {
   renderDateBar();
   renderHead();
@@ -743,6 +837,7 @@ function renderDay() {
   renderStarters();
   renderOutlook();
   renderRecent();
+  announce();
 }
 
 init();

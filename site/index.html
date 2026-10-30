@@ -49,14 +49,17 @@
         <input class="rewind__range" type="range" id="rewind-range" min="0" max="0" step="1" value="0" aria-describedby="rewind-hint">
         <p class="rewind__hint" id="rewind-hint">2026 시즌 경기일만 이동합니다. 화살표 키로도 움직일 수 있습니다.</p>
       </div>
+      <div class="rewind-error" id="rewind-error" hidden></div>
     </div>
   </div>
 
   <p class="fixture-note" id="fixture-note" hidden></p>
 
   <!-- 매치업 카드: 원정(왼쪽·핑크) | 홈(오른쪽·틸). 첫 경기 크게, 나머지는 반 높이 2열 -->
-  <section id="matchups" class="matchups" aria-label="경기별 승리 확률" aria-live="polite" aria-busy="true">
-    <div class="skeleton matchup-skeleton"></div>
+  <p class="sr-only" id="day-status" aria-live="polite"></p>
+  <section class="matchups" aria-labelledby="matchups-title">
+    <h2 class="sr-only" id="matchups-title">경기별 승리 확률</h2>
+    <div id="matchups" aria-busy="true"><div class="skeleton matchup-skeleton"></div></div>
   </section>
   <noscript><p class="error-box">이 페이지는 자바스크립트로 데이터를 읽어 그립니다. 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
 
@@ -66,7 +69,7 @@
       <h2 class="card__title" id="factors-title">승률을 가른 요인</h2>
       <p class="card__lead" id="factors-lead">홈팀 승률을 올린 요인(+)과 내린 요인(−), 단위 %p</p>
       <div class="factor-tabs" id="factor-tabs" role="tablist" aria-label="경기 고르기" hidden></div>
-      <div class="inset" id="factors-body" role="tabpanel"><div class="skeleton" style="height:160px"></div></div>
+      <div class="inset" id="factors-body"><div class="skeleton" style="height:160px"></div></div>
       <p class="card__foot" id="factors-foot"></p>
     </section>
 
