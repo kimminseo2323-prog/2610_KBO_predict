@@ -1,0 +1,38 @@
+# 정적 사이트 site/ 를 GitHub Pages로 배포한다.
+# 데이터는 배포본에 넣지 않는다 — 페이지가 raw.githubusercontent.com의 data/public/ JSON을 직접 fetch한다
+# (raw는 Access-Control-Allow-Origin: * 이라 Pages에서 읽을 수 있고, 일일 커밋이 사이트 재배포 없이 바로 보인다).
+# site/_preview.html은 gitignore라 체크아웃에 없으므로 배포본에도 들어가지 않는다.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true   # 저장소에서 Pages가 꺼져 있으면 첫 실행이 켠다(source = GitHub Actions)
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

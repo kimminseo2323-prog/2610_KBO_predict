@@ -5,6 +5,7 @@
 - scripts/check_site.py가 저장소에서 통과하고(페이지가 아직 없으면 --allow-missing-pages), 금지된 외부 스크립트를 잡는지
 - docs/site/data-contract.md 매핑 표의 키 경로가 샘플 파일에 실제로 있는지
 - 홈 화면 방어용 fixture(취소·선발 미정·정상 경기, 되감기 status)가 커밋본과 같은 모양인지
+- scripts/import_site.py가 내보내기의 beacon을 지우고 file:// 경로를 고치며, 검증 실패면 site/를 되돌리는지
 """
 import ast
 import json
@@ -566,3 +567,77 @@ def test_teams_tiebreak_games_are_real_ties():
         assert w["wins"] * (l["wins"] + l["losses"]) == l["wins"] * (w["wins"] + w["losses"]), season
     for rule in ("결정전 승리(정규시즌 성적 미포함)", "상대 전적", "동률·코드순(임의)"):
         assert rule in js, rule
+
+
+# ---------- Genspark 내보내기 반영 (scripts/import_site.py) ----------
+
+BEACON = ('<script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015"'
+          ' integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ=="'
+          ' data-cf-beacon=\'{"rayId":"9a1b2c3d","version":"2025.9.1","token":"abc>def"}\' crossorigin="anonymous"></script>')
+
+
+def _export_dir(tmp_path: Path) -> Path:
+    """가짜 Genspark 내보내기: 저장소 index.html에 beacon + file:// 경로를 넣고, 성적표는 제목만 맞는 다른 이름의 단일 파일."""
+    export = tmp_path / "export" / "genspark-kbo"   # zip 안 최상위 폴더 하나
+    export.mkdir(parents=True)
+    index = (SITE / "index.html").read_text(encoding="utf-8")
+    assert "fonts.googleapis.com" in index and "cdn.jsdelivr.net/gh/orioncactus/pretendard@" in index  # 허용 폰트 링크
+    index = index.replace("</body>", BEACON + "\n</body>")
+    index = index.replace('href="assets/home.css"', 'href="file:///C:/Users/me/Downloads/genspark-kbo/assets/home.css"')
+    (export / "index.html").write_text(index, encoding="utf-8")
+    report = (SITE / "report.html").read_text(encoding="utf-8").replace("</head>", BEACON + "\n</head>")
+    (export / "KBO Predict export (2).html").write_text(report, encoding="utf-8")
+    (export / "data-snapshot.json").write_text("{}", encoding="utf-8")  # 데이터 사본은 반영하지 않음
+    return export
+
+
+def _zip(folder: Path, dest: Path) -> Path:
+    import zipfile
+    with zipfile.ZipFile(dest, "w") as zf:
+        for p in folder.rglob("*"):
+            zf.write(p, p.relative_to(folder.parent).as_posix())
+    return dest
+
+
+def test_import_site_strips_beacon(tmp_path, capsys):
+    """zip을 반영하면 beacon은 지워지고 허용 폰트 링크는 남으며, file:// 경로는 상대 경로가 되고, 제목으로 페이지를 찾는다.
+    반영 전 site/는 백업되고 check_site(--strict)를 통과한다. dry-run은 site/를 건드리지 않는다."""
+    from scripts import import_site
+    site = _tmp_site(tmp_path)
+    before = (site / "index.html").read_text(encoding="utf-8")
+    archive = _zip(_export_dir(tmp_path), tmp_path / "genspark.zip")
+    backups = tmp_path / "backups"
+
+    assert import_site.main([str(archive), "--site", str(site), "--backup-root", str(backups), "--dry-run"]) == 0
+    assert (site / "index.html").read_text(encoding="utf-8") == before and not backups.exists()
+
+    assert import_site.main([str(archive), "--site", str(site), "--backup-root", str(backups)]) == 0
+    out = capsys.readouterr().out
+    for page in ("index.html", "report.html"):
+        html = (site / page).read_text(encoding="utf-8")
+        assert "cloudflareinsights" not in html and "data-cf-beacon" not in html, page
+        assert "https://fonts.googleapis.com/css2?family=Inter" in html, page
+        assert "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@" in html, page
+    assert 'href="assets/home.css"' in (site / "index.html").read_text(encoding="utf-8")
+    assert "file:" not in (site / "index.html").read_text(encoding="utf-8")
+    assert "KBO Predict export (2).html → report.html" in out and "PASS" in out
+    assert not (site / "data-snapshot.json").exists() and "data-snapshot.json" in out
+    [backup] = list(backups.iterdir())
+    assert backup.name.startswith("site-backup-")
+    assert (backup / "index.html").read_text(encoding="utf-8") == before
+    assert check_site.run(site, DATA, ROOT / "docs" / "site" / "data-contract.md", strict=True)
+
+
+def test_import_site_restores_on_failure(tmp_path):
+    """반영본이 검증에 실패하면(허용 밖 외부 이미지) exit 1이고 site/는 백업으로 되돌아간다. --keep이면 남긴다."""
+    from scripts import import_site
+    site = _tmp_site(tmp_path)
+    before = (site / "teams.html").read_text(encoding="utf-8")
+    bad = tmp_path / "teams-export.html"
+    bad.write_text(before.replace("</main>", '<img src="https://images.genspark.ai/x.png" alt=""></main>'),
+                   encoding="utf-8")
+    args = [str(bad), "--as", "teams.html", "--site", str(site), "--backup-root", str(tmp_path / "bk")]
+    assert import_site.main(args) == 1
+    assert (site / "teams.html").read_text(encoding="utf-8") == before
+    assert import_site.main([*args, "--keep"]) == 1
+    assert "images.genspark.ai" in (site / "teams.html").read_text(encoding="utf-8")
