@@ -13,7 +13,7 @@
 // 팀 필터는 점을 지우지 않고 다른 팀 점을 흐리게만 한다(지도 모양 유지, charts.js scatter의 dim 옵션).
 
 import {
-  TEAMS, el, fetchJSON, fmtPct, teamName, typeColor, colorVar, onColor,
+  TEAMS, el, fetchJSON, fmtPct, teamName, teamNameFor, typeColor, colorVar, onColor,
   renderNav, renderFooter, showError,
 } from "./app.js";
 import { scatter } from "./charts.js";
@@ -98,7 +98,7 @@ async function loadPlayers() {
   $("map-body").setAttribute("aria-busy", "true");
   $("map-body").replaceChildren(
     el("div", { class: "inset map__frame" }, el("div", { class: "skeleton map-skeleton" })),
-    el("p", { class: "map__loading" }, "선수 2,918명 불러오는 중…"),
+    el("p", { class: "map__loading" }, "선수-시즌 기록 불러오는 중…"),
   );
   playersReq ??= fetchJSON("players.json");
   try {
@@ -289,13 +289,14 @@ function bindSearch() {
     else if (e.key === "ArrowUp") { e.preventDefault(); (i === 0 ? input : hits[i - 1]).focus(); }
     else if (e.key === "Escape") { e.preventDefault(); closeSearch(); input.focus(); }
   });
+  // Safari/WebKit은 버튼을 눌러도 포커스를 주지 않아 focusout이 클릭보다 먼저 목록을 닫는다 → 목록 위 pointerdown은 포커스 이동을 막는다
+  list.addEventListener("pointerdown", (e) => e.preventDefault());
   box.addEventListener("focusout", (e) => { if (!box.contains(e.relatedTarget)) closeSearch(); });
   document.addEventListener("pointerdown", (e) => { if (!box.contains(e.target)) closeSearch(); });
 }
 
 function closeSearch() {
   $("search-results").hidden = true;
-  $("player-search").setAttribute("aria-expanded", "false");
 }
 
 function runSearch() {
@@ -303,6 +304,7 @@ function runSearch() {
   const list = $("search-results");
   const q = norm(input.value);
   if (!q || !state.data) {
+    list.replaceChildren();
     closeSearch();
     $("search-status").textContent = "";
     return;
@@ -330,11 +332,10 @@ function runSearch() {
     }, [
       el("span", { class: "dot", style: { background: colorVar(typeColor(p.group, p.type?.id)) }, "aria-hidden": "true" }),
       el("span", { class: "search__name" }, nameOf(p)),
-      el("span", { class: "search__meta" }, `${teamName(p.team)} · ${p.season} ${GROUP[p.group]}`),
+      el("span", { class: "search__meta" }, `${teamNameFor(p.team, p.season)} · ${p.season} ${GROUP[p.group]}`),
     ])))
     : [el("li", { class: "search__none" }, "일치하는 선수가 없습니다. 한글 이름이나 영문 이름 일부로 찾아 보세요.")]));
   list.hidden = false;
-  input.setAttribute("aria-expanded", "true");
   $("search-status").textContent = hits.length
     ? `${hits.length}개 찾음${hits.length > SEARCH_MAX ? `, 앞의 ${SEARCH_MAX}개를 표시` : ""}. 아래 화살표로 결과로 이동합니다.`
     : "일치하는 선수가 없습니다.";
@@ -377,7 +378,7 @@ function renderMap() {
   const types = typesOf(g);
   const team = state.team;
   $("map-lead").textContent = `${state.season} ${GROUP[g]} ${int(all.length)}명` +
-    (team ? ` 중 ${teamName(team)} ${int(pool.length)}명을 진하게 표시했습니다.` : "을 기록이 비슷할수록 가깝게 놓았습니다.") +
+    (team ? ` 중 ${teamNameFor(team, state.season)} ${int(pool.length)}명을 진하게 표시했습니다.` : "을 기록이 비슷할수록 가깝게 놓았습니다.") +
     " 점을 누르면 선수 카드가 바뀝니다.";
   $("map-legend").replaceChildren(...types.map((t) => el("li", { class: "type-legend__item" }, [
     el("span", { class: "dot", style: { background: colorVar(typeColor(g, t.id)) }, "aria-hidden": "true" }),
@@ -390,20 +391,20 @@ function renderMap() {
   ]));
   const chart = $("map-chart");
   if (!pool.length) {
-    chart.replaceChildren(el("p", { class: "empty map__empty" }, `${teamName(team)}에는 ${state.season} ${GROUP[g]} 기록이 없습니다. 팀을 '전체'로 바꿔 보세요.`));
+    chart.replaceChildren(el("p", { class: "empty map__empty" }, `${teamNameFor(team, state.season)}에는 ${state.season} ${GROUP[g]} 기록이 없습니다. 팀을 '전체'로 바꿔 보세요.`));
     chart._chartRO?.disconnect();
     return;
   }
   scatter(chart, all.map((p) => ({
     id: p.player_id, x: p.x, y: p.y, entry: p,
-    label: `${nameOf(p)} · ${teamName(p.team)} · ${p.type?.name ?? "—"}`,
+    label: `${nameOf(p)} · ${teamNameFor(p.team, p.season)} · ${p.type?.name ?? "—"}`,
   })), {
     colorKey: (pt) => typeColor(g, pt.entry.type?.id),
     typeLabel: (pt) => pt.entry.type?.name ?? "—",
     selectedId: state.sel?.player_id,
     dim: team ? (pt) => pt.entry.team !== team : undefined,
     onSelect: (pt) => select(pt.entry, { from: "map" }),
-    label: `${state.season} ${GROUP[g]} 유형 지도${team ? ` (${teamName(team)})` : ""}: 점 하나가 한 선수, 화살표 키로 이동하고 Enter로 고릅니다`,
+    label: `${state.season} ${GROUP[g]} 유형 지도${team ? ` (${teamNameFor(team, state.season)})` : ""}: 점 하나가 한 선수, 화살표 키로 이동하고 Enter로 고릅니다`,
   });
 }
 
@@ -415,13 +416,13 @@ function renderCard() {
   const p = state.sel;
   if (!p) {
     body.replaceChildren(el("div", { class: "inset" }, el("p", { class: "empty" },
-      `${teamName(state.team)}에는 ${state.season} ${GROUP[state.group]} 기록이 없습니다. 팀을 '전체'로 바꿔 보세요.`)));
+      `${teamNameFor(state.team, state.season)}에는 ${state.season} ${GROUP[state.group]} 기록이 없습니다. 팀을 '전체'로 바꿔 보세요.`)));
     return;
   }
   const tok = typeColor(p.group, p.type?.id);
   const types = typesOf(p.group);
   const members = types.map((t) => {
-    const v = p.membership?.[t.id];
+    const v = p.membership?.[t.id]; // membership[i]의 i는 유형 id (데이터 계약: "유형 id 순서")
     const on = t.id === p.type?.id;
     return el("li", { class: `member${on ? " is-own" : ""}` }, [
       el("span", { class: "member__name" }, [
@@ -443,7 +444,7 @@ function renderCard() {
     el("h3", { class: "pcard__name", id: "card-name", tabindex: "-1" }, nameOf(p)),
     el("div", { class: "inset pcard__meta" }, [
       p.name_ko ? el("span", { class: "pcard__roman", lang: "en" }, p.name) : null,
-      el("span", { class: "pcard__facts" }, `${teamName(p.team, { full: true })} · ${POS[p.pos] ?? p.pos ?? "—"} · ${p.season} 시즌`),
+      el("span", { class: "pcard__facts" }, `${teamNameFor(p.team, p.season, { full: true })} · ${POS[p.pos] ?? p.pos ?? "—"} · ${p.season} 시즌`),
     ]),
     el("div", { class: "inset pcard__fit" }, [
       el("div", { class: "pcard__prob" }, [
@@ -471,7 +472,7 @@ function renderSimilar() {
     return;
   }
   $("similar-lead").textContent =
-    `${nameOf(p)}(${p.season})와 스탯이 가장 가까운 ${GROUP[p.group]} 선수-시즌 ${(p.similar ?? []).length}개. 행을 누르면 그 선수로 옮겨 갑니다.`;
+    `기준: ${nameOf(p)}(${p.season}). 스탯이 가장 가까운 ${GROUP[p.group]} 선수-시즌 ${(p.similar ?? []).length}개입니다. 행을 누르면 그 선수로 옮겨 갑니다.`;
   const rows = (p.similar ?? []).map((s) => {
     const e = state.index.get(keyOf(p.group, s.season, s.player_id));
     if (!e) {
@@ -486,7 +487,7 @@ function renderSimilar() {
         "aria-label": `${nameOf(e)} ${e.season} 시즌 보기` }, [
         nameOf(e), e.name_ko ? el("span", { class: "sim__roman", lang: "en" }, e.name) : null,
       ])),
-      el("td", {}, teamName(e.team)),
+      el("td", {}, teamNameFor(e.team, e.season)),
       el("td", { class: "num" }, String(e.season)),
       el("td", {}, el("span", { class: "sim__type" }, [
         el("span", { class: "dot", style: { background: colorVar(typeColor(e.group, e.type?.id)) }, "aria-hidden": "true" }),
@@ -497,7 +498,7 @@ function renderSimilar() {
   });
   body.replaceChildren(rows.length
     ? el("div", { class: "table-scroll" }, el("table", { class: "table sim-table" }, [
-      el("caption", { class: "sr-only" }, `${nameOf(p)} ${p.season}와 비슷한 선수 (유사도 높은 순)`),
+      el("caption", { class: "sr-only" }, `비슷한 선수, 기준 ${nameOf(p)} ${p.season} 시즌 (유사도 높은 순)`),
       el("thead", {}, el("tr", {}, [
         el("th", { scope: "col" }, "이름"), el("th", { scope: "col" }, "팀"), el("th", { scope: "col", class: "num" }, "시즌"),
         el("th", { scope: "col" }, "유형"), el("th", { scope: "col", class: "num" }, "유사도"),
@@ -520,10 +521,14 @@ function renderModel() {
     body.replaceChildren(el("p", { class: "empty" }, "유형 모델 정보가 없습니다."));
     return;
   }
+  const silOf = (g) => (cq[g]?.k_table ?? []).find((row) => row.k === cq[g]?.k)?.silhouette;
+  const LOW_SIL = 0.25; // 이보다 낮으면 "유형 경계가 흐리다"고 적는다
+  const sils = ["batter", "pitcher"].map(silOf).filter(fin);
+  const low = sils.length > 0 && sils.every((v) => v < LOW_SIL);
   const block = (g) => {
     const q = cq[g];
     if (!q) return null;
-    const sil = (q.k_table ?? []).find((row) => row.k === q.k)?.silhouette;
+    const sil = silOf(g);
     return el("div", { class: "inset model__group" }, [
       el("h3", { class: "model__title" }, GROUP[g]),
       el("dl", { class: "model__stats" }, [
@@ -536,7 +541,8 @@ function renderModel() {
   body.replaceChildren(
     el("div", { class: "model__groups" }, ["batter", "pitcher"].map(block)),
     el("ul", { class: "model__notes" }, [
-      el("li", {}, "실루엣은 유형끼리 얼마나 또렷이 갈리는지(1에 가까울수록 또렷), 유지율은 연속 두 시즌 모두 자격인 선수의 유형이 그대로인 비율입니다. 실루엣이 낮아 유형은 연속적인 분포를 부드럽게 나눈 구분으로 보는 것이 맞습니다."),
+      el("li", {}, "실루엣은 유형끼리 얼마나 또렷이 갈리는지(1에 가까울수록 또렷), 유지율은 연속 두 시즌 모두 자격인 선수의 유형이 그대로인 비율입니다." +
+        (low ? " 실루엣이 낮아 유형은 연속적인 분포를 부드럽게 나눈 구분으로 보는 것이 맞습니다." : "")),
       cq.membership_note ? el("li", {}, cq.membership_note) : null,
     ]),
   );

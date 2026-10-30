@@ -198,6 +198,8 @@ export function scatter(el, points, { colorKey = "color", onSelect, selectedId, 
   const [xl, xh, yl, yh] = [Math.min(...xv), Math.max(...xv), Math.min(...yv), Math.max(...yv)];
   const live = pts.filter((p) => !isDim(p)); // 고를 수 있는 점 (dim이 없으면 전부)
   const order = [...live].sort((a, b) => a.x - b.x || a.y - b.y);
+  // 지금 선택된 점 id. 점을 고르면 바뀌고, 너비가 바뀌어 다시 그릴 때(ResizeObserver)도 이 값을 쓴다.
+  let current = selectedId;
   return mount(el, (W) => {
     const H = height ?? Math.round(Math.min(480, Math.max(260, W * 0.72)));
     const P = 14;
@@ -215,6 +217,7 @@ export function scatter(el, points, { colorKey = "color", onSelect, selectedId, 
       const hadFocus = document.activeElement === c;
       c.parentNode.append(c); // 맨 위로 (DOM 이동은 포커스를 잃으므로 되돌린다)
       if (hadFocus) c.focus();
+      current = p.id;
       onSelect(p);
     };
     const focusAt = (from, step) => {
@@ -225,16 +228,16 @@ export function scatter(el, points, { colorKey = "color", onSelect, selectedId, 
       c.setAttribute("tabindex", 0);
       c.focus();
     };
-    const first = live.find((p) => p.id === selectedId) ?? order[0];
+    const first = live.find((p) => p.id === current) ?? order[0];
     // 그리는 순서: 흐린 점 → 보통 점 → 선택된 점 (위에 그린 것이 보인다)
-    const rank = (p) => (isDim(p) ? 0 : p.id === selectedId ? 2 : 1);
+    const rank = (p) => (isDim(p) ? 0 : p.id === current ? 2 : 1);
     [...pts].sort((a, b) => rank(a) - rank(b)).forEach((p) => {
       if (isDim(p)) {
         svg.append(svgEl("circle", { class: "c-point c-point--dim", cx: X(+p.x).toFixed(1), cy: Y(+p.y).toFixed(1), r: 5,
           style: `fill:${cv(colorOf(p))}`, "fill-opacity": 0.22, "aria-hidden": "true" }));
         return;
       }
-      const on = p.id === selectedId;
+      const on = p.id === current;
       const c = svgEl("circle", { class: `c-point${on ? " is-selected" : ""}`, cx: X(+p.x).toFixed(1), cy: Y(+p.y).toFixed(1), r: on ? 9 : 6,
         style: `fill:${cv(colorOf(p))}`, "fill-opacity": 0.9 }, svgEl("title", {}, p.label ?? String(p.id)));
       if (onSelect) {

@@ -103,6 +103,19 @@ export function teamName(code, { full = false } = {}) {
   return t ? (full ? t.full : t.ko) : (code ?? "—");
 }
 
+// 시즌에 따라 이름이 달랐던 구단 (코드는 그대로): SK = SK 와이번스(~2020) → SSG, WO = 넥센 히어로즈(~2018) → 키움.
+export const OLD_TEAM_NAMES = {
+  "SK": {"until": 2020, "ko": "SK", "full": "SK 와이번스"},
+  "WO": {"until": 2018, "ko": "넥센", "full": "넥센 히어로즈"}
+};
+
+/** 그 시즌 당시의 팀 이름(옛 이름이 있으면 옛 이름). 시즌이 없으면 teamName과 같다. */
+export function teamNameFor(code, season, { full = false } = {}) {
+  const old = OLD_TEAM_NAMES[code];
+  if (old && Number.isFinite(Number(season)) && Number(season) <= old.until) return full ? old.full : old.ko;
+  return teamName(code, { full });
+}
+
 // ---------- 데이터 읽기 ----------
 
 function bust(url) {

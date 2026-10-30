@@ -492,3 +492,14 @@ def test_check_site_strict_passes_with_players():
         assert re.search(rf"\| {re.escape(check)}\s+\| players\.html\s+\| OK", r.stdout), (check, r.stdout)
     skipped = re.findall(r"\| page\s+\| (\S+)\s+\| SKIP", r.stdout)
     assert skipped in ([], ["teams.html"]), skipped
+
+
+def test_team_name_for_old_names():
+    """시즌 당시 이름: SK는 2020까지 SK 와이번스, WO는 2018까지 넥센 히어로즈 (그 뒤는 TEAMS의 지금 이름)."""
+    js = (ASSETS / "app.js").read_text(encoding="utf-8")
+    old = check_site.parse_js_const(js, "OLD_TEAM_NAMES")
+    assert old == {"SK": {"until": 2020, "ko": "SK", "full": "SK 와이번스"},
+                   "WO": {"until": 2018, "ko": "넥센", "full": "넥센 히어로즈"}}
+    assert "export function teamNameFor" in js
+    players = (ASSETS / "players.js").read_text(encoding="utf-8")
+    assert "teamNameFor(p.team, p.season, { full: true })" in players and "teamNameFor(e.team, e.season)" in players
