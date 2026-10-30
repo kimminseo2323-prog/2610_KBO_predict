@@ -238,6 +238,22 @@ def test_check_site_flags_external_urls_in_js(tmp_path):
                'const b = "https://github.com/kimminseo2323-prog/2610_KBO_predict/commit/abc1234";\n'
                '// 참고: https://comment.example/only-in-comment\n')
     assert check_site.js_external_urls(allowed) == []
+    # 저장소 아래(앵커·파일 경로)와 공개 사이트 주소도 허용 — 브리프대로 만든 Genspark 페이지가 쓰는 링크
+    own = ['const m = "https://github.com/kimminseo2323-prog/2610_KBO_predict#모델";',
+           'const f = "https://github.com/kimminseo2323-prog/2610_KBO_predict/blob/main/README.md";',
+           'const s = "https://kimminseo2323-prog.github.io/2610_KBO_predict/";',
+           'const t = "https://kimminseo2323-prog.github.io/2610_KBO_predict/teams.html?season=2025";']
+    assert check_site.js_external_urls("\n".join(own)) == []
+    others = ['const o = "https://github.com/other/repo";',
+              'const p = "https://github.com/kimminseo2323-prog/2610_KBO_predict_fork";',
+              'const q = "https://evil.github.io/2610_KBO_predict/";']
+    assert check_site.js_external_urls("\n".join(others)) == [
+        "https://github.com/other/repo", "https://github.com/kimminseo2323-prog/2610_KBO_predict_fork",
+        "https://evil.github.io/2610_KBO_predict/"]
+    # check_site의 저장소·데이터 주소는 app.js 상수와 같다
+    app = (ASSETS / "app.js").read_text(encoding="utf-8")
+    for name in ("REPO_URL", "RAW_BASE"):
+        assert f'export const {name} = "{getattr(check_site, name)}";' in app, name
     site = _tmp_site(tmp_path)
     home = site / "assets" / "home.js"
     home.write_text(allowed + 'const beacon = "https://collect.example/p";\n' + home.read_text(encoding="utf-8"), encoding="utf-8")

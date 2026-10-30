@@ -4,7 +4,7 @@
   (1) 페이지 4개(index/teams/players/report.html): 존재·기본 구조(doctype, lang, title, viewport),
       <nav> 안 내부 링크 4개가 정해진 순서·이름이고 자기 페이지에 aria-current="page", "GitHub에서 보기" 링크, #evidence,
       외부 리소스는 허용 목록(https, 호스트 정확히 일치: fonts.googleapis.com, fonts.gstatic.com, cdn.jsdelivr.net/gh/orioncactus/pretendard@…)만, <script src>는 assets/ 상대 경로만(파일 존재),
-      인라인·assets JS의 import는 상대 경로만, JS 문자열 속 https:// 주소는 허용 목록·RAW_BASE(데이터)·REPO_URL(과 커밋 링크)만,
+      인라인·assets JS의 import는 상대 경로만, JS 문자열 속 https:// 주소는 허용 목록·RAW_BASE(데이터)·REPO_URL 아래·PAGES_URL 아래만,
       페이지가 연결한 로컬 스타일시트(경로 무관)·assets CSS·인라인 <style>·style= 의 @import/url()도 외부 금지, 트래킹 스크립트 금지.
   (2) assets/app.js의 TEAMS(ko)·FACTOR_LABELS·TYPE_COLORS가 파이썬 원본(teams.py, features.py, cluster_labels.yaml)과 같다.
   (3) docs/site/data-contract.md 매핑 표(| 페이지 | 요소 | 파일 | 키 경로 |)의 키 경로가 샘플 파일에 실제로 있다.
@@ -34,6 +34,8 @@ from bs4 import BeautifulSoup
 ROOT = Path(__file__).resolve().parents[1]
 REPO_URL = "https://github.com/kimminseo2323-prog/2610_KBO_predict"
 RAW_BASE = "https://raw.githubusercontent.com/kimminseo2323-prog/2610_KBO_predict/main/data/public"
+PAGES_URL = "https://kimminseo2323-prog.github.io/2610_KBO_predict"  # 사이트가 공개될 주소 (README 링크와 같음)
+# REPO_URL·RAW_BASE는 site/assets/app.js의 같은 이름 상수와 같다 (tests/test_site.py가 확인).
 PAGES = ["index.html", "teams.html", "players.html", "report.html"]
 NAV = [("index.html", "오늘의 경기"), ("teams.html", "팀"), ("players.html", "선수"), ("report.html", "모델 성적표")]
 # 허용하는 외부 리소스: https + 호스트 정확히 일치 + (jsDelivr는) 경로 접두사. 그 밖의 외부 리소스는 모두 금지.
@@ -319,13 +321,18 @@ def scan_js(src: str) -> JsScan:
     return JsScan("".join(code), "".join(skel), strings)
 
 
+def _own_url(url: str, base: str) -> bool:
+    """url이 base 자체이거나 base 아래(/…, #…, ?…)인가 — 'base' + 다른 글자(예: 저장소 이름이 더 긴 다른 저장소)는 아니다."""
+    return url == base or url.startswith((f"{base}/", f"{base}#", f"{base}?"))
+
+
 def js_external_urls(src: str) -> list[str]:
-    """JS 문자열 리터럴 안의 https:// 주소 중 허용 밖인 것. 허용: 글꼴(ALLOWED), RAW_BASE 아래 데이터, REPO_URL과 그 커밋 링크."""
+    """JS 문자열 리터럴 안의 https:// 주소 중 허용 밖인 것.
+    허용: 글꼴(ALLOWED), RAW_BASE 아래 데이터, 이 저장소(REPO_URL — 커밋·#모델 같은 앵커·/blob/… 등), 공개 사이트(PAGES_URL)."""
     bad = []
     for s in scan_js(src).strings:
         for url in re.findall(r"https://[^\s\"'`<>()]+", s):
-            ok = (_allowed(url) or url.startswith(RAW_BASE) or url.rstrip("/") == REPO_URL
-                  or url.startswith(f"{REPO_URL}/commit/"))
+            ok = (_allowed(url) or _own_url(url, RAW_BASE) or _own_url(url, REPO_URL) or _own_url(url, PAGES_URL))
             if not ok:
                 bad.append(url)
     return bad
