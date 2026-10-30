@@ -1,0 +1,246 @@
+/* KBO Predict — 공통 레이아웃·컴포넌트. 토큰은 tokens.css (먼저 불러온다).
+   원칙(DESIGN_clay.md): 크림 캔버스, 포화색 피처 카드(24px 라운드, 그림자 없음), 크림 푸터, 호버 장식 최소.
+   돋보이는 것은 카드 색과 큰 숫자 하나뿐이고 나머지 크롬은 조용하게 둔다. */
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+img, svg { max-width: 100%; }
+h1, h2, h3, h4, p, ul, ol, figure { margin: 0; }
+a { color: inherit; text-underline-offset: 3px; }
+button, input, select { font: inherit; color: inherit; }
+
+/* ---------- 접근성 ---------- */
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; border-radius: var(--r-xs); }
+.card--teal :focus-visible { outline-color: var(--on-dark); }
+.sr-only {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.skip-link {
+  position: absolute; left: var(--sp-16); top: -100px; z-index: 20;
+  background: var(--ink); color: var(--on-dark); padding: var(--sp-12) var(--sp-16);
+  border-radius: var(--r-md); font-weight: 600; font-size: 14px; text-decoration: none;
+}
+.skip-link:focus { top: var(--sp-8); }
+
+/* ---------- 레이아웃 ---------- */
+.wrap { width: 100%; max-width: 1280px; margin-inline: auto; padding-inline: 20px; }
+main { display: block; padding-bottom: var(--sp-96); }
+.stack > * + * { margin-top: var(--sp-16); }
+
+.page-head {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: var(--sp-24); padding-block: var(--sp-48) var(--sp-24);
+}
+.page-head h1 { max-width: 20ch; }
+.page-head .lead { margin-top: var(--sp-8); color: var(--body); max-width: 60ch; }
+.section { margin-top: var(--sp-48); }
+.section > h2 { margin-bottom: var(--sp-16); }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+.num { font-variant-numeric: tabular-nums; }
+.r { text-align: right; }
+
+/* ---------- 상단 내비 (64px, 크림) ---------- */
+.topnav { background: var(--canvas); position: relative; z-index: 10; }
+.topnav__inner {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-24);
+  min-height: 64px;
+}
+.brand {
+  display: inline-flex; align-items: center; gap: 10px; flex: none;
+  font-weight: 600; font-size: 16px; letter-spacing: -0.2px; text-decoration: none; color: var(--ink);
+}
+/* 작은 점토 공 — 로고 대신 */
+.brand__mark {
+  width: 22px; height: 22px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 35% 30%, #fff 0 18%, var(--coral) 20% 100%);
+}
+.topnav nav ul { list-style: none; display: flex; gap: var(--sp-4); padding: 0; }
+.topnav nav a {
+  display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px;
+  border-radius: var(--r-pill); font-size: 14px; font-weight: 500; line-height: 1.4;
+  color: var(--muted); text-decoration: none; white-space: nowrap;
+}
+.topnav nav a:hover { color: var(--ink); }
+.topnav nav a[aria-current="page"] { background: var(--surface-card); color: var(--ink); }
+@media (min-width: 768px) {
+  .topnav { position: sticky; top: 0; }
+}
+@media (max-width: 767px) {
+  .topnav__inner { flex-wrap: wrap; gap: 0 var(--sp-12); padding-block: var(--sp-8); }
+  .topnav nav { order: 3; flex: 1 0 100%; margin-inline: -6px; overflow-x: auto; scrollbar-width: none; }
+  .topnav nav::-webkit-scrollbar { display: none; }
+  .topnav nav a { padding: 0 12px; }
+  .topnav .btn { height: 40px; padding: 0 14px; }
+}
+
+/* ---------- 버튼 ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-8);
+  height: 44px; padding: 0 20px; border-radius: var(--r-md); border: 0; cursor: pointer;
+  font-size: 14px; font-weight: 600; line-height: 1; white-space: nowrap; text-decoration: none;
+  background: var(--ink); color: var(--on-dark);
+}
+.btn--secondary { background: var(--canvas); color: var(--ink); border: 1px solid var(--hairline); }
+.btn--on-color { background: var(--canvas); color: var(--ink); }
+.btn[disabled] { background: #e5e5e5; color: var(--muted); cursor: not-allowed; }
+
+/* ---------- 카드 (피처 카드: 24px 라운드, 32px 패딩, 그림자 없음) ---------- */
+.card {
+  position: relative; overflow: hidden; min-width: 0;
+  border-radius: var(--r-xl); padding: var(--sp-32);
+  background: var(--surface-card); color: var(--ink);
+}
+.card--pink { background: var(--pink); }
+.card--teal { background: var(--teal); }
+.card--lavender { background: var(--lavender); }
+.card--peach { background: var(--peach); }
+.card--ochre { background: var(--ochre); }
+.card--cream { background: var(--cream); }
+.card--pink, .card--teal { color: var(--on-dark); }
+.card__title { font-size: 18px; font-weight: 600; line-height: 1.4; }
+.card__lead { margin-top: var(--sp-4); font-size: 14px; opacity: 0.85; }
+.card__foot { margin-top: var(--sp-16); font-size: 13px; opacity: 0.85; }
+/* 카드 안 제품 UI 조각 — 크림 패널 */
+.inset {
+  margin-top: var(--sp-16); padding: 14px var(--sp-16);
+  background: var(--canvas); color: var(--ink); border-radius: var(--r-lg); font-size: 14px;
+}
+.inset .muted { color: var(--muted); }
+/* 콘텐츠 카드 (흰 바탕 + 헤어라인, 16px 라운드) */
+.panel { background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--r-lg); padding: var(--sp-24); }
+/* 큰 숫자 하나 */
+.kpi { font-size: clamp(44px, 32px + 3vw, 64px); font-weight: 500; letter-spacing: -2.5px; line-height: 1; margin-top: var(--sp-16); font-variant-numeric: tabular-nums; }
+.kpi small { display: block; margin-top: 6px; font-size: 14px; letter-spacing: 0; font-weight: 400; opacity: 0.85; }
+
+/* ---------- 벤토 (데스크톱 3열 · 태블릿 2열 · 모바일 1열) ---------- */
+.bento { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-16); }
+.span-2 { grid-column: span 2; }
+.span-all { grid-column: 1 / -1; }
+.row-2 { grid-row: span 2; }
+@media (max-width: 1024px) {
+  .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .span-2 { grid-column: 1 / -1; }
+  .row-2 { grid-row: auto; }
+}
+@media (max-width: 767px) {
+  .bento { grid-template-columns: minmax(0, 1fr); }
+  .card { padding: var(--sp-24); }
+  .page-head { padding-block: var(--sp-32) var(--sp-16); }
+}
+@media (max-width: 479px) {
+  .wrap { padding-inline: var(--sp-16); }
+}
+
+/* ---------- 알약 (배지·칩) ---------- */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: var(--r-pill); border: 0;
+  background: var(--surface-card); color: var(--ink);
+  font-size: 13px; font-weight: 500; line-height: 1.4; white-space: nowrap;
+}
+.pill--sm { font-size: 12px; padding: 2px 10px; }
+.pill--ink { background: var(--ink); color: var(--on-dark); }
+.pill--white { background: rgba(255, 255, 255, 0.92); color: var(--ink); }
+.pill--pink { background: var(--pink); color: var(--on-dark); }
+.pill--teal { background: var(--teal); color: var(--on-dark); }
+.pill--lavender { background: var(--lavender); }
+.pill--peach { background: var(--peach); }
+.pill--ochre { background: var(--ochre); }
+.pill--mint { background: var(--mint); }
+.pill--coral { background: var(--coral); color: var(--ink); }
+.pill--muted { background: var(--surface-strong); color: var(--body); }
+button.pill { cursor: pointer; min-height: 32px; }
+.pills { display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: center; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+
+/* ---------- 표 ---------- */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table caption { text-align: left; font-size: 13px; color: var(--muted); padding-bottom: var(--sp-8); }
+.table th {
+  text-align: left; font-size: 13px; font-weight: 600; color: var(--muted);
+  padding: var(--sp-8) var(--sp-12) var(--sp-8) 0; border-bottom: 1px solid var(--hairline); white-space: nowrap;
+}
+.table td { padding: 9px var(--sp-12) 9px 0; border-bottom: 1px solid var(--hairline-soft); vertical-align: top; }
+.table th:last-child, .table td:last-child { padding-right: 0; }
+.table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.table tr:last-child td { border-bottom: 0; }
+.card--pink .table th, .card--teal .table th { color: inherit; opacity: 0.8; border-color: rgba(255, 255, 255, 0.3); }
+.card--pink .table td, .card--teal .table td { border-color: rgba(255, 255, 255, 0.15); }
+
+/* ---------- 상태: 로딩·오류·빈 화면 ---------- */
+.skeleton {
+  display: block; border-radius: var(--r-lg); min-height: 1em;
+  background: var(--surface-strong); animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: 0.55; } }
+.error-box {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-16);
+  padding: var(--sp-24); border-radius: var(--r-lg);
+  background: var(--canvas); color: var(--ink); border: 1px solid var(--hairline); border-left: 4px solid var(--coral);
+}
+.error-box p { max-width: 60ch; }
+.empty { color: var(--muted); font-size: 14px; }
+
+/* ---------- 차트 (charts.js가 그리는 인라인 SVG) ---------- */
+.chart { position: relative; width: 100%; min-width: 0; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { font-family: var(--font-body); font-size: 12px; fill: currentColor; }
+.chart .c-axis { fill: currentColor; opacity: 0.7; }
+.chart .c-label { font-size: 13px; }
+.chart .c-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chart .c-grid { stroke: currentColor; opacity: 0.15; }
+.chart .c-zero { stroke: currentColor; opacity: 0.5; }
+.chart .c-ref { stroke: currentColor; opacity: 0.55; stroke-dasharray: 4 4; fill: none; }
+.chart .c-point { stroke: var(--canvas); stroke-width: 1.5; }  /* 같은 색 카드 위에서도 점이 보이게 */
+.chart [role="button"].c-point { cursor: pointer; }
+.chart .c-point:focus { outline: none; }
+.chart .c-point:focus-visible { stroke: var(--ink); stroke-width: 3; }
+.chart .c-point.is-selected { stroke: var(--ink); stroke-width: 3; }
+.card--teal .chart .c-point.is-selected, .card--teal .chart .c-point:focus-visible { stroke: var(--on-dark); }
+.chart-legend { list-style: none; padding: 0; margin-top: var(--sp-12); display: flex; flex-wrap: wrap; gap: var(--sp-8) var(--sp-16); font-size: 13px; }
+.chart-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend .dot { border: 1.5px solid var(--canvas); width: 12px; height: 12px; }  /* 카드와 같은 색 점도 보이게 */
+
+/* ---------- 푸터 (크림, 증거 바) ---------- */
+.footer {
+  position: relative; overflow: hidden; margin-top: var(--sp-48);
+  background: var(--surface-soft); color: var(--body); font-size: 14px; line-height: 1.55;
+}
+.footer__inner { position: relative; z-index: 1; padding-block: var(--sp-48) 120px; }
+.evidence { color: var(--body-strong); max-width: 70ch; }
+.evidence a { color: var(--ink); text-decoration: underline; font-variant-numeric: tabular-nums; }
+.footer__note { margin-top: var(--sp-8); color: var(--muted); max-width: 70ch; }
+/* 점토 산 세 개 — 오커·피치·라벤더 (장식) */
+.footer__mtn { position: absolute; right: 40px; bottom: -30px; width: 300px; height: 120px; pointer-events: none; }
+.footer__mtn b { position: absolute; bottom: 0; display: block; border-radius: 50% 50% 0 0; }
+.footer__mtn b:nth-child(1) { left: 0; width: 150px; height: 96px; background: radial-gradient(circle at 40% 20%, #f7d08a, var(--ochre) 60%); }
+.footer__mtn b:nth-child(2) { left: 100px; width: 180px; height: 120px; background: radial-gradient(circle at 40% 20%, #ffc9a6, var(--peach) 60%); }
+.footer__mtn b:nth-child(3) { left: 220px; width: 120px; height: 76px; background: radial-gradient(circle at 40% 20%, #d4c8f5, var(--lavender) 60%); }
+@media (min-width: 900px) {
+  .footer__inner { padding-block: 80px; padding-right: 380px; }
+}
+@media (max-width: 479px) {
+  .footer__mtn { right: -20px; width: 240px; transform: scale(0.8); transform-origin: bottom right; }
+}
+
+/* ---------- 움직임 줄이기 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+  }
+  .skeleton { animation: none; }
+}
