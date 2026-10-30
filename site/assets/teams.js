@@ -20,6 +20,7 @@ const REWIND_SEASON = 2026;   // 되감기 파일이 있는 유일한 시즌 (re
 const PLAYOFF_SPOTS = 5;      // 가을야구: 정규시즌 5위까지 (2015년부터 와일드카드 포함)
 const REWIND_STRIDE = 7;      // 되감기 날짜 표본 간격 (매 7번째 날 + 마지막 날 → 최대 25개 파일)
 const LABEL_SHARE = 0.08;     // 로스터 막대 안에 %를 쓰는 최소 비중
+const SVGNS = "http://www.w3.org/2000/svg";
 // 정규시즌 승률이 같아 결정전(1위·5위)으로 순위를 정한 시즌: 시즌 → [이긴 팀, 진 팀].
 // 결정전은 정규시즌 경기가 아니라 teams.json에 없으므로 실제 결과를 여기 적어 둔다 (JSON 문법 — tests/test_site.py가 읽는다).
 export const TIEBREAK_GAMES = {"2021": ["KT", "SS"], "2024": ["KT", "SK"]};
@@ -143,6 +144,61 @@ function renderAll() {
 
 // ---------- ① 순위표 ----------
 
+/** 인라인 SVG 노드 만들기 (순위표 눈금 열 전용). */
+function svg(tag, attrs = {}, children = []) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v !== null && v !== undefined) n.setAttribute(k, String(v));
+  for (const c of [].concat(children)) n.append(typeof c === "string" ? document.createTextNode(c) : c);
+  return n;
+}
+
+/** 눈금 범위: 실제·피타고리안·모델 값과 .500을 모두 담는 0.05 단위 구간(양쪽에 0.03 여유). */
+function rulerDomain(rows) {
+  const vals = rows.flatMap((r) => [r.win_pct, r.pyth_pct, r.model_expected]).filter(fin).map(Number).concat(0.5);
+  const lo = Math.floor((Math.min(...vals) - 0.03) * 20) / 20;
+  const hi = Math.ceil((Math.max(...vals) + 0.03) * 20) / 20;
+  return [lo, hi];
+}
+const pctPos = (v, [lo, hi]) => `${(((Number(v) - lo) / (hi - lo || 1)) * 100).toFixed(2)}%`;
+
+/** 머리글 눈금: 0.10 간격 숫자, .500은 굵게. */
+function rulerHead(dom) {
+  const [lo, hi] = dom;
+  const ticks = [];
+  for (let v = Math.ceil(lo * 10) / 10; v <= hi + 1e-9; v = Math.round((v + 0.1) * 10) / 10) ticks.push(v);
+  return svg("svg", { class: "ruler__head", width: "100%", height: 26, "aria-hidden": "true", focusable: "false" },
+    ticks.map((v) => svg("text", {
+      x: pctPos(v, dom), y: 18, "text-anchor": "middle", class: Math.abs(v - 0.5) < 1e-9 ? "ruler__tick is-half" : "ruler__tick",
+    }, fmtRate3(v))));
+}
+
+/** 한 줄 눈금: 실제(● 잉크) · 피타고리안(○ 고리) · 모델 기대(◆ 핑크). 실제↔피타고리안 사이는 잉크 선. */
+function rulerRow(r, dom) {
+  const [lo, hi] = dom;
+  const ticks = [];
+  for (let v = Math.ceil(lo * 10) / 10; v <= hi + 1e-9; v = Math.round((v + 0.1) * 10) / 10) ticks.push(v);
+  const has = (v) => fin(v);
+  const mid = 20;
+  const kids = [
+    ...ticks.map((v) => svg("line", { class: Math.abs(v - 0.5) < 1e-9 ? "ruler__half" : "ruler__grid", x1: pctPos(v, dom), x2: pctPos(v, dom), y1: 0, y2: 40 })),
+    svg("line", { class: "ruler__track", x1: 0, x2: "100%", y1: mid, y2: mid }),
+  ];
+  if (has(r.win_pct) && has(r.pyth_pct)) kids.push(svg("line", { class: "ruler__gap", x1: pctPos(r.win_pct, dom), x2: pctPos(r.pyth_pct, dom), y1: mid, y2: mid }));
+  if (has(r.pyth_pct)) kids.push(svg("circle", { class: "ruler__pyth", cx: pctPos(r.pyth_pct, dom), cy: mid, r: 6 }));
+  if (has(r.model_expected)) {
+    const x = pctPos(r.model_expected, dom);
+    // 퍼센트 위치에 마름모를 놓으려고 안쪽 svg의 x를 퍼센트로 준다 (그 안에서 45도 돌린 정사각형)
+    kids.push(svg("svg", { x, y: mid, width: 1, height: 1, overflow: "visible" },
+      svg("rect", { class: "ruler__model", x: -6, y: -6, width: 12, height: 12, transform: "rotate(45)" })));
+  }
+  if (has(r.win_pct)) kids.push(svg("circle", { class: "ruler__act", cx: pctPos(r.win_pct, dom), cy: mid, r: 7 }));
+  const say = [`실제 ${fmtRate3(r.win_pct)}`, `피타고리안 ${fmtRate3(r.pyth_pct)}`, has(r.model_expected) ? `모델 기대 ${fmtRate3(r.model_expected)}` : null].filter(Boolean).join(", ");
+  return svg("svg", { class: "ruler__row", width: "100%", height: 40, role: "img", "aria-label": `${shortName(r.code, state.season)} ${say}`, focusable: "false" }, kids);
+}
+
+/** pp 표기: +4.1%p / −2.3%p */
+const pp = (d) => `${d >= 0 ? "+" : "−"}${Math.abs(d * 100).toFixed(1)}%p`;
+
 function renderStandings(rows) {
   const body = $("standings-body");
   const season = state.season;
@@ -152,10 +208,12 @@ function renderStandings(rows) {
   $("standings-lead").textContent =
     `${season} 정규시즌 ${rows.length}팀, 팀당 ${games.length === 1 ? games[0] : `${Math.min(...games)}~${Math.max(...games)}`}경기. 승률 순서이고, 무승부는 승률 계산에서 뺍니다.`;
 
+  const dom = rulerDomain(rows);
   const cols = [
-    ["순위", "num rank-col"], ["팀"], ["경기", "num"], ["승-패-무", "num"], ["승률", "num"], ["피타고리안", "num"],
-    ...(hasModel ? [[[ "모델 기대 승률", el("span", { class: "th-note" }, `${version} 홀드아웃 예측 평균`)], "num model-col"]] : []),
-    ["홈 승률", "num"], ["원정 승률", "num"],
+    ["순위", "num rank-col"], ["팀", "team-col"], ["승-패-무", "num"], ["승률", "num win-col"], ["피타고리안", "num"],
+    ...(hasModel ? [[["모델 기대 승률", el("span", { class: "th-note" }, `${version} 홀드아웃 예측 평균`)], "num model-col"]] : []),
+    [[el("span", { class: "sr-only" }, "한눈에 비교 (눈금)"), rulerHead(dom)], "ruler-col"],
+    ["경기", "num"], ["홈 승률", "num"], ["원정 승률", "num"],
   ];
   const tr = (r) => el("tr", { class: r.rank <= PLAYOFF_SPOTS ? "is-playoff" : null }, [
     el("td", { class: "num rank-col" }, [String(r.rank), r.tied ? el("span", { class: "tie-mark", title: "승률 동률" }, "†") : null]),
@@ -163,14 +221,30 @@ function renderStandings(rows) {
       ...teamCell(r.code, season),
       r.rank <= PLAYOFF_SPOTS ? el("span", { class: "sr-only" }, " (가을야구 진출)") : null,
     ]),
-    el("td", { class: "num" }, String(r.games ?? "—")),
     el("td", { class: "num nowrap" }, `${r.wins}-${r.losses}-${r.ties}`),
-    el("td", { class: "num strong" }, fmtRate3(r.win_pct)),
+    el("td", { class: "num win-col" }, fmtRate3(r.win_pct)),
     el("td", { class: "num" }, fmtRate3(r.pyth_pct)),
     hasModel ? el("td", { class: "num model-col" }, fmtRate3(r.model_expected)) : null,
+    el("td", { class: "ruler-col" }, rulerRow(r, dom)),
+    el("td", { class: "num" }, String(r.games ?? "—")),
     el("td", { class: "num" }, fmtRate3(r.home_pct)),
     el("td", { class: "num" }, fmtRate3(r.away_pct)),
   ]);
+
+  // 무대 위 한 줄: 눈금 범례 + 실제 승률이 피타고리안과 가장 크게 어긋난 두 팀 (접전 운)
+  const gaps = rows.filter((r) => fin(r.win_pct) && fin(r.pyth_pct)).map((r) => ({ r, d: Number(r.win_pct) - Number(r.pyth_pct) }));
+  const up = gaps.reduce((b, g) => (!b || g.d > b.d ? g : b), null);
+  const down = gaps.reduce((b, g) => (!b || g.d < b.d ? g : b), null);
+  const chip = (label, g) => g ? el("li", { class: "fact" }, [el("span", { class: "fact__label" }, label), el("b", {}, shortName(g.r.code, season)), el("span", { class: "fact__num num" }, pp(g.d))]) : null;
+  const legend = el("ul", { class: "ruler__legend", "aria-label": "눈금 보는 법" }, [
+    el("li", {}, [el("i", { class: "mk mk--act", "aria-hidden": "true" }), "실제 승률"]),
+    el("li", {}, [el("i", { class: "mk mk--pyth", "aria-hidden": "true" }), "피타고리안"]),
+    hasModel ? el("li", {}, [el("i", { class: "mk mk--model", "aria-hidden": "true" }), "모델 기대"]) : null,
+    el("li", {}, [el("i", { class: "mk mk--half", "aria-hidden": "true" }), ".500 기준선"]),
+  ]);
+  const facts = gaps.length > 1 ? el("ul", { class: "facts", "aria-label": "실제 승률과 피타고리안의 차이" }, [
+    chip("피타고리안보다 가장 잘 이김", up), chip("피타고리안보다 가장 못 이김", down),
+  ]) : null;
   const cut = el("tr", { class: "cutline", "aria-hidden": "true" },
     el("td", { colspan: String(cols.length) }, el("span", { class: "cutline__label" }, `가을야구 · 위 ${PLAYOFF_SPOTS}팀`)));
   const bodyRows = rows.flatMap((r) => (r.rank === PLAYOFF_SPOTS && rows.length > PLAYOFF_SPOTS ? [tr(r), cut] : [tr(r)]));
@@ -188,7 +262,9 @@ function renderStandings(rows) {
 
   body.setAttribute("aria-busy", "false");
   body.replaceChildren(
+    el("div", { class: "stage__bar" }, [legend, facts]),
     el("div", { class: "table-scroll standings-scroll", tabindex: "0", role: "region", "aria-label": `${season} 순위표 (가로로 넘겨 보기)` }, el("table", { class: "table standings" }, [
+      // 눈금 열 머리글은 위에서 만든 SVG를 함께 담는다
       el("caption", { class: "sr-only" }, `${season} 정규시즌 순위표 (위 ${PLAYOFF_SPOTS}팀 가을야구)`),
       el("thead", {}, el("tr", {}, cols.map(([t, c]) => el("th", { scope: "col", class: c ?? null }, t)))),
       el("tbody", {}, bodyRows),

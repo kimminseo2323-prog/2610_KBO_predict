@@ -1,14 +1,24 @@
 /* KBO Predict — 팀 전용. tokens.css · app.css 다음에 불러온다.
-   한 곳만 크게: 피치 카드의 상대 전적 격자(잉크 농도 = 승률). 순위표·막대·선은 조용하게.
-   유형 색·팀 색이 카드 색과 겹치므로(라벤더 유형, 오커 팀) 차트와 격자는 모두 크림 패널(.inset) 안에 그린다. */
+
+   디자인 아이디어 (셋 이상을 비교해 하나를 골랐다)
+     A. 눈금 순위표 — 표의 숫자 열(승률·피타고리안·모델 기대) 옆에 같은 눈금(.500 기준선)을 공유하는 한 줄 막대를 둔다.
+        실제 ●, 피타고리안 ○, 모델 기대 ◆가 한 줄에 놓여 "셋을 비교하는 장면"이 눈에 먼저 들어온다. ← 채택
+     B. 막대 레이스 — 팀별 승률 막대를 길게. 읽기는 쉽지만 피타고리안·모델 값을 얹을 자리가 없고 표의 정확한 숫자가 사라져 기각.
+     C. 기울기 그래프(실제 → 피타고리안) — 팀마다 기울어진 선. 운이 좋고 나쁜 팀은 드러나지만 10개 선이 겹치고
+        모델 기대(2026만)를 넣으면 복잡해져 기각 (대신 "가장 잘/못 이김" 두 칩으로만 가져왔다).
+     D. 순위표 그대로 크게 — 안전하지만 비교가 숫자 읽기에 맡겨져 "장면"이 되지 못해 기각.
+   → A. 숫자는 표에 그대로 남기고(정확한 값, 스크린리더), 눈금은 시각 보조. 눈금 범위는 값과 .500을 모두 담도록 시즌마다 정한다.
+   순위표는 6색 카드 중 크림 한 장을 넓고 크게(안쪽 여백 32px, 행 높이 52px). 로스터(라벤더)·상대 전적(피치)·되감기(오커)는
+   .rubric 아래에서 24px 안쪽 여백·16px 제목으로 한 걸음 물러난 조연. 색 순서: 크림 → 라벤더 → 피치 → 오커.
+   유형 색·팀 색이 카드 색과 겹치므로 차트와 격자는 모두 크림 패널(.inset) 안에 그린다. 그림자 없음. */
 
 [hidden] { display: none !important; }
 .nowrap { white-space: nowrap; }
 
 /* ---------- 머리 + 시즌 고르기 ---------- */
-.teams-head { padding-bottom: var(--sp-24); }
+.page-head.teams-head { padding-block: var(--sp-32) var(--sp-16); }
 .teams-head h1 { max-width: none; }
-.teams-head .lead { max-width: 64ch; }
+.teams-head .lead { max-width: 64ch; font-size: 14px; }
 .season-ctl { display: flex; flex-direction: column; gap: 6px; }
 .season-ctl__label { font-size: 13px; font-weight: 500; color: var(--muted); line-height: 1.4; }
 .season-ctl__select {
@@ -19,12 +29,20 @@
   background-position: calc(100% - 21px) 19px, calc(100% - 16px) 19px;
   background-size: 5px 5px; background-repeat: no-repeat;
 }
-.season-ctl__select:hover { border-color: var(--muted-soft); }
 .season-ctl__select[disabled] { cursor: progress; color: var(--muted); }
 
-/* ---------- 카드 쌓기 (모든 폭에서 1열: 크림 → 라벤더 → 피치 → 오커) ---------- */
+/* ---------- 조연 쌓기 ---------- */
+.rubric {
+  display: flex; align-items: center; gap: var(--sp-16); margin: var(--sp-32) 0 var(--sp-16);
+  font-size: 13px; font-weight: 500; color: var(--muted);
+}
+.rubric::before, .rubric::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+.rubric::before { max-width: 32px; }
+
 .teams-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-16); }
-.skel-table { height: 420px; margin-top: var(--sp-16); }
+.teams-stack > .card { padding: var(--sp-24); }
+.teams-stack .card__title { font-size: 16px; }
+.skel-table { height: 560px; margin-top: var(--sp-16); }
 .skel-bars { height: 330px; }
 .skel-grid { height: 440px; }
 .skel-line { height: 300px; }
@@ -32,37 +50,76 @@
 .notes { margin-top: var(--sp-16); padding-left: 18px; font-size: 13px; color: var(--muted); max-width: 90ch; }
 .notes li + li { margin-top: 4px; }
 
-/* ---------- ① 순위표 ---------- */
-.standings-scroll { margin-top: var(--sp-16); }
-.standings { min-width: 720px; }
+/* ---------- ① 순위표 무대 (크림, 크게) ---------- */
+.stage { padding: var(--sp-24); }
+.stage .card__title { font-size: clamp(22px, 18px + 1vw, 28px); font-weight: 500; letter-spacing: -0.5px; }
+.stage .card__lead { font-size: 14px; max-width: 80ch; }
+@media (min-width: 768px) { .stage { padding: var(--sp-32); } }
+
+/* 눈금 범례 + 접전 운 칩 */
+.stage__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-12) var(--sp-24); margin-top: var(--sp-16); }
+.ruler__legend { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 4px var(--sp-16); font-size: 13px; font-weight: 500; }
+.ruler__legend li { display: inline-flex; align-items: center; gap: 6px; }
+.mk { display: inline-block; flex: none; width: 12px; height: 12px; }
+.mk--act { border-radius: 50%; background: var(--ink); }
+.mk--pyth { border-radius: 50%; border: 2.5px solid var(--ink); background: var(--canvas); }
+.mk--model { background: var(--pink); transform: rotate(45deg) scale(0.85); }
+.mk--half { width: 0; height: 14px; border-left: 2.5px solid var(--ink); }
+.facts { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-8); }
+.fact {
+  display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-8);
+  padding: 4px 14px; border-radius: var(--r-pill); background: var(--canvas); font-size: 13px;
+}
+.fact__label { color: var(--muted); }
+.fact b { font-weight: 600; }
+.fact__num { font-weight: 600; }
+
+/* 표 — 캔버스색 패널 위에 놓는다 */
+.standings-scroll { margin-top: var(--sp-16); padding: var(--sp-8) var(--sp-16); background: var(--canvas); border-radius: var(--r-lg); }
+.standings-scroll:focus-visible { outline-offset: 2px; }
+.standings { min-width: 900px; table-layout: auto; }
 .standings th, .standings td { vertical-align: middle; }
-.standings thead th { vertical-align: bottom; }
-.standings tbody th { font-weight: 500; color: var(--ink); white-space: nowrap; padding: 9px var(--sp-12) 9px 0;
-  border-bottom: 1px solid var(--hairline); text-align: left; }
-.standings tbody td { border-bottom-color: var(--hairline); }
-.standings .rank-col { width: 3.5em; text-align: left; padding-right: var(--sp-16); }
-.standings td.rank-col { font-weight: 600; }
-.standings .strong { font-weight: 600; }
-.standings .model-col { background: rgba(10, 10, 10, 0.035); padding-left: var(--sp-12); }
-.standings th.model-col { white-space: normal; width: 10.5em; min-width: 10.5em; }
-.standings tr:last-child th { border-bottom: 0; }
+.standings thead th { vertical-align: bottom; padding-bottom: 8px; }
+.standings tbody th { font-weight: 500; color: var(--ink); white-space: nowrap; padding: 0 var(--sp-12) 0 0; border-bottom: 1px solid var(--hairline-soft); text-align: left; font-size: 15px; height: 52px; }
+.standings tbody td { height: 52px; border-bottom: 1px solid var(--hairline-soft); padding-block: 0; }
+.standings .rank-col { width: 3.2em; padding-right: var(--sp-12); }
+.standings td.rank-col { font-size: 22px; font-weight: 500; letter-spacing: -0.5px; }
+.standings .win-col { font-size: 18px; font-weight: 600; color: var(--ink); }
+.standings .model-col { background: var(--surface-card); padding-inline: var(--sp-12); }
+.standings th.model-col { white-space: normal; width: 9.5em; min-width: 9.5em; border-radius: var(--r-sm) var(--r-sm) 0 0; }
+.standings tr:last-child th, .standings tr:last-child td { border-bottom: 0; }
 .th-note { display: block; font-size: 11px; font-weight: 500; line-height: 1.3; margin-top: 2px; }
-.tie-mark { margin-left: 2px; font-weight: 500; color: var(--muted); }
-.team-dot { width: 9px; height: 9px; margin-right: 10px; vertical-align: 1px; }
+.tie-mark { margin-left: 2px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.team-dot { width: 10px; height: 10px; margin-right: 10px; vertical-align: 1px; }
 .tn-short { display: none; }
 @media (max-width: 599px) {
   .tn-full { display: none; }
   .tn-short { display: inline; }
-  .standings { min-width: 600px; }
+  .standings { min-width: 780px; }
+  .standings-scroll { padding-inline: var(--sp-12); }
 }
+
+/* 눈금 열: 머리글 눈금 숫자 + 행마다 한 줄 */
+.standings .ruler-col { width: 34%; min-width: 260px; padding-inline: var(--sp-12); }
+.ruler__head, .ruler__row { display: block; width: 100%; overflow: visible; }
+.ruler__tick { font-size: 11px; font-weight: 500; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.ruler__tick.is-half { fill: var(--ink); font-weight: 600; }
+.ruler__grid { stroke: var(--hairline); stroke-width: 1; }
+.ruler__half { stroke: var(--ink); stroke-width: 2; }
+.ruler__track { stroke: var(--hairline); stroke-width: 2; }
+.ruler__gap { stroke: var(--ink); stroke-width: 3; opacity: 0.35; }
+.ruler__act { fill: var(--ink); stroke: var(--canvas); stroke-width: 2; }
+.ruler__pyth { fill: var(--canvas); stroke: var(--ink); stroke-width: 2.5; }
+.ruler__model { fill: var(--pink); stroke: var(--canvas); stroke-width: 1.5; }
+
 /* 가을야구 선: 5위 아래에 잉크 선 한 줄 + 작은 이름표 */
 .standings tr.cutline td { padding: 0; border-bottom: 0; height: 0; position: relative; }
-.standings tr.cutline td::before { content: ""; display: block; border-top: 1.5px solid var(--ink); }
+.standings tr.cutline td::before { content: ""; display: block; border-top: 2px solid var(--ink); }
 .cutline__label {
   position: absolute; left: 0; top: -10px; padding: 1px 10px; border-radius: var(--r-pill);
   background: var(--ink); color: var(--on-dark); font-size: 11px; font-weight: 600; line-height: 18px; white-space: nowrap;
 }
-.standings tr.cutline + tr th, .standings tr.cutline + tr td { padding-top: 16px; }
+.standings tr.cutline + tr th, .standings tr.cutline + tr td { padding-top: 14px; }
 
 /* ---------- ② 로스터 유형 구성 ---------- */
 .roster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-16); }
@@ -126,3 +183,6 @@
 .rewind__frame { padding: var(--sp-16) 20px 18px; }
 .rewind__progress { margin-top: var(--sp-12); font-size: 14px; color: var(--muted); }
 .rewind__note { max-width: 90ch; }
+
+/* 한글 문장은 낱말 중간에서 줄을 바꾸지 않게 */
+.teams-head .lead, .card__lead, .notes, .rewind__note { word-break: keep-all; overflow-wrap: anywhere; }

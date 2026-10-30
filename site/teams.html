@@ -32,7 +32,7 @@
   <div class="page-head teams-head">
     <div>
       <h1 class="display-md">팀</h1>
-      <p class="lead" id="teams-lead">정규시즌 실제 성적과 피타고리안 기대 승률, report-2026 모델의 홀드아웃 기대 승률, 로스터 유형 구성을 시즌별로 봅니다.</p>
+      <p class="lead" id="teams-lead">정규시즌 실제 승률과 피타고리안 기대 승률, report-2026 모델의 홀드아웃 기대 승률을 한 표의 같은 눈금 위에서 비교하고, 로스터 유형 구성·상대 전적·가을야구 확률을 시즌별로 봅니다.</p>
     </div>
     <div class="season-ctl">
       <label class="season-ctl__label" for="season-select">시즌</label>
@@ -44,14 +44,15 @@
   <noscript><p class="error-box">이 페이지는 자바스크립트로 데이터를 읽어 그립니다. 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
   <p class="sr-only" id="season-status" aria-live="polite"></p>
 
-  <!-- 크림(순위표) → 라벤더(로스터 유형) → 피치(상대 전적) → 오커(가을야구 되감기, 2026만) -->
-  <div class="teams-stack">
-    <section class="card card--cream" id="standings" aria-labelledby="standings-title">
-      <h2 class="card__title" id="standings-title">순위표</h2>
-      <p class="card__lead" id="standings-lead">정규시즌 승률 순서. 무승부는 승률 계산에서 뺍니다.</p>
-      <div id="standings-body" aria-busy="true"><div class="skeleton skel-table"></div></div>
-    </section>
+  <!-- 무대: 크림 순위표(실제·피타고리안·모델 기대를 한 눈금에) → 조연: 라벤더(로스터 유형) → 피치(상대 전적) → 오커(가을야구 되감기, 2026만) -->
+  <section class="card card--cream stage" id="standings" aria-labelledby="standings-title">
+    <h2 class="card__title" id="standings-title">순위표</h2>
+    <p class="card__lead" id="standings-lead">정규시즌 승률 순서. 무승부는 승률 계산에서 뺍니다.</p>
+    <div id="standings-body" aria-busy="true"><div class="skeleton skel-table"></div></div>
+  </section>
 
+  <p class="rubric">같은 시즌을 다른 각도에서</p>
+  <div class="teams-stack">
     <section class="card card--lavender" id="roster-types" aria-labelledby="roster-title">
       <h2 class="card__title" id="roster-title">로스터 유형 구성</h2>
       <p class="card__lead" id="roster-lead">팀 타석과 이닝을 어떤 유형의 선수가 맡았는지. 팀 순서는 순위표와 같습니다.</p>

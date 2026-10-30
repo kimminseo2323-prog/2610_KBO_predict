@@ -602,7 +602,7 @@ def test_teams_markup():
         assert soup.find(id=cid) is not None, cid
     assert soup.find(id="season-select").name == "select"
     assert soup.find("label", attrs={"for": "season-select"}) is not None
-    cards = soup.select(".teams-stack > section")
+    cards = soup.select("main section.card")  # 순위표는 무대(.stage) 안, 나머지는 .teams-stack 안 — 문서 순서로 센다
     assert [c["id"] for c in cards] == TEAMS_SECTIONS
     colors = [next(k for k in c["class"] if k.startswith("card--")) for c in cards]
     assert colors == ["card--cream", "card--lavender", "card--peach", "card--ochre"]
