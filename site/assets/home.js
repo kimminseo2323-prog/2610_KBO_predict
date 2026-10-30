@@ -337,52 +337,86 @@ function typePill(type, onCard) {
   ]);
 }
 
+/**
+ * 한쪽 진영(원정 = 왼쪽 핑크, 홈 = 오른쪽 틸). 이름은 크게(한 줄 정식 이름은 그 아래 작게), 숫자는 가장 크게.
+ * 선발·기록은 전부 하나의 크림 칩(하단 자막)에 담는다 — 핑크·틸 위 작은 글자의 대비 문제를 없애고 두 진영을 같은 모양으로.
+ */
 function sideBlock(g, side, prob, large) {
   const t = g[side];
   const s = t.starter;
   const role = side === "home" ? "홈" : "원정";
   const head = el("div", { class: "side__head" }, [
     el("p", { class: "side__role" }, role),
-    el("h3", { class: "side__team" }, teamName(t.code, { full: large })),
+    el("h3", { class: "side__team" }, teamName(t.code)),
+    large ? el("p", { class: "side__full" }, teamName(t.code, { full: true })) : null,
   ]);
   const probEl = el("p", { class: "side__prob" }, [
     el("span", { class: "side__num" }, prob === "—" ? "—" : [String(prob), el("small", {}, "%")]),
     el("span", { class: "side__who" }, `${teamName(t.code)} 승리`),
   ]);
-  const starter = s
-    ? el("p", { class: "side__starter" }, [el("span", {}, ["선발 ", el("b", {}, starterName(s))]), typePill(s.type, true)])
-    : el("p", { class: "side__starter" }, el("span", {}, "선발 미정"));
-  // 기록 두 줄은 크림 칩에 담는다(핑크·틸 위 작은 흰 글자의 대비 부족을 피하고 두 쪽을 같은 모양으로)
   const stats = !s ? null
     : fin(s.era) || fin(s.k9) || fin(s.bb9) ? `ERA ${num(s.era)} · K/9 ${num(s.k9)} · BB/9 ${num(s.bb9)}` : "선발 올해 등판 기록 없음";
-  const details = el("div", { class: "side__details" }, [
-    starter,
-    large ? el("div", { class: "side__chip num" }, [
-      stats ? el("p", {}, stats) : null,
-      el("p", {}, `${recentForm(t.last10, t.win_pct_season)} · 시즌 승률 ${fmtRate3(t.win_pct_season)}`),
-    ]) : null,
+  const chip = el("div", { class: "side__chip" }, [
+    s ? el("p", { class: "chip__row" }, [el("span", {}, ["선발 ", el("b", {}, starterName(s))]), typePill(s.type, false)])
+      : el("p", { class: "chip__row" }, el("b", {}, "선발 미정")),
+    large && stats ? el("p", { class: "chip__stats num" }, stats) : null,
+    large ? el("p", { class: "chip__stats num" }, `${recentForm(t.last10, t.win_pct_season)} · 시즌 승률 ${fmtRate3(t.win_pct_season)}`) : null,
   ]);
-  return el("div", { class: `side side--${side}` }, [head, probEl, details]);
+  return el("div", { class: `side side--${side}` }, [head, probEl, el("div", { class: "side__details" }, chip)]);
 }
 
+/** 모델이 어느 쪽으로 얼마나 기우는지 한 마디 (잡지 표지의 헤드라인 칸). 확률이 없으면 null. */
+function lean(g) {
+  if (!fin(g.home_win_prob)) return null;
+  const d = Number(g.home_win_prob) - 0.5;
+  const a = Math.abs(d);
+  if (a < 0.03) return "사실상 반반";
+  const who = teamName(g[d > 0 ? "home" : "away"].code);
+  return `${who} ${a < 0.1 ? "근소 우세" : a < 0.2 ? "우세" : "크게 우세"}`;
+}
+
+/** 승률을 가장 크게 움직인 요인 한 줄 + 선발 피처 미사용 알림 (하단 자막 띠). */
+function ticker(g) {
+  const f = (g.factors ?? []).filter((x) => fin(x.contribution_pp))
+    .reduce((best, x) => (!best || Math.abs(x.contribution_pp) > Math.abs(best.contribution_pp) ? x : best), null);
+  const parts = [];
+  if (f) {
+    const v = Number(f.contribution_pp);
+    parts.push(el("span", { class: "ticker__item" }, [
+      el("span", { class: "ticker__tag" }, "가장 크게 움직인 요인"),
+      el("b", {}, f.name),
+      el("span", { class: "num" }, `${sign(v)}${v > 0 ? " · 홈 쪽" : v < 0 ? " · 원정 쪽" : ""}`),
+    ]));
+  }
+  if (g.starter_known === false) {
+    parts.push(el("span", { class: "ticker__item ticker__note" }, "선발 정보 없이 예측했습니다 (선발 피처 미사용)"));
+  }
+  return parts.length ? el("div", { class: "stage__ticker" }, parts) : null;
+}
+
+/** 상단 띠: 왼쪽 = 어디서·무슨 경기·모델의 한 마디, 오른쪽 = (되감기) 결과. */
 function metaPills(g, large) {
-  const pills = [];
+  const left = [];
   const where = [STADIUMS[g.stadium] ?? g.stadium, g.time].filter(Boolean).join(" ");
-  if (where) pills.push(el("span", { class: "pill pill--white" }, where));
+  if (where) left.push(el("span", { class: "pill pill--white" }, where));
   const o = state.day.outlook;
   if (large && o?.type === "series" && o.teams?.includes(g.home.code) && o.teams?.includes(g.away.code)) {
-    pills.push(el("span", { class: "pill pill--white" },
+    left.push(el("span", { class: "pill pill--white" },
       `${o.name} ${teamName(o.teams[0])} ${o.wins[0]}승 · ${teamName(o.teams[1])} ${o.wins[1]}승`));
   }
+  const say = large ? lean(g) : null;
+  if (say) left.push(el("span", { class: "pill pill--white pill--lean" }, `모델 전망 · ${say}`));
+  const right = [];
   const r = g.result;
   if (r) {
-    pills.push(el("span", { class: "pill pill--white num" }, `최종 ${r.away_score} : ${r.home_score}`));
-    pills.push(verdictPill(r));
+    if (large && r.pick) right.push(el("span", { class: "pill pill--white" }, `모델 선택 ${r.pick === "HOME" ? teamName(g.home.code) : r.pick === "AWAY" ? teamName(g.away.code) : "—"}`));
+    right.push(el("span", { class: "pill pill--white num" }, `최종 ${r.away_score} : ${r.home_score}`));
+    right.push(verdictPill(r));
   }
-  return pills;
+  return [left.length ? el("div", { class: "pills" }, left) : null, right.length ? el("div", { class: "pills" }, right) : null];
 }
 
-function matchupCard(g, large) {
+function matchupCard(g, large, settled = false) {
   if (g.status === "CANCELED") {
     return el("article", { class: `matchup matchup--canceled card${large ? " matchup--lg" : ""}`, "aria-label": `${matchLabel(g)} 취소` }, [
       el("div", { class: "pills" }, [el("span", { class: "pill pill--ink" }, "취소"),
@@ -396,10 +430,25 @@ function matchupCard(g, large) {
   const away = fin(p) ? 100 - home : "—";
   const pctText = (v) => (v === "—" ? "—" : `${v}%`);
   const label = `${matchLabel(g)}: ${teamName(g.home.code)} 홈 승리 확률 ${pctText(home)}, ${teamName(g.away.code)} ${pctText(away)}`;
-  return el("article", { class: `matchup ${large ? "matchup--lg" : "matchup--sm"}`, "aria-label": label }, [
-    el("div", { class: "matchup__meta pills" }, metaPills(g, large)),
+  // 핑크|틸 경계가 원정 승률 위치로 움직인다(너무 치우치면 글자 자리가 모자라 38~62%로 제한 — 숫자는 실제 값 그대로).
+  // 작은 경기 띠는 경계를 가운데에 둔다(좁은 화면에서 이름 자리가 모자라서).
+  const share = fin(p) ? (1 - Number(p)) * 100 : 50;
+  const cut = large ? Math.min(62, Math.max(38, share)) : 50;
+  const meta = metaPills(g, large);
+  return el("article", {
+    class: `matchup ${large ? "matchup--lg" : "matchup--sm"}${settled ? " is-settled" : ""}`,
+    style: `--cut-to: ${cut.toFixed(1)}%`, "aria-label": label,
+  }, [
+    meta.some(Boolean) ? el("div", { class: "stage__top" }, meta) : null,
     sideBlock(g, "away", away, large),
     sideBlock(g, "home", home, large),
+    large ? el("span", { class: "stage__vs", "aria-hidden": "true" }, "VS") : null,
+    // 좁은 화면에서는 경계가 사라지므로 같은 비율의 가로 막대로 긴장감을 대신한다
+    el("div", { class: "stage__meter", "aria-hidden": "true" }, [
+      el("span", { class: "meter__away", style: { flexGrow: String(fin(p) ? share : 50) } }),
+      el("span", { class: "meter__home", style: { flexGrow: String(fin(p) ? 100 - share : 50) } }),
+    ]),
+    large ? ticker(g) : null,
   ]);
 }
 
@@ -415,8 +464,12 @@ function renderMatchups() {
     return;
   }
   const [first, ...rest] = games;
-  const cards = [matchupCard(first, true)];
-  if (rest.length) cards.push(el("div", { class: "matchups__rest" }, rest.map((g) => matchupCard(g, false))));
+  // 같은 날을 다시 그릴 때(players.json 뒤 선발 이름 갱신 등)는 경계가 다시 움직이지 않게 한다
+  const key = `${state.mode}:${state.day.date}`;
+  const settled = state.stageKey === key;
+  state.stageKey = key;
+  const cards = [matchupCard(first, true, settled)];
+  if (rest.length) cards.push(el("div", { class: "matchups__rest" }, rest.map((g) => matchupCard(g, false, settled))));
   box.replaceChildren(...cards); // replaceChildren은 null을 "null" 글자로 넣으므로 배열로 모은다
 }
 

@@ -1,11 +1,23 @@
 /* KBO Predict — 홈(오늘의 경기) 전용. tokens.css · app.css 다음에 불러온다.
-   한 곳만 크게: 매치업 카드의 두 확률 숫자가 핑크|틸 경계를 사이에 두고 마주 본다. 나머지는 조용히. */
+
+   디자인 아이디어 (셋 이상을 비교해 하나를 골랐다)
+     A. 중계 스코어보드 — 화면을 가르는 핑크|틸 무대. 두 색의 경계선이 모델의 승률 위치로 "당겨져" 멈춘다. ← 채택
+     B. 잡지 표지 — 한 개의 거대한 숫자와 작은 팀 이름. 두 팀의 대립이 사라지고 숫자 하나만 남아 기각.
+     C. 입장권/티켓 — 절취선과 좌석 번호. 장식은 예쁘지만 확률이 주인공이 되지 못해 기각.
+     D. 줄다리기 막대 — 가로 한 줄 막대. 가장 정직하지만 "화면을 압도"하기엔 얇아서 기각 (모바일에서 보조 장치로만 재사용).
+   → A + D의 정직함: 경계선의 위치 = 원정 승률. 숫자·이름은 바깥쪽·가운데에 배치해 마주 보게 한다.
+   나머지 카드는 24px 안쪽 여백·작은 제목으로 한 걸음 물러난 조연. 색 순서(크림→라벤더→피치→오커→틸→크림)는 그대로. */
 
 [hidden] { display: none !important; }
 .nowrap { white-space: nowrap; }
 
-/* ---------- 머리: 날짜 + 라이브 칩 / 되감기 슬라이더 ---------- */
+/* 경계선 위치(--cut)를 움직일 수 있게 등록 — 지원하지 않는 브라우저는 애니메이션 없이 바로 제자리에 선다 */
+@property --cut { syntax: "<percentage>"; inherits: true; initial-value: 50%; }
+
+/* ---------- 머리: 날짜 + 라이브 칩 / 되감기 슬라이더 (무대 위에서 작게) ---------- */
+.page-head.home-head { padding-block: var(--sp-32) var(--sp-16); }
 .home-head h1 { max-width: none; }
+.home-head .lead { font-size: 14px; }
 .datebar { display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-8); }
 .datebar__live { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-12); }
 .live-dot { width: 8px; height: 8px; background: var(--success); }
@@ -35,60 +47,85 @@
   background: var(--surface-strong); color: var(--body-strong); font-size: 13px;
 }
 
-/* ---------- 매치업 카드: 원정(왼쪽·핑크) | 홈(오른쪽·틸) ---------- */
-.matchups { margin-bottom: var(--sp-16); }
-.matchup-skeleton { height: 300px; border-radius: var(--r-xl); }
+/* ---------- 무대: 원정(왼쪽·핑크) | 홈(오른쪽·틸). 모바일 우선 = 위아래로 쌓기 ---------- */
+.matchups { margin-bottom: var(--sp-32); }
+.matchup-skeleton { height: 420px; border-radius: var(--r-xl); }
 
 .matchup:not(.matchup--canceled) {
   --muted: var(--on-dark);
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto 1fr;
-  border-radius: var(--r-xl); overflow: hidden; color: var(--on-dark);
-  background: linear-gradient(90deg, var(--pink) 50%, var(--teal) 50%);
+  position: relative; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: var(--r-xl); color: var(--on-dark); background: var(--teal);
 }
-.matchup__meta { grid-column: 1 / -1; justify-content: center; padding: var(--sp-24) var(--sp-24) 0; }
-.matchup__meta:empty { display: none; }
 
-.side { display: grid; gap: 0 var(--sp-24); min-width: 0; padding: var(--sp-24) var(--sp-32) var(--sp-32); }
+/* 모바일의 경계선 대신 쓰는 가로 막대: 길이 = 승률 (맨 위, 핑크 | 틸) */
+.stage__meter { order: -1; display: flex; height: 12px; background: var(--canvas); }
+.meter__away { background: var(--pink); }
+.meter__home { background: var(--teal); }
+
+.stage__top {
+  order: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-8) var(--sp-16);
+  padding: var(--sp-16) var(--sp-24) 0; background: var(--pink); color: var(--ink);
+}
+.stage__top .pills { min-width: 0; }
+
+.side { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head prob" "details details"; gap: 0 var(--sp-16); min-width: 0; padding: var(--sp-16) var(--sp-24) var(--sp-24); }
+.side--away { background: var(--pink); color: var(--ink); --muted: var(--ink); }
+.side--home { padding-top: var(--sp-24); }
 .side__head { grid-area: head; min-width: 0; }
-.side__prob { grid-area: prob; align-self: end; display: flex; flex-direction: column; }
-.side__details { grid-area: details; align-self: end; display: grid; gap: 2px; margin-top: var(--sp-24); font-size: 14px; min-width: 0; }
+.side__prob { grid-area: prob; display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.side__details { grid-area: details; margin-top: var(--sp-16); min-width: 0; }
 
 .side__role { font-size: 13px; font-weight: 500; }
-.side__team { font-size: clamp(21px, 16px + 0.9vw, 26px); font-weight: 600; line-height: 1.25; letter-spacing: -0.3px; }
+/* 대비: 핑크 위에서는 24px 이상의 큰 글자(팀 이름·큰 숫자)만 흰색. 작은 글자는 잉크, 선발·기록은 크림 칩 안에. */
+.side__team { font-family: var(--font-display); font-size: clamp(28px, 18px + 2.6vw, 48px); font-weight: 500; line-height: 1.05; letter-spacing: -1px; overflow-wrap: anywhere; }
+.side--away .side__team, .side--away .side__num { color: var(--on-dark); }
+.side__full { margin-top: 4px; font-size: 14px; }
 .side__num {
-  font-size: clamp(72px, 28px + 7.4vw, 136px); font-weight: 500; line-height: 0.82; letter-spacing: -0.055em;
+  display: block; font-family: var(--font-display);
+  font-size: 64px; font-weight: 500; line-height: 0.82; letter-spacing: -0.055em;
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.side__num small { font-size: max(0.26em, 19px); font-weight: 600; letter-spacing: 0; margin-left: 0.12em; }  /* 19px 굵게 = 큰 글자 기준 */
-.side__who { margin-top: 12px; font-size: 14px; font-weight: 600; }
-.side__starter { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-8); }
-.side__starter b { font-weight: 600; }
-/* 대비: 핑크(#ff4d8b) 위 작은 흰 글자는 3.1:1이라, 핑크 쪽은 팀 이름·큰 숫자만 흰색이고 나머지는 잉크(6.3:1).
-   기록 두 줄은 양쪽 모두 크림 칩에 담아 같은 모양으로 읽힌다. */
-.side--away { color: var(--ink); --muted: var(--ink); }
-.side--away .side__team, .side--away .side__num { color: var(--on-dark); }
-.side__chip {
-  width: fit-content; max-width: 100%; margin-top: var(--sp-8); padding: 8px 12px;
-  border-radius: var(--r-md); background: var(--canvas); color: var(--ink); font-size: 13px; line-height: 1.5;
-  font-variant-numeric: tabular-nums; text-align: left;
+.side__num small { font-size: max(0.26em, 19px); font-weight: 600; letter-spacing: 0; margin-left: 0.1em; }  /* 19px 굵게 = 큰 글자 기준 */
+/* 이 작은 글자는 경계가 어느 쪽으로 당겨져도 읽히도록 항상 크림 알약 위에 */
+.side__who {
+  display: inline-block; margin-top: var(--sp-12); padding: 2px 10px; border-radius: var(--r-pill);
+  background: var(--canvas); color: var(--ink); font-size: 13px; font-weight: 600; line-height: 1.5; white-space: nowrap;
 }
-.side--home .side__details { justify-items: end; }
 
-/* 데스크톱 큰 카드: 숫자는 경계 쪽, 이름·기록은 바깥 쪽 */
-.matchup--lg .side { min-height: 260px; }
-.matchup--lg .side--away { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head prob" "details prob"; }
-.matchup--lg .side--home { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "prob head" "prob details"; text-align: right; }
-.matchup--lg .side--away .side__prob { align-items: flex-end; text-align: right; }
-.side--home .side__starter { justify-content: flex-end; }
+/* 하단 자막: 선발·기록 한 덩어리 */
+.side__chip {
+  width: fit-content; max-width: 100%; padding: 10px 14px; border-radius: var(--r-md);
+  background: var(--canvas); color: var(--ink); font-size: 13px; line-height: 1.5; text-align: left;
+}
+.chip__row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-8); font-size: 14px; }
+.chip__row b { font-weight: 600; }
+.chip__stats { color: var(--body); font-variant-numeric: tabular-nums; }
 
-/* 나머지 경기: 반 높이, 2열 */
-.matchups__rest { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-16); margin-top: var(--sp-16); }
-.matchup--sm .matchup__meta { padding: var(--sp-16) var(--sp-16) 0; }
-.matchup--sm .side { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head prob" "details details"; padding: var(--sp-16) var(--sp-24) var(--sp-24); }
-.matchup--sm .side--home { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "prob head" "details details"; text-align: right; }
-.matchup--sm .side__num { font-size: clamp(40px, 28px + 2vw, 56px); }
+/* 방송 자막 띠 — 가장 크게 움직인 요인 */
+.stage__ticker {
+  order: 5; display: flex; flex-wrap: wrap; gap: var(--sp-8) var(--sp-24);
+  margin: 0 var(--sp-16) var(--sp-16); padding: 10px 16px; border-radius: var(--r-md);
+  background: var(--canvas); color: var(--ink); font-size: 14px;
+}
+.ticker__item { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-8); }
+.ticker__tag { font-size: 12px; font-weight: 600; color: var(--muted-base); }
+.ticker__item b { font-weight: 600; }
+.ticker__note { color: var(--body); }
+.stage__vs { display: none; }
+
+/* 작은 경기 띠 */
+.matchup--sm .stage__top { padding: var(--sp-12) var(--sp-16) 0; }
+.matchup--sm .side { padding: var(--sp-12) var(--sp-16) var(--sp-16); gap: 0 var(--sp-8); }
+.matchup--sm .side--home { padding-top: var(--sp-16); }
+.matchup--sm .side__num { font-size: 40px; }
+.matchup--sm .side__team { font-size: 22px; letter-spacing: -0.3px; font-weight: 600; }
 .matchup--sm .side__who { display: none; }  /* 팀 이름이 바로 옆에 있다 */
-.matchup--sm .side__details { margin-top: var(--sp-12); }
+.matchup--sm .side__details { margin-top: var(--sp-8); }
+.matchup--sm .side__chip { padding: 6px 10px; }
+.matchups__rest { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-12); margin-top: var(--sp-12); }
+
+/* 큰 경기(모바일) */
+.matchup--lg .side__who { margin-top: var(--sp-8); }
 
 /* 취소 경기 — 크림 카드 옆에 크림이 오지 않도록 한 단계 진한 서피스 */
 .matchup--canceled { background: var(--surface-strong); }
@@ -96,37 +133,79 @@
 .matchup__canceled-title { margin-top: var(--sp-12); font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
 .matchups__rest .matchup--canceled { padding: var(--sp-24); }
 
-@media (max-width: 1024px) {
-  .matchup--lg .side--away, .matchup--lg .side--home { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "prob" "details"; }
-  .matchup--lg .side__prob { margin-top: var(--sp-24); }
-  .matchup--lg .side--home .side__prob { align-items: flex-end; }
-  .matchup--lg .side--away .side__prob { align-items: flex-start; text-align: left; }
+/* ---------- 무대 (태블릿·데스크톱 ≥768px): 경계선이 승률만큼 움직이는 가로 분할 ---------- */
+@media (min-width: 768px) {
+  .matchup:not(.matchup--canceled) {
+    --cut: var(--cut-to, 50%);
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto 1fr auto;
+    /* 경계: 크림색 6px 선이 핑크와 틸을 가른다 */
+    background: linear-gradient(90deg, var(--pink) calc(var(--cut) - 3px), var(--canvas) calc(var(--cut) - 3px) calc(var(--cut) + 3px), var(--teal) calc(var(--cut) + 3px));
+  }
+  .matchup--lg:not(.matchup--canceled):not(.is-settled) { animation: cut-in 1100ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .matchup--lg:not(.matchup--canceled):not(.is-settled) .side__num { animation: rise 700ms 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .stage__meter { display: none; }
+  .stage__top { grid-column: 1 / -1; grid-row: 1; background: none; color: inherit; padding: var(--sp-24) var(--sp-32) 0; position: relative; z-index: 1; }
+  .side { background: none; grid-row: 2; display: flex; flex-direction: column; }
+  .side--away { grid-column: 1; }
+  .side--home { grid-column: 2; padding-top: var(--sp-16); }
+  .stage__ticker { grid-column: 1 / -1; grid-row: 3; margin: 0 var(--sp-24) var(--sp-24); }
+
+  /* 큰 경기: 이름·자막은 바깥쪽, 숫자는 경계 쪽에서 마주 본다 */
+  .matchup--lg .side { min-height: 420px; padding: var(--sp-16) var(--sp-32) var(--sp-32); }
+  .matchup--lg .side--home .side__head, .matchup--lg .side--home .side__details { align-self: flex-end; text-align: right; }
+  .matchup--lg .side--home .chip__row { justify-content: flex-end; }
+  .matchup--lg .side__prob { margin-top: auto; padding-top: var(--sp-32); }
+  .matchup--lg .side--away .side__prob { align-items: flex-end; text-align: right; }
+  .matchup--lg .side--home .side__prob { align-items: flex-start; text-align: left; }
+  .matchup--lg .side__num { font-size: clamp(96px, 28px + 12vw, 208px); line-height: 0.8; }
+  .matchup--lg .side__details { margin-top: var(--sp-24); }
+  .matchup--lg .side--home .side__chip { margin-left: auto; }
+  .matchup--lg .side--home .side__chip { text-align: left; }
+
+  /* 경계 위의 VS 원 */
+  .stage__vs {
+    display: grid; place-items: center; position: absolute; z-index: 2; left: var(--cut); top: 92px; translate: -50% 0;
+    width: 56px; height: 56px; border-radius: 50%; background: var(--canvas); color: var(--ink);
+    font-family: var(--font-display); font-size: 16px; font-weight: 600; letter-spacing: 0.5px;
+  }
+
+  /* 작은 경기: 한 줄 스코어보드 */
+  .matchup--sm:not(.matchup--canceled) { grid-template-rows: auto auto; }
+  .matchup--sm .stage__top { padding: var(--sp-16) var(--sp-24) 0; }
+  .matchup--sm .side { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head prob" "details details"; padding: var(--sp-12) var(--sp-24) var(--sp-16); }
+  .matchup--sm .side--home { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "prob head" "details details"; text-align: right; }
+  .matchup--sm .side--home .side__prob { align-items: flex-start; text-align: left; }
+  .matchup--sm .side--home .side__details .side__chip { margin-left: auto; }
+  .matchup--sm .side--home .chip__row { justify-content: flex-end; }
+  .matchup--sm .side__num { font-size: clamp(48px, 28px + 3vw, 72px); }
+  .matchup--sm .side__team { font-size: 26px; }
 }
+
+@keyframes cut-in { from { --cut: 50%; } }
+@keyframes rise { from { opacity: 0; translate: 0 14px; } }
+
 @media (max-width: 767px) {
   .home-head .datebar, .home-head .datebar__live { align-items: flex-start; justify-content: flex-start; }
   .home-head .datebar { width: 100%; }
   .rewind { width: 100%; }
-  /* 큰 카드는 위아래로 쌓는다: 원정(핑크) 위, 홈(틸) 아래 */
-  .matchup--lg:not(.matchup--canceled) { grid-template-columns: minmax(0, 1fr); background: var(--pink); }
-  .matchup--lg .matchup__meta { justify-content: flex-start; padding: var(--sp-24) var(--sp-24) 0; }
-  .matchup--lg .side { min-height: 0; padding: var(--sp-16) var(--sp-24) var(--sp-24); }
-  .matchup--lg .side--home { background: var(--teal); padding-top: var(--sp-24); }
-  .matchup--lg .side--away, .matchup--lg .side--home {
-    grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head prob" "details details"; text-align: left;
-  }
-  .matchup--lg .side__prob { margin-top: 0; align-self: start; align-items: flex-end !important; text-align: right !important; }
-  .matchup--lg .side--home .side__starter { justify-content: flex-start; }
-  .matchup--lg .side--home .side__details { justify-items: start; }
-  .matchup--lg .side__details { margin-top: var(--sp-16); }
-  .matchup--lg .side__num { font-size: 64px; }
-  .matchup--lg .side__who { margin-top: 8px; font-size: 13px; }
-  .matchups__rest { grid-template-columns: minmax(0, 1fr); }
-  .matchup--sm .side { padding: var(--sp-12) var(--sp-16) var(--sp-16); gap: 0 var(--sp-8); }
-  .matchup--sm .side__num { font-size: 40px; }
+  .matchup--lg .side__num { font-size: 72px; }
+  .matchup--lg .side__team { font-size: 32px; }
+  .matchup--lg:not(.matchup--canceled):not(.is-settled) .stage__meter { animation: none; }
+  .matchup--lg:not(.matchup--canceled):not(.is-settled) .meter__away, .matchup--lg:not(.matchup--canceled):not(.is-settled) .meter__home { animation: grow 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 }
+@keyframes grow { from { flex-grow: 50; } }
 
-/* ---------- 벤토 (6열 격자: 3+3 / 2+2+2(지도 두 줄) / 4) ---------- */
+/* ---------- 벤토: 무대를 받쳐 주는 조연 (한 걸음 물러난 크기, 6열 격자: 3+3 / 2+2+2(지도 두 줄) / 4) ---------- */
+.rubric {
+  display: flex; align-items: center; gap: var(--sp-16); margin: 0 0 var(--sp-16);
+  font-size: 13px; font-weight: 500; color: var(--muted);
+}
+.rubric::before, .rubric::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+.rubric::before { max-width: 32px; }
+
 .home-bento { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.home-bento > .card { padding: var(--sp-24); }
+.home-bento .card__title { font-size: 16px; }
 .b-factors, .b-accuracy { grid-column: span 3; }
 .b-starters, .b-outlook { grid-column: span 2; }
 .b-typemap { grid-column: span 2; grid-row: span 2; display: flex; flex-direction: column; }

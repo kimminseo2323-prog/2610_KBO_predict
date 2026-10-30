@@ -55,13 +55,17 @@
 
   <p class="fixture-note" id="fixture-note" hidden></p>
 
-  <!-- 매치업 카드: 원정(왼쪽·핑크) | 홈(오른쪽·틸). 첫 경기 크게, 나머지는 반 높이 2열 -->
+  <!-- 오늘의 한 장면: 원정(왼쪽·핑크) | 홈(오른쪽·틸). 둘의 경계가 승률만큼 움직이는 중계 그래픽.
+       첫 경기는 화면을 채우는 크기로, 나머지는 가로 띠로 세로 반복 -->
   <p class="sr-only" id="day-status" aria-live="polite"></p>
   <section class="matchups" aria-labelledby="matchups-title">
     <h2 class="sr-only" id="matchups-title">경기별 승리 확률</h2>
     <div id="matchups" aria-busy="true"><div class="skeleton matchup-skeleton"></div></div>
   </section>
   <noscript><p class="error-box">이 페이지는 자바스크립트로 데이터를 읽어 그립니다. 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
+
+  <!-- 장면 아래의 조연들. 위 한 경기를 받쳐 주는 근거 카드 -->
+  <p class="rubric"><span>이 확률의 근거와 배경</span></p>
 
   <!-- 벤토: 크림 → 라벤더 → 피치 → 오커 → 틸 → 크림 (같은 색 연속 없음) -->
   <div class="bento home-bento">
