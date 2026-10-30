@@ -322,6 +322,7 @@ Component voltage comes from **saturated single-color feature cards** in a 6-col
 - **Brand Ochre** (`{colors.brand-ochre}` — #e8b94a): Mustard / ochre feature card and illustration accents.
 - **Brand Mint** (`{colors.brand-mint}` — #a4d4c5): Mint accent on illustrations and small badges.
 - **Brand Coral** (`{colors.brand-coral}` — #ff6b5a): Coral accent for highlights.
+- **Team colours (KBO Predict project):** each club gets its representative colour (approximation of logo/uniform colour) as `--team-<code>` in `site/assets/tokens.css` — LG #c30452, 두산 #131230, KIA #ea0029, 삼성 #074ca1, 롯데 #041e42, SSG #ffb81c (secondary yellow; its red collides with KIA), KT #000000, NC #315288, 한화 #fc4e00, 키움 #570514. Used only for team-identifying marks (dots, lines, bars), never as text backgrounds. Navy/black family (두산·KT·롯데) is told apart by line style in the playoff-rewind chart.
 
 ### Surface
 - **Canvas** (`{colors.canvas}` — #fffaf0): The default page floor. Cream-tinted white.

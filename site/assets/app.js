@@ -29,16 +29,16 @@ export const NAV = [
 // 색은 팔레트 8색(카드 6색 + 민트·코랄) 안에서 구단 상징색에 가까운 것을 골랐다. 겹치는 색이 있으므로
 // 색만으로 팀을 구분하지 말고 항상 이름을 함께 쓴다.
 export const TEAMS = {
-  "OB": {"ko": "두산", "full": "두산 베어스", "short": "두산", "color": "teal"},
-  "LT": {"ko": "롯데", "full": "롯데 자이언츠", "short": "롯데", "color": "coral"},
-  "KT": {"ko": "KT", "full": "KT 위즈", "short": "KT", "color": "mint"},
-  "WO": {"ko": "키움", "full": "키움 히어로즈", "short": "키움", "color": "pink"},
-  "SK": {"ko": "SSG", "full": "SSG 랜더스", "short": "SSG", "color": "ochre"},
-  "SS": {"ko": "삼성", "full": "삼성 라이온즈", "short": "삼성", "color": "lavender"},
-  "HH": {"ko": "한화", "full": "한화 이글스", "short": "한화", "color": "peach"},
-  "HT": {"ko": "KIA", "full": "KIA 타이거즈", "short": "KIA", "color": "coral"},
-  "LG": {"ko": "LG", "full": "LG 트윈스", "short": "LG", "color": "pink"},
-  "NC": {"ko": "NC", "full": "NC 다이노스", "short": "NC", "color": "ochre"}
+  "OB": {"ko": "두산", "full": "두산 베어스", "short": "두산", "color": "team-ob"},
+  "LT": {"ko": "롯데", "full": "롯데 자이언츠", "short": "롯데", "color": "team-lt"},
+  "KT": {"ko": "KT", "full": "KT 위즈", "short": "KT", "color": "team-kt"},
+  "WO": {"ko": "키움", "full": "키움 히어로즈", "short": "키움", "color": "team-wo"},
+  "SK": {"ko": "SSG", "full": "SSG 랜더스", "short": "SSG", "color": "team-sk"},
+  "SS": {"ko": "삼성", "full": "삼성 라이온즈", "short": "삼성", "color": "team-ss"},
+  "HH": {"ko": "한화", "full": "한화 이글스", "short": "한화", "color": "team-hh"},
+  "HT": {"ko": "KIA", "full": "KIA 타이거즈", "short": "KIA", "color": "team-ht"},
+  "LG": {"ko": "LG", "full": "LG 트윈스", "short": "LG", "color": "team-lg"},
+  "NC": {"ko": "NC", "full": "NC 다이노스", "short": "NC", "color": "team-nc"}
 };
 
 // 승패 모델 피처 26개 + bias의 한글 이름 (src/kbo_predict/features.py FACTOR_LABELS와 같음 — 테스트로 고정).

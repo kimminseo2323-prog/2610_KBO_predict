@@ -136,7 +136,7 @@ export function barChart(el, rows, { valueKey = "value", labelKey = "label", col
 
 /**
  * 꺾은선. points = [{x, y}] 한 줄, 또는 [{name, color, points: [{x, y}]}] 여러 줄(모든 줄의 x가 같다고 본다).
- * 여러 줄일 때 줄마다 선택: short(오른쪽 끝 이름표 글자, 기본 name), legend(범례 글자, 기본 name), dash(true면 점선).
+ * 여러 줄일 때 줄마다 선택: short(오른쪽 끝 이름표 글자, 기본 name), legend(범례 글자, 기본 name), dash(true면 "6 4" 점선, 문자열이면 그 stroke-dasharray).
  * y가 숫자가 아니면 선을 끊는다. options: color="ink", yFormat=pct, yDomain=[lo, hi], label, height=240,
  * refY(점선 기준값 — yDomain이 없으면 범위에 넣고, yDomain 밖이면 그리지 않는다),
  * endLabels(여러 줄: 각 줄의 마지막 값 옆에 이름표를 단다. 겹치면 위아래로 밀고 짧은 연결선을 긋는다 — 색이 같은 줄을 구분하려고).
@@ -174,7 +174,7 @@ export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, l
         d += `${d === "" || d.endsWith(" ") ? "M" : "L"}${X(i).toFixed(1)},${Y(Number(p.y)).toFixed(1)}`;
       });
       svg.append(svgEl("path", { d: d.trim(), fill: "none", style: `stroke:${cv(s.color ?? color)}`, "stroke-width": 2.5, "stroke-linejoin": "round", "stroke-linecap": "round",
-        "stroke-dasharray": s.dash ? "6 4" : null }));
+        "stroke-dasharray": s.dash ? (typeof s.dash === "string" ? s.dash : "6 4") : null }));
     });
     if (multi && endLabels) {
       // 마지막 유한값 위치 → 이름표 y. 위에서부터 최소 간격(GAP)을 지키며 아래로 밀고, 그림 밖으로 나가면 아래에서부터 다시 위로 민다.

@@ -120,10 +120,12 @@ def test_teams_match_python():
         expected.setdefault(info["code"], info["ko"])
     js = check_site.parse_js_const((ASSETS / "app.js").read_text(encoding="utf-8"), "TEAMS")
     assert {code: t["ko"] for code, t in js.items()} == expected
-    palette = {"pink", "teal", "lavender", "peach", "ochre", "cream", "mint", "coral"}
+    tokens = (ASSETS / "tokens.css").read_text(encoding="utf-8")
     for code, t in js.items():
-        assert t["color"] in palette, code
+        assert t["color"] == f"team-{code.lower()}", code  # 구단 대표색 토큰
+        assert re.search(rf"--team-{code.lower()}:\s*#[0-9a-f]{{6}};", tokens), code  # tokens.css에 정의
         assert t["short"] and t["full"], code
+    assert len({re.search(rf"--team-{c.lower()}:\s*(#[0-9a-f]{{6}})", tokens).group(1) for c in js}) == len(js)  # 겹치는 색 없음
 
 
 def test_factor_labels_match_python():

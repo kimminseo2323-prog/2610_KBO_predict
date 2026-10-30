@@ -433,6 +433,9 @@ async function loadRewind() {
   else showRewindError();
 }
 
+/** 되감기 선 모양: 두산(실선)·KT·롯데가 모두 남색·검정 계열이라 KT는 점선, 롯데는 점점선. 나머지 팀은 색만으로 구분된다. */
+const LINE_DASH = { KT: "7 5", LT: "2 4" };
+
 function drawRewind() {
   const rw = state.rewind;
   const body = $("rewind-body");
@@ -441,9 +444,7 @@ function drawRewind() {
   const lastDay = days.findLast((d) => d.outlook?.teams);
   const final = (code) => lastDay?.outlook?.teams?.[code]?.playoff_prob;
   const codes = Object.keys(TEAMS).filter((c) => days.some((d) => fin(d.outlook?.teams?.[c]?.playoff_prob)));
-  // 색이 같은 두 팀(롯데·KIA, 키움·LG, SSG·NC)은 TEAMS 순서에서 뒤에 오는 팀을 점선으로
-  const seen = new Set();
-  const dashed = new Set(codes.filter((c) => { const col = TEAMS[c].color; const dup = seen.has(col); seen.add(col); return dup; }));
+  // 팀마다 구단 대표색(tokens.css --team-*)을 쓴다. 두산·KT·롯데는 셋 다 남색·검정 계열이라 선 모양으로 가른다(LINE_DASH).
   const series = codes
     .sort((a, b) => (final(b) ?? -1) - (final(a) ?? -1) || a.localeCompare(b))
     .map((c) => ({
@@ -451,7 +452,7 @@ function drawRewind() {
       short: shortName(c, REWIND_SEASON),
       legend: `${shortName(c, REWIND_SEASON)} ${fmtPct(final(c))}`,
       color: TEAMS[c].color,
-      dash: dashed.has(c),
+      dash: LINE_DASH[c] ?? false,
       points: days.map((d) => ({ x: x(d), y: d.outlook?.teams?.[c]?.playoff_prob ?? null })),
     }));
   const chart = el("div", { class: "rewind__chart" });
@@ -460,7 +461,7 @@ function drawRewind() {
     el("div", { class: "inset rewind__frame" }, chart),
     el("p", { class: "card__foot rewind__note" },
       `${fmtDate(first?.outlook?.as_of ?? first?.date)}부터 ${fmtDate(lastDay?.outlook?.as_of ?? lastDay?.date)}까지 약 일주일 간격 ${days.length - rw.failed}개 날짜. ` +
-      "각 점은 그날 경기 전 성적으로 남은 경기를 1만 번 시뮬레이션해 5위 안에 든 비율입니다. 범례 숫자는 마지막 날짜의 확률이고, 색이 같은 두 팀은 한쪽을 점선으로 그렸습니다." +
+      "각 점은 그날 경기 전 성적으로 남은 경기를 1만 번 시뮬레이션해 5위 안에 든 비율입니다. 범례 숫자는 마지막 날짜의 확률이고, 선 색은 구단 대표색입니다(남색 계열인 KT는 점선, 롯데는 점점선)." +
       (rw.failed ? ` 날짜 ${rw.failed}개는 받지 못해 선을 끊었습니다.` : "")),
   );
   lineChart(chart, series, {
