@@ -10,7 +10,7 @@
 // 데이터 키는 docs/site/data-contract.md 매핑 표(페이지 "팀")에 적은 것만 쓴다.
 
 import {
-  TEAMS, el, fetchJSON, fmtPct, fmtDate, teamNameFor, typeColor, renderNav, renderFooter, showError,
+  TEAMS, el, fetchJSON, settle, fin, fmtPct, fmtRate3, fmtDate, teamNameFor, typeColor, renderNav, renderFooter, showError,
 } from "./app.js";
 import { lineChart, stackedBar } from "./charts.js";
 
@@ -34,9 +34,6 @@ const state = {
 
 // ---------- 작은 도우미 ----------
 
-const fin = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
-/** 0.345 → ".345", 1 → "1.000" (야구식 승률 표기). 값이 없으면 "—". */
-const dot = (v) => (fin(v) ? Number(v).toFixed(3).replace(/^0\./, ".") : "—");
 /** 반올림 전 승률 (동률 판정용). 승패가 갈린 경기가 없으면 -1. */
 const exactPct = (t) => (t.wins + t.losses > 0 ? t.wins / (t.wins + t.losses) : -1);
 const shortName = (code, season) => teamNameFor(code, season);
@@ -53,22 +50,12 @@ function teamCell(code, season) {
 
 // ---------- 읽기 ----------
 
-async function settle(key, promise) {
-  try {
-    state[key] = await promise;
-    delete state.errors[key];
-  } catch (err) {
-    state[key] = null;
-    state.errors[key] = err.message;
-  }
-}
-
-const loadTeams = () => settle("teams", fetchJSON("teams.json"));
-const loadReport = () => settle("report", fetchJSON("model_report.json"));
+const loadTeams = () => settle(state, "teams", fetchJSON("teams.json"));
+const loadReport = () => settle(state, "report", fetchJSON("model_report.json"));
 
 async function init() {
   renderNav("teams.html");
-  await Promise.all([loadTeams(), loadReport(), settle("status", fetchJSON("status.json"))]);
+  await Promise.all([loadTeams(), loadReport(), settle(state, "status", fetchJSON("status.json", { fresh: true }))]);
   renderFooter(state.status);
   setupSeasons();
   renderAll();
@@ -131,8 +118,8 @@ function tieNotes(rows, season) {
     const next = rows[i + 1];
     if (!next || !sameExact(r, next)) return;
     const t = tieRule(r, next, season);
-    const why = t.rule === "상대 전적" ? `상대 전적 ${dot(t.h2h)}` : t.rule;
-    out.push(`${shortName(r.code, season)} > ${shortName(next.code, season)} (승률 ${dot(r.win_pct)} 동률): ${why}`);
+    const why = t.rule === "상대 전적" ? `상대 전적 ${fmtRate3(t.h2h)}` : t.rule;
+    out.push(`${shortName(r.code, season)} > ${shortName(next.code, season)} (승률 ${fmtRate3(r.win_pct)} 동률): ${why}`);
   });
   return out;
 }
@@ -178,11 +165,11 @@ function renderStandings(rows) {
     ]),
     el("td", { class: "num" }, String(r.games ?? "—")),
     el("td", { class: "num nowrap" }, `${r.wins}-${r.losses}-${r.ties}`),
-    el("td", { class: "num strong" }, dot(r.win_pct)),
-    el("td", { class: "num" }, dot(r.pyth_pct)),
-    hasModel ? el("td", { class: "num model-col" }, dot(r.model_expected)) : null,
-    el("td", { class: "num" }, dot(r.home_pct)),
-    el("td", { class: "num" }, dot(r.away_pct)),
+    el("td", { class: "num strong" }, fmtRate3(r.win_pct)),
+    el("td", { class: "num" }, fmtRate3(r.pyth_pct)),
+    hasModel ? el("td", { class: "num model-col" }, fmtRate3(r.model_expected)) : null,
+    el("td", { class: "num" }, fmtRate3(r.home_pct)),
+    el("td", { class: "num" }, fmtRate3(r.away_pct)),
   ]);
   const cut = el("tr", { class: "cutline", "aria-hidden": "true" },
     el("td", { colspan: String(cols.length) }, el("span", { class: "cutline__label" }, `가을야구 · 위 ${PLAYOFF_SPOTS}팀`)));
@@ -274,7 +261,7 @@ function renderH2H(rows) {
       return el("td", {
         class: `h2h__cell num${dark ? " is-dark" : ""}`,
         style: { background: `rgba(10, 10, 10, ${a.toFixed(2)})` },
-      }, dot(v));
+      }, fmtRate3(v));
     }),
   ]));
   const grid = el("div", { class: "inset h2h__frame" }, el("div", { class: "table-scroll h2h__scroll", tabindex: "0", role: "region", "aria-label": `${season} 상대 전적 표 (가로로 넘겨 보기)` },
@@ -294,13 +281,13 @@ function renderH2H(rows) {
   const aside = el("div", { class: "h2h__aside" }, [
     top ? el("div", { class: "inset h2h__fact" }, [
       el("p", { class: "h2h__fact-label" }, "가장 한쪽으로 기운 맞대결"),
-      el("p", { class: "h2h__fact-big num" }, dot(top.v)),
+      el("p", { class: "h2h__fact-big num" }, fmtRate3(top.v)),
       el("p", {}, `${shortName(top.a, season)}, ${shortName(top.b, season)} 상대 승률`),
     ]) : null,
     first ? el("div", { class: "inset h2h__fact" }, [
       el("p", { class: "h2h__fact-label" }, `1위 ${shortName(first.code, season)}의 5할 아래 상대`),
       weak.length
-        ? el("ul", { class: "h2h__weak" }, weak.map(([c, v]) => el("li", {}, [el("span", {}, shortName(c, season)), el("b", { class: "num" }, dot(v))])))
+        ? el("ul", { class: "h2h__weak" }, weak.map(([c, v]) => el("li", {}, [el("span", {}, shortName(c, season)), el("b", { class: "num" }, fmtRate3(v))])))
         : el("p", {}, "없음. 모든 상대에게 5할 이상을 거뒀습니다."),
     ]) : null,
     el("div", { class: "h2h__scale", "aria-hidden": "true" }, [
@@ -348,7 +335,7 @@ async function loadRewind() {
   const progress = el("p", { class: "rewind__progress", role: "status" }, "되감기 날짜를 불러오는 중…");
   body.replaceChildren(el("div", { class: "inset" }, el("div", { class: "skeleton skel-line" })), progress);
   try {
-    rw.index = await fetchJSON(`rewind/${REWIND_SEASON}/index.json`);
+    rw.index = await fetchJSON(`rewind/${REWIND_SEASON}/index.json`, { fresh: true });
     const dates = sampleDates((rw.index.dates ?? []).map((d) => d.date).filter(Boolean));
     let done = 0;
     progress.textContent = `날짜 ${dates.length}개 중 0개 불러옴…`;

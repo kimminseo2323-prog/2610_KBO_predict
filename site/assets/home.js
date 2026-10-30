@@ -13,8 +13,8 @@
 // 데이터 키는 docs/site/data-contract.md 매핑 표(페이지 "홈")에 적은 것만 쓴다.
 
 import {
-  DATA_BASE, IS_LOCAL, TEAMS, TYPE_COLORS, el, fetchJSON, fetchCSV, fmtPct, fmtDate, fmtKST,
-  teamName, typeColor, renderNav, renderFooter, showError,
+  IS_LOCAL, TEAMS, TYPE_COLORS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInnings, fmtDate, fmtKST,
+  teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError,
 } from "./app.js";
 import { barChart, scatter } from "./charts.js";
 
@@ -26,6 +26,7 @@ const REWIND = "rewind/2026";
 
 const state = {
   status: null, latest: null, index: null, history: null, report: null, players: null,
+  nameKo: null,            // player_id → 한글 이름 (players.json을 읽은 뒤에 채운다)
   errors: {},              // 파일별 읽기 실패 메시지
   mode: "live",            // "live" | "rewind"
   day: null,               // 지금 그리는 하루 (latest.json 또는 rewind/2026/{date}.json)
@@ -36,10 +37,7 @@ const state = {
 
 // ---------- 작은 도우미 ----------
 
-const fin = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
 const num = (v, d = 2) => (fin(v) ? Number(v).toFixed(d) : "—");
-/** 0.589 → ".589" (야구식 승률). */
-const rate3 = (v) => (fin(v) ? Number(v).toFixed(3).replace(/^0/, "") : "—");
 /**
  * 최근 경기 흐름. last10 = 최근 최대 10경기의 승 ÷ (승+패) (무승부 제외, 시즌 초에는 10경기 미만).
  * ×10이 정수일 때만 "최근 10경기 7승 3패"로 쓰고, 아니면 "최근 승률 .667" (경기 수를 지어내지 않는다).
@@ -50,14 +48,7 @@ function recentForm(v, season) {
   const x = Number(v) * 10;
   const maybeShort = fin(season) && Math.abs(Number(season) - Number(v)) < 0.0005;
   if (!maybeShort && Math.abs(x - Math.round(x)) < 0.01) return `최근 10경기 ${Math.round(x)}승 ${10 - Math.round(x)}패`;
-  return `최근 승률 ${rate3(v)}`;
-}
-/** 이닝 103.3(= 103⅓, 소수로 저장) → "103⅓". */
-function innings(v) {
-  if (!fin(v)) return "—";
-  const whole = Math.floor(v + 1e-6);
-  const third = Math.round((v - whole) * 3);
-  return third === 3 ? String(whole + 1) : `${whole}${["", "⅓", "⅔"][third]}`;
+  return `최근 승률 ${fmtRate3(v)}`;
 }
 /** 확률 → "%". 0%·100%로 반올림되는 극단값은 "<1%"·">99%"로 (정확히 0·1이면 0%·100%). */
 const prob = (v) => {
@@ -69,6 +60,8 @@ const prob = (v) => {
 };
 const sign = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%p`;
 const matchLabel = (g) => `${teamName(g.away.code)} @ ${teamName(g.home.code)}`;
+/** 선발 이름: players.json을 읽었으면 한글 이름(player_id로 찾음), 그 전이나 없으면 데이터의 로마자 이름. */
+const starterName = (s) => state.nameKo?.get(s.player_id) ?? s.name;
 
 /** KST 오늘 날짜 "YYYY-MM-DD". */
 const todayKST = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -95,22 +88,18 @@ function selectedGame() {
 
 // ---------- 읽기 ----------
 
-async function settle(key, promise) {
-  try {
-    state[key] = await promise;
-    delete state.errors[key];
-  } catch (err) {
-    state[key] = null;
-    state.errors[key] = err.message;
-  }
-}
+// 매일 바뀌는 파일(status·latest·history·되감기 목차)만 fresh로 읽는다 — 나머지는 브라우저 캐시 (app.js fetchOK 주석).
+const loadIndex = () => settle(state, "index", fetchJSON(`${REWIND}/index.json`, { fresh: true }));
+const loadHistory = () => settle(state, "history", fetchCSV("history.csv", { fresh: true }));
+const loadReport = () => settle(state, "report", fetchJSON("model_report.json"));
 
 function loadCore() {
-  const latest = FIXTURE === "edge" ? fetchJSON("latest_edge.json", FIXTURE_BASE) : fetchJSON("latest.json", DATA_BASE);
-  const status = FIXTURE === "offseason" ? fetchJSON("status_rewind.json", FIXTURE_BASE) : fetchJSON("status.json", DATA_BASE);
+  const latest = FIXTURE === "edge"
+    ? fetchJSON("latest_edge.json", { base: FIXTURE_BASE, fresh: true }) : fetchJSON("latest.json", { fresh: true });
+  const status = FIXTURE === "offseason"
+    ? fetchJSON("status_rewind.json", { base: FIXTURE_BASE, fresh: true }) : fetchJSON("status.json", { fresh: true });
   return Promise.all([
-    settle("status", status), settle("latest", latest), settle("index", fetchJSON(`${REWIND}/index.json`)),
-    settle("history", fetchCSV("history.csv")), settle("report", fetchJSON("model_report.json")),
+    settle(state, "status", status), settle(state, "latest", latest), loadIndex(), loadHistory(), loadReport(),
   ]);
 }
 
@@ -237,7 +226,7 @@ async function openRewind(i, { writeURL = true } = {}) {
 
 /** 되감기 목차를 다시 받아 보고, 되면 마지막 날짜를 연다. */
 async function retryIndex() {
-  await settle("index", fetchJSON(`${REWIND}/index.json`));
+  await loadIndex();
   if (state.index && !state.index.dates?.length) {
     state.errors.index = "되감기 목차(rewind/2026/index.json)에 날짜가 없습니다.";
     state.index = null;
@@ -361,7 +350,7 @@ function sideBlock(g, side, prob, large) {
     el("span", { class: "side__who" }, `${teamName(t.code)} 승리`),
   ]);
   const starter = s
-    ? el("p", { class: "side__starter" }, [el("span", {}, ["선발 ", el("b", {}, s.name)]), typePill(s.type, true)])
+    ? el("p", { class: "side__starter" }, [el("span", {}, ["선발 ", el("b", {}, starterName(s))]), typePill(s.type, true)])
     : el("p", { class: "side__starter" }, el("span", {}, "선발 미정"));
   // 기록 두 줄은 크림 칩에 담는다(핑크·틸 위 작은 흰 글자의 대비 부족을 피하고 두 쪽을 같은 모양으로)
   const stats = !s ? null
@@ -370,7 +359,7 @@ function sideBlock(g, side, prob, large) {
     starter,
     large ? el("div", { class: "side__chip num" }, [
       stats ? el("p", {}, stats) : null,
-      el("p", {}, `${recentForm(t.last10, t.win_pct_season)} · 시즌 승률 ${rate3(t.win_pct_season)}`),
+      el("p", {}, `${recentForm(t.last10, t.win_pct_season)} · 시즌 승률 ${fmtRate3(t.win_pct_season)}`),
     ]) : null,
   ]);
   return el("div", { class: `side side--${side}` }, [head, probEl, details]);
@@ -388,16 +377,9 @@ function metaPills(g, large) {
   const r = g.result;
   if (r) {
     pills.push(el("span", { class: "pill pill--white num" }, `최종 ${r.away_score} : ${r.home_score}`));
-    pills.push(verdictPill(r.winner === "DRAW" ? null : r.correct, r.winner === "DRAW"));
+    pills.push(verdictPill(r));
   }
   return pills;
-}
-
-function verdictPill(correct, draw = false) {
-  if (draw) return el("span", { class: "pill pill--sm pill--muted" }, "무승부");
-  if (correct === true || correct === 1) return el("span", { class: "pill pill--sm pill--ink" }, "적중");
-  if (correct === false || correct === 0) return el("span", { class: "pill pill--sm pill--coral" }, "미적중");
-  return el("span", { class: "pill pill--sm pill--muted" }, "결과 대기");
 }
 
 function matchupCard(g, large) {
@@ -545,10 +527,15 @@ function liveRecord() {
   if (!state.history) return el("p", { class: "acc__live" }, "라이브 기록(history.csv)을 불러오지 못했습니다.");
   const decided = state.history.filter((h) => h.status === "FINAL" && (h.correct === 0 || h.correct === 1));
   const n = decided.length;
-  const c = decided.reduce((s, h) => s + h.correct, 0);
-  const versions = [...new Set(decided.map((h) => h.model_version).filter(Boolean))].join(", ");
+  // 모델 버전이 바뀌면 따로 센다(성적표 ⑥과 같은 규칙): "v0.2 모델 12경기 중 7경기 적중 (58%) · v0.3 모델 …"
+  const versions = [...new Set(decided.map((h) => h.model_version ?? "—"))];
+  const parts = versions.map((v) => {
+    const mine = decided.filter((h) => (h.model_version ?? "—") === v);
+    const c = mine.reduce((s, h) => s + h.correct, 0);
+    return `${v} 모델 ${mine.length}경기 중 ${c}경기 적중 (${fmtPct(c / mine.length)})`;
+  });
   return el("p", { class: "acc__live" }, [
-    el("b", {}, "라이브 "), n ? `${versions} 모델 ${n}경기 중 ${c}경기 적중 (${fmtPct(c / n)})` : "아직 결과가 난 경기가 없습니다",
+    el("b", {}, "라이브 "), n ? parts.join(" · ") : "아직 결과가 난 경기가 없습니다",
     n < 10 ? ". 라이브 기록은 2026 포스트시즌부터 쌓여 아직 표본이 적습니다." : ".",
   ]);
 }
@@ -557,7 +544,7 @@ function renderAccuracy() {
   const body = $("accuracy-body");
   const r = state.report;
   if (!r) {
-    showError(body, state.errors.report, async () => { await settle("report", fetchJSON("model_report.json")); renderAccuracy(); });
+    showError(body, state.errors.report, async () => { await loadReport(); renderAccuracy(); });
     return;
   }
   const t = r.models?.[r.selected]?.test ?? r.models?.lr?.test ?? {};
@@ -600,11 +587,11 @@ function starterBlock(g, side) {
     ]);
   }
   const stats = fin(s.ip) || fin(s.era)
-    ? `ERA ${num(s.era)} · K/9 ${num(s.k9)} · BB/9 ${num(s.bb9)} · ${innings(s.ip)}이닝 · ${fin(s.starts) ? s.starts : "—"}경기 선발`
+    ? `ERA ${num(s.era)} · K/9 ${num(s.k9)} · BB/9 ${num(s.bb9)} · ${fmtInnings(s.ip)}이닝 · ${fin(s.starts) ? s.starts : "—"}경기 선발`
     : "올해 등판 기록이 없습니다.";
   const blurb = blurbFor(s.type);
   return el("div", { class: "inset starter" }, [
-    el("div", { class: "starter__top" }, [el("b", {}, [s.name, el("span", { class: "starter__team" }, ` · ${team} ${role}`)]), typePill(s.type, false)]),
+    el("div", { class: "starter__top" }, [el("b", {}, [starterName(s), el("span", { class: "starter__team" }, ` · ${team} ${role}`)]), typePill(s.type, false)]),
     el("p", { class: "starter__stats num" }, stats),
     // 유형 설명은 players.json을 읽은 뒤에 채운다 — 자리를 미리 잡아 두어 화면이 밀리지 않게
     s.type && (blurb || !state.players) ? el("p", { class: "starter__note starter__blurb" }, blurb ?? "") : null,
@@ -635,9 +622,8 @@ function renderOutlook() {
     body.replaceChildren(el("p", { class: "empty" }, "이날은 전망을 계산하지 못했습니다."));
     return;
   }
-  const asOf = el("p", { class: "card__foot" }, `${fmtDate(o.as_of)} 기준, 남은 경기를 1만 번 시뮬레이션했습니다.`);
-  if (o.type === "series") return outlookSeries(o, title, body, asOf);
-  if (o.type === "playoff_race") return outlookRace(o, title, body, asOf);
+  if (o.type === "series") return outlookSeries(o, title, body);
+  if (o.type === "playoff_race") return outlookRace(o, title, body);
   title.textContent = "다음 경기";
   const next = o.next_game_date ?? state.status?.next_game_date;
   const days = next ? Math.round((Date.parse(next) - Date.parse(todayKST())) / 864e5) : null;
@@ -649,7 +635,7 @@ function renderOutlook() {
   );
 }
 
-function outlookSeries(o, title, body, asOf) {
+function outlookSeries(o, title, body) {
   title.textContent = `${o.name} 전망`;
   const need = Math.floor(o.best_of / 2) + 1;
   const [t0, t1] = o.teams;
@@ -679,7 +665,7 @@ function outlookSeries(o, title, body, asOf) {
   });
 }
 
-function outlookRace(o, title, body, asOf) {
+function outlookRace(o, title, body) {
   title.textContent = "가을야구 진출 확률";
   const g = selectedGame();
   const teams = Object.entries(o.teams ?? {}).sort((a, b) => b[1].playoff_prob - a[1].playoff_prob);
@@ -703,20 +689,13 @@ function outlookRace(o, title, body, asOf) {
   ]));
   body.replaceChildren(
     el("p", { class: "card__lead" }, g ? `${matchLabel(g)} 두 팀이 5위 안에 들 확률` : "5위 안에 들 확률"),
-    big.length ? el("div", { class: "race" }, big) : null,
+    ...(big.length ? [el("div", { class: "race" }, big)] : []), // replaceChildren은 null을 "null" 글자로 넣으므로 펼친다
     el("details", { class: "inset race__all" }, [el("summary", {}, "10팀 모두 보기"), table]),
-    asOf,
+    el("p", { class: "card__foot" }, `${fmtDate(o.as_of)} 기준, 남은 경기를 1만 번 시뮬레이션했습니다.`),
   );
 }
 
 // ---------- ⑥ 최근 예측 ----------
-
-function winnerText(winner, home, away) {
-  if (winner === "HOME") return `${teamName(home)} 승`;
-  if (winner === "AWAY") return `${teamName(away)} 승`;
-  if (winner === "DRAW") return "무승부";
-  return null;
-}
 
 function renderRecent() {
   const body = $("recent-body");
@@ -730,8 +709,9 @@ function renderRecent() {
         el("td", {}, matchLabel(g)),
         el("td", { class: "num" }, fmtPct(g.home_win_prob)),
         el("td", { class: "num" }, r ? `${r.away_score} : ${r.home_score}` : "취소"),
-        el("td", { class: "hide-sm" }, r ? winnerText(r.winner, g.home.code, g.away.code) : NOTES[g.status_note] ?? "취소"),
-        el("td", { class: "r" }, r ? verdictPill(r.correct, r.winner === "DRAW") : "—"),
+        el("td", { class: "hide-sm" }, r ? winnerText({ winner: r.winner, home: g.home.code, away: g.away.code, status: "FINAL" })
+          : NOTES[g.status_note] ?? "취소"),
+        el("td", { class: "r" }, r ? verdictPill(r) : "—"),
       ]);
     });
     body.replaceChildren(el("div", { class: "table-scroll" }, el("table", { class: "table recent" }, [
@@ -743,7 +723,7 @@ function renderRecent() {
   $("recent-title").textContent = "최근 예측";
   $("recent-lead").textContent = "경기 전 마지막 예측과 실제 결과 (라이브 기록)";
   if (!state.history) {
-    showError(body, state.errors.history, async () => { await settle("history", fetchCSV("history.csv")); renderRecent(); renderAccuracy(); });
+    showError(body, state.errors.history, async () => { await loadHistory(); renderRecent(); renderAccuracy(); });
     return;
   }
   const rows = state.history.slice(-8).reverse();
@@ -758,8 +738,8 @@ function renderRecent() {
       el("td", { class: "nowrap" }, fmtDate(h.date).replace(/ \(.\)$/, "")), // 요일은 빼서 좁은 화면에 맞춘다
       el("td", {}, `${teamName(h.away)} @ ${teamName(h.home)}`),
       el("td", { class: "num" }, fmtPct(h.home_win_prob)),
-      el("td", { class: "hide-sm" }, winnerText(h.winner, h.home, h.away) ?? (h.status === "FINAL" ? "—" : "경기 전")),
-      el("td", { class: "r" }, verdictPill(h.correct, h.winner === "DRAW")),
+      el("td", { class: "hide-sm" }, winnerText(h)),
+      el("td", { class: "r" }, verdictPill(h)),
     ]))),
   ])));
 }
@@ -791,8 +771,21 @@ async function loadPlayers() {
       return;
     }
   }
+  state.nameKo ??= koreanNames(state.players);
   renderTypeMap();
-  if (state.day) renderStarters(); // 유형 설명(blurb)을 덧붙인다
+  if (state.day) { // 선발 이름을 한글로 바꾸고(매치업·선발 카드) 유형 설명(blurb)을 덧붙인다
+    renderMatchups();
+    renderStarters();
+  }
+}
+
+/** players.json → player_id → 한글 이름. 가장 최근 시즌 행을 먼저 쓰고, 그 시즌에 없는 선수는 다른 시즌 행으로 채운다. */
+function koreanNames(data) {
+  const rows = (data?.players ?? []).filter((p) => p?.name_ko && fin(p.season));
+  rows.sort((a, b) => b.season - a.season);
+  const map = new Map();
+  for (const p of rows) if (!map.has(p.player_id)) map.set(p.player_id, p.name_ko);
+  return map;
 }
 
 function renderTypeMap() {

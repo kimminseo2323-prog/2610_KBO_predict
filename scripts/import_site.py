@@ -2,6 +2,7 @@
 
 순서:
   1. 입력 읽기 — zip, 폴더, 단일 .html 하나. zip 안에 최상위 폴더 하나만 있으면 그 안을 루트로 본다.
+     숨김 파일(.DS_Store, .nojekyll 등)과 __MACOSX/는 건너뛰고 알린다. zip 안의 절대 경로·'..'는 반영을 멈춘다(exit 2).
   2. 페이지 이름 정하기 — 파일 이름이 index/teams/players/report.html이면 그대로, 아니면 <title>의 낱말로
      (성적표 → report, 선수 → players, 오늘의 경기 → index, 팀 → teams). 단일 파일은 --as index.html 로 직접 정할 수 있다.
   3. 정리 — 허용 목록(check_site.ALLOWED: fonts.googleapis.com, fonts.gstatic.com, cdn.jsdelivr.net/gh/orioncactus/pretendard@…)
@@ -75,14 +76,17 @@ class ImportPlan:
 
 # ---------- 입력 읽기 ----------
 
-def _safe_rel(name: str) -> PurePosixPath | None:
-    """zip·폴더 안의 경로를 site/ 기준 상대 경로로. 절대 경로·'..'·숨김 파일·__MACOSX는 None."""
+def _safe_rel(name: str) -> PurePosixPath:
+    """zip·폴더 안의 경로를 site/ 기준 상대 경로로. 절대 경로·드라이브 문자·'..'는 ValueError (site/ 밖에 쓰지 않는다)."""
     p = PurePosixPath(name.replace("\\", "/"))
     if p.is_absolute() or re.match(r"^[A-Za-z]:", name) or ".." in p.parts:
-        return None
-    if any(part.startswith(".") or part == "__MACOSX" for part in p.parts):
-        return None
+        raise ValueError(f"zip 안의 경로를 받을 수 없음: {name!r} (절대 경로·'..')")
     return p
+
+
+def _hidden(rel: PurePosixPath) -> bool:
+    """숨김 파일·폴더(.DS_Store, .nojekyll 등)와 macOS 압축 부산물(__MACOSX/…)."""
+    return any(part.startswith(".") or part == "__MACOSX" for part in rel.parts)
 
 
 def _strip_single_top(files: dict[PurePosixPath, bytes]) -> dict[PurePosixPath, bytes]:
@@ -93,13 +97,18 @@ def _strip_single_top(files: dict[PurePosixPath, bytes]) -> dict[PurePosixPath, 
     return files
 
 
-def read_source(src: Path) -> dict[PurePosixPath, bytes]:
+def read_source(src: Path, skipped: list[str] | None = None) -> dict[PurePosixPath, bytes]:
+    """입력의 파일들(site/ 기준 상대 경로 → 내용). 숨김 파일·__MACOSX는 건너뛰고 skipped에 적는다(반영 중단 아님).
+    zip 안에 절대 경로나 '..'가 있으면 ValueError."""
     files: dict[PurePosixPath, bytes] = {}
+    skipped = skipped if skipped is not None else []
     if src.is_dir():
         for path in sorted(src.rglob("*")):
             if path.is_file():
                 rel = _safe_rel(path.relative_to(src).as_posix())
-                if rel is not None:
+                if _hidden(rel):
+                    skipped.append(f"{rel} (숨김 파일·__MACOSX)")
+                else:
                     files[rel] = path.read_bytes()
     elif src.suffix.lower() == ".zip":
         with zipfile.ZipFile(src) as zf:
@@ -107,8 +116,9 @@ def read_source(src: Path) -> dict[PurePosixPath, bytes]:
                 if info.is_dir():
                     continue
                 rel = _safe_rel(info.filename)
-                if rel is None:
-                    raise ValueError(f"zip 안의 경로를 받을 수 없음: {info.filename!r} (절대 경로·'..'·숨김 파일)")
+                if _hidden(rel):
+                    skipped.append(f"{rel} (숨김 파일·__MACOSX)")
+                    continue
                 files[rel] = zf.read(info)
     elif src.is_file():
         files[PurePosixPath(src.name)] = src.read_bytes()
@@ -214,14 +224,15 @@ def sanitize_html(html: str, report: PageReport) -> str:
 
 
 def plan_import(src: Path, as_page: str | None = None) -> ImportPlan:
-    raw = read_source(src)
+    skipped: list[str] = []
+    raw = read_source(src, skipped)
     html_files = {p: b for p, b in raw.items() if p.suffix.lower() in (".html", ".htm")}
     if as_page is not None:
         if as_page not in PAGES:
             raise ValueError(f"--as는 {PAGES} 중 하나")
         if len(html_files) != 1:
             raise ValueError(f"--as는 HTML이 하나일 때만 쓸 수 있음 (지금 {len(html_files)}개)")
-    plan = ImportPlan(files={}, pages=[])
+    plan = ImportPlan(files={}, pages=[], skipped=skipped)
     for rel, data in sorted(raw.items()):
         suffix = rel.suffix.lower()
         if suffix not in WEB_SUFFIXES:

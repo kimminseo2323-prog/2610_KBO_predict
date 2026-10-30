@@ -25,7 +25,7 @@ button, input, select { font: inherit; color: inherit; }
 .card--lavender, .card--peach, .card--ochre { --muted: var(--body); }
 .card--pink, .card--teal { --muted: var(--on-dark); }
 .card--teal { --focus: var(--on-dark); }
-.inset { --muted: #6a6a6a; --focus: var(--ink); }
+.inset { --muted: var(--muted-base); --focus: var(--ink); }
 
 /* ---------- 접근성 ---------- */
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
@@ -101,7 +101,7 @@ main { display: block; padding-bottom: var(--sp-96); }
 }
 .btn--secondary { background: var(--canvas); color: var(--ink); border: 1px solid var(--hairline); }
 .btn--on-color { background: var(--canvas); color: var(--ink); }
-.btn[disabled] { background: #e5e5e5; color: var(--muted); cursor: not-allowed; }
+.btn[disabled] { background: var(--hairline); color: var(--muted); cursor: not-allowed; }
 
 /* ---------- 카드 (피처 카드: 24px 라운드, 32px 패딩, 그림자 없음) ---------- */
 .card {

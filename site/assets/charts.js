@@ -344,13 +344,18 @@ export function calibrationChart(el, bins, { color = "ink", label = "신뢰도 �
         svgEl("text", { class: "c-axis", x: L - 8, y: Y(v) + 4, "text-anchor": "end" }, pct(v)),
         svgEl("text", { class: "c-axis", x: X(v), y: H - 22, "text-anchor": v === 0 ? "start" : v === 1 ? "end" : "middle" }, pct(v)));
     });
+    let counts = 0; // 막대 위에 경기 수를 실제로 쓴 막대 수 (좁은 화면에서는 막대가 좁아 0일 수 있다)
     all.filter(has).forEach((b) => {
       const x = X(b.lo) + 2, w = X(b.hi) - X(b.lo) - 4;
       svg.append(svgEl("rect", { x, y: Y(b.actual_rate), width: Math.max(w, 1), height: Y(0) - Y(b.actual_rate), rx: 3, style: `fill:${cv(color)}`, "fill-opacity": 0.82 }));
-      if (w > 22) svg.append(svgEl("text", { class: "c-axis", x: x + w / 2, y: Y(b.actual_rate) - 5, "text-anchor": "middle" }, String(b.n)));
+      if (w > 22) {
+        svg.append(svgEl("text", { class: "c-axis", x: x + w / 2, y: Y(b.actual_rate) - 5, "text-anchor": "middle" }, String(b.n)));
+        counts += 1;
+      }
     });
     svg.append(svgEl("line", { class: "c-ref", x1: X(0), y1: Y(0), x2: X(1), y2: Y(1) }));
-    svg.append(svgEl("text", { class: "c-axis", x: (L + W - R) / 2, y: H - 4, "text-anchor": "middle" }, "예측 홈 승률 (막대 위 숫자 = 경기 수)"));
+    svg.append(svgEl("text", { class: "c-axis", x: (L + W - R) / 2, y: H - 4, "text-anchor": "middle" },
+      counts ? "예측 홈 승률 (막대 위 숫자 = 경기 수)" : "예측 홈 승률"));
     const table = srTable(label, ["예측 구간", "경기 수", "예측 평균", "실제 홈 승률"],
       all.map((b) => [`${pct(b.lo)}–${pct(b.hi)}`, String(b.n ?? "—"), pct(b.pred_mean), has(b) ? pct(b.actual_rate) : "표본 없음"]));
     return [svg, table];

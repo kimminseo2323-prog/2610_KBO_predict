@@ -2,7 +2,8 @@
 
 - tokens.css가 DESIGN_clay.md의 색·라운드·타입 스케일을 그대로 옮겼는지
 - app.js의 TEAMS / FACTOR_LABELS / TYPE_COLORS가 파이썬 원본(teams.py, features.py, cluster_labels.yaml)과 같은지
-- scripts/check_site.py가 저장소에서 통과하고(페이지가 아직 없으면 --allow-missing-pages), 금지된 외부 스크립트를 잡는지
+- scripts/check_site.py가 저장소에서 --strict로 통과하고, 금지된 외부 스크립트·CSS·JS 주소를 잡는지
+- assets JS가 replaceChildren/append에 `조건 ? 노드 : null`을 넘기지 않는지(null이 "null" 글자로 찍힘), fresh 읽기 규칙
 - docs/site/data-contract.md 매핑 표의 키 경로가 샘플 파일에 실제로 있는지
 - 홈 화면 방어용 fixture(취소·선발 미정·정상 경기, 되감기 status)가 커밋본과 같은 모양인지
 - scripts/import_site.py가 내보내기의 beacon을 지우고 file:// 경로를 고치며, 검증 실패면 site/를 되돌리는지
@@ -148,53 +149,21 @@ def test_type_colors_match_cluster_labels():
 
 # ---------- check_site.py ----------
 
-def test_check_site_reports_missing_pages_until_tasks_2_to_5():
-    """페이지가 없을 때는 'missing page'로 exit 1 — 페이지가 생기면 이 테스트는 통과 쪽으로 바뀐다."""
-    missing = [p for p in check_site.PAGES if not (SITE / p).exists()]
-    r = _run_check()
-    if missing:
-        assert r.returncode == 1
-        assert r.stdout.count("missing page") == len(missing)
-    else:
-        assert r.returncode == 0, r.stdout
-
-
-def test_check_site_passes_on_repo():
-    r = _run_check("--allow-missing-pages")
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert not re.search(r"\| FAIL\s*\|", r.stdout)
-
-
-def _skeleton(page: str) -> str:
-    """검사용 최소 페이지 — Task 2~5가 쓰는 공통 뼈대와 같은 구조(정적 nav + #evidence + assets/ 모듈)."""
-    links = "".join(
-        f'<li><a href="{href}"{" aria-current=\"page\"" if href == page else ""}>{label}</a></li>'
-        for href, label in check_site.NAV)
-    return f"""<!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KBO Predict</title>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="assets/tokens.css"><link rel="stylesheet" href="assets/app.css"></head>
-<body><header class="topnav"><a class="brand" href="index.html">KBO Predict</a>
-<nav aria-label="주 메뉴"><ul>{links}</ul></nav>
-<a class="btn" href="{check_site.REPO_URL}">GitHub에서 보기</a></header>
-<main id="main"></main>
-<footer class="footer"><p id="evidence"></p></footer>
-<script type="module">import {{ renderNav }} from "./assets/app.js"; renderNav("{page}");</script>
-<script type="module" src="assets/charts.js"></script>
-</body></html>
-"""
-
-
 def _tmp_site(tmp_path: Path) -> Path:
+    """site/ 사본 (검사 도구가 잡아야 할 것을 넣어 보는 용도)."""
     site = tmp_path / "site"
     shutil.copytree(SITE, site)
-    for page in check_site.PAGES:
-        if not (site / page).exists():
-            (site / page).write_text(_skeleton(page), encoding="utf-8")
     return site
+
+
+def test_check_site_missing_page(tmp_path):
+    """페이지가 없으면 'missing page' FAIL(exit 1), --allow-missing-pages면 SKIP(exit 0)."""
+    site = _tmp_site(tmp_path)
+    (site / "teams.html").unlink()
+    r = _run_check("--site", str(site))
+    assert r.returncode == 1 and re.search(r"\| page\s+\| teams\.html\s+\| FAIL\s+\| missing page", r.stdout), r.stdout
+    r = _run_check("--site", str(site), "--allow-missing-pages")
+    assert r.returncode == 0 and re.search(r"\| page\s+\| teams\.html\s+\| SKIP", r.stdout), r.stdout
 
 
 def test_check_site_rejects_external_script(tmp_path):
@@ -248,6 +217,52 @@ def test_check_site_rejects_other_jsdelivr_and_inline_style(tmp_path):
         assert bad in r.stdout, bad
 
 
+def test_check_site_scans_every_linked_stylesheet(tmp_path):
+    """assets/ 밖에 있는 로컬 스타일시트도 페이지가 연결했으면 외부 @import·url()을 검사한다."""
+    site = _tmp_site(tmp_path)
+    (site / "css").mkdir()
+    (site / "css" / "extra.css").write_text('.x { background: url("https://img.example/bg.png"); }\n'
+                                            '@import "https://evil.example/extra.css";\n', encoding="utf-8")
+    page = site / "report.html"
+    page.write_text(page.read_text(encoding="utf-8").replace("</head>", '<link rel="stylesheet" href="css/extra.css"></head>'),
+                    encoding="utf-8")
+    r = _run_check("--site", str(site))
+    assert r.returncode == 1
+    assert re.search(r"\| resources\s+\| report\.html\s+\| FAIL", r.stdout), r.stdout
+    assert "img.example/bg.png" in r.stdout and "evil.example/extra.css" in r.stdout
+
+
+def test_check_site_flags_external_urls_in_js(tmp_path):
+    """JS 문자열 속 https:// 주소: 허용 목록·RAW_BASE·REPO_URL(커밋 링크 포함) 밖이면 FAIL. 주석 속 주소는 세지 않는다."""
+    allowed = ('const a = "https://raw.githubusercontent.com/kimminseo2323-prog/2610_KBO_predict/main/data/public/status.json";\n'
+               'const b = "https://github.com/kimminseo2323-prog/2610_KBO_predict/commit/abc1234";\n'
+               '// 참고: https://comment.example/only-in-comment\n')
+    assert check_site.js_external_urls(allowed) == []
+    site = _tmp_site(tmp_path)
+    home = site / "assets" / "home.js"
+    home.write_text(allowed + 'const beacon = "https://collect.example/p";\n' + home.read_text(encoding="utf-8"), encoding="utf-8")
+    page = site / "teams.html"
+    page.write_text(page.read_text(encoding="utf-8").replace(
+        "</body>", '<script type="module">fetch(`https://tracker.example/t?d=${document.title}`);</script></body>'), encoding="utf-8")
+    r = _run_check("--site", str(site))
+    assert r.returncode == 1
+    assert re.search(r"\| assets\s+\| assets/\s+\| FAIL .*collect\.example/p", r.stdout), r.stdout
+    assert re.search(r"\| resources\s+\| teams\.html\s+\| FAIL .*tracker\.example/t", r.stdout), r.stdout
+    assert "comment.example" not in r.stdout and "commit/abc1234" not in r.stdout
+
+
+def test_check_site_fixture_mode_needs_real_code(tmp_path):
+    """--strict의 fixture 검사는 주석이 아닌 코드의 === "edge" 비교를 찾는다 (낱말이 주석에만 있으면 FAIL)."""
+    site = _tmp_site(tmp_path)
+    home = site / "assets" / "home.js"
+    text = home.read_text(encoding="utf-8")
+    assert 'FIXTURE === "edge"' in text
+    home.write_text(text.replace('FIXTURE === "edge"', 'FIXTURE === "edgy"'), encoding="utf-8")
+    r = _run_check("--site", str(site), "--strict")
+    assert r.returncode == 1
+    assert re.search(r'\| fixture-mode\s+\| index\.html\s+\| FAIL .*=== "edge"', r.stdout), r.stdout
+
+
 def test_contract_keys_exist_in_samples():
     rows = check_site.contract_rows((ROOT / "docs" / "site" / "data-contract.md").read_text(encoding="utf-8"))
     assert len(rows) >= 35
@@ -273,6 +288,67 @@ def test_key_path_syntax():
     for bad in ("games..home", "", ".teams", "teams{}."):
         with pytest.raises(ValueError):
             check_site.key_exists(obj, bad)
+
+
+# ---------- assets JS 공통 규칙 ----------
+
+def _null_child_args(js: str) -> list[str]:
+    """replaceChildren/append/prepend/before/after/replaceWith(…)의 인자 가운데 `조건 ? x : null` 꼴인 것.
+    DOM 메서드는 null을 "null" 글자로 넣는다(app.js의 el()은 null을 건너뛰므로 el(…) 안은 괜찮다). 중첩 괄호 안은 보지 않는다."""
+    skel = check_site.scan_js(js).skeleton
+    found = []
+    for m in re.finditer(r"\.(?:replaceChildren|append|prepend|before|after|replaceWith)\(", skel):
+        i, depth, args, cur = m.end(), 0, [], []
+        while i < len(skel):
+            c = skel[i]
+            if c in "([{":
+                depth += 1
+                if depth == 1:
+                    cur.append(c + "…")
+            elif c in ")]}":
+                if depth == 0:
+                    break
+                depth -= 1
+                if depth == 0:
+                    cur.append(c)
+            elif depth == 0:
+                if c == ",":
+                    args.append("".join(cur))
+                    cur = []
+                else:
+                    cur.append(c)
+            i += 1
+        args.append("".join(cur))
+        found += [a.strip() for a in args if re.search(r"\?[^?:]*:\s*null\b", a)]
+    return found
+
+
+def test_no_null_children_in_dom_calls():
+    """조건부 자식은 `...(cond ? [x] : [])`로 펼친다 — `cond ? x : null`을 replaceChildren/append에 넘기면 "null"이 찍힌다."""
+    assert _null_child_args('box.replaceChildren(a, big.length ? el("div") : null, c);')
+    assert _null_child_args('box.append(ok ? x : null)')
+    assert not _null_child_args('box.replaceChildren(a, ...(big.length ? [el("div")] : []), el("p", {}, b ? c : null));')
+    for js in sorted(ASSETS.glob("*.js")):
+        assert _null_child_args(js.read_text(encoding="utf-8")) == [], js.name
+
+
+# 브라우저 캐시를 피할(fresh) 파일: 매일 바뀌는 4개뿐. 되감기 날짜 파일·players·teams·model_report는 기본 캐시.
+FRESH = {"status.json", "latest.json", "history.csv", "index.json", "latest_edge.json", "status_rewind.json"}
+
+
+def test_fresh_fetch_only_for_daily_files():
+    """fetchJSON/fetchCSV에 { fresh: true }를 주는 것은 status·latest·history·rewind 목차(+ 그 검증용 fixture)뿐."""
+    app = (ASSETS / "app.js").read_text(encoding="utf-8")
+    assert "fresh" in app and 'cache: "no-store"' in app
+    calls = 0
+    for js in sorted(ASSETS.glob("*.js")):
+        code = check_site.scan_js(js.read_text(encoding="utf-8")).code
+        for m in re.finditer(r"\bfetch(?:JSON|CSV)\(\s*([\"'`])(.*?)\1([^()]*(?:\([^()]*\)[^()]*)*)\)", code):
+            calls += 1
+            name = m.group(2).rsplit("/", 1)[-1]
+            fresh = re.search(r"\bfresh:\s*true\b", m.group(3)) is not None
+            assert fresh == (name in FRESH), (js.name, m.group(0))
+    assert calls >= 15
 
 
 # ---------- fixture (홈 방어용) ----------
@@ -359,15 +435,11 @@ def test_home_rewind_mode_markup():
     code = re.sub(r"(?m)^\s*//.*$|^\s*\*.*$|/\*\*?", "", js)  # 주석 줄은 빼고 코드만 본다
     # ?date= / ?fixture=edge(로컬에서만) 처리, 되감기는 index.json 날짜만 이동
     assert 'params.get("date")' in code
-    assert 'FIXTURE === "edge"' in code and 'fetchJSON("latest_edge.json", FIXTURE_BASE)' in code
+    assert 'FIXTURE === "edge"' in code and 'fetchJSON("latest_edge.json", { base: FIXTURE_BASE, fresh: true })' in code
     assert 'IS_LOCAL ? params.get("fixture") : null' in code
+    # 선발 이름은 players.json을 읽은 뒤 player_id → 한글 이름으로 바꿔 다시 그린다(매치업·선발 카드)
+    assert "koreanNames(state.players)" in code and code.count("starterName(s)") >= 2
     assert 'REWIND = "rewind/2026"' in code and '`${REWIND}/index.json`' in code
-
-
-def test_check_site_strict_passes_with_home():
-    r = _run_check("--strict", "--allow-missing-pages")
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert re.search(r"\| fixture-mode\s+\| index\.html\s+\| OK", r.stdout), r.stdout
 
 
 # ---------- 모델 성적표 (report.html) ----------
@@ -411,7 +483,7 @@ def test_report_js_uses_shared_constants_and_data():
     assert imports and "FACTOR_LABELS" in imports.group(1) and "typeColor" in imports.group(1)
     assert not re.search(r"\b(?:const|let|var)\s+FACTOR_LABELS\b", js)
     assert '"pyth_diff"' not in js and "피타고리안" not in js  # 한글 이름 표를 복사하지 않음
-    assert 'fetchJSON("model_report.json")' in js and 'fetchCSV("history.csv")' in js
+    assert 'fetchJSON("model_report.json")' in js and 'fetchCSV("history.csv", { fresh: true })' in js
     # 유의성 수치는 하드코딩하지 않는다 (+2.7%p, p = .215는 JSON에서 계산)
     code = re.sub(r"(?m)^\s*//.*$|^\s*\*.*$", "", js)
     for literal in ("2.7", ".215", "0.215", "0.594", "59.4", ".17", ".20"):
@@ -421,17 +493,9 @@ def test_report_js_uses_shared_constants_and_data():
         assert key in js, key
 
 
-def test_check_site_strict_passes_with_report():
-    r = _run_check("--strict", "--allow-missing-pages")
-    assert r.returncode == 0, r.stdout + r.stderr
-    for check in ("nav", "#evidence", "resources"):
-        assert re.search(rf"\| {re.escape(check)}\s+\| report\.html\s+\| OK", r.stdout), (check, r.stdout)
-    assert "report.html | SKIP" not in r.stdout.replace("  ", " ")
-
-
 # ---------- 선수 탐색 (players.html) ----------
 
-PLAYERS_SECTIONS = ["type-map", "player-card", "similar", "type-model"]  # 순서 고정: 크림 → 핑크 → 크림 → 틸
+PLAYERS_SECTIONS = ["type-map", "player-card", "similar", "type-model"]  # 순서 고정: 크림 → 핑크 → 라벤더 → 틸
 
 
 def _players_soup():
@@ -455,7 +519,8 @@ def test_players_markup():
     cards = soup.select(".explore > section")
     assert [c["id"] for c in cards] == PLAYERS_SECTIONS
     colors = [next(k for k in c["class"] if k.startswith("card--")) for c in cards]
-    assert colors == ["card--cream", "card--pink", "card--cream", "card--teal"]
+    assert colors == ["card--cream", "card--pink", "card--lavender", "card--teal"]
+    # 넓은 화면에서는 지도(크림)·선수 카드(핑크)가 한 줄, 그 아래 비슷한 선수가 오므로 크림이 세로로 겹치지 않게 라벤더
     for c in cards:
         h2 = c.find("h2")
         assert h2 is not None and c.get("aria-labelledby") == h2.get("id")
@@ -484,15 +549,6 @@ def test_type_colors_cover_all_types():
             assert colors[group][str(t["id"])] in tokens, (group, t)
     used = {(p["group"], str(p["type"]["id"])) for p in players["players"]}
     assert all(tid in colors[g] for g, tid in used)
-
-
-def test_check_site_strict_passes_with_players():
-    r = _run_check("--strict", "--allow-missing-pages")
-    assert r.returncode == 0, r.stdout + r.stderr
-    for check in ("nav", "#evidence", "resources"):
-        assert re.search(rf"\| {re.escape(check)}\s+\| players\.html\s+\| OK", r.stdout), (check, r.stdout)
-    skipped = re.findall(r"\| page\s+\| (\S+)\s+\| SKIP", r.stdout)
-    assert skipped in ([], ["teams.html"]), skipped
 
 
 def test_team_name_for_old_names():
@@ -537,7 +593,7 @@ def test_teams_markup():
     assert soup.find("script", src="assets/teams.js").get("type") == "module"
     js = (ASSETS / "teams.js").read_text(encoding="utf-8")
     assert 'fetchJSON("teams.json")' in js and 'fetchJSON("model_report.json")' in js
-    assert re.search(r'fetchJSON\((?:"rewind/2026/index\.json"|`rewind/\$\{REWIND_SEASON\}/index\.json`)\)', js)
+    assert re.search(r'fetchJSON\((?:"rewind/2026/index\.json"|`rewind/\$\{REWIND_SEASON\}/index\.json`), \{ fresh: true \}\)', js)
     assert "const REWIND_SEASON = 2026;" in js
     assert "history.replaceState" in js and "teamNameFor" in js
     assert re.search(r'import\s*\{[^}]*\btypeColor\b[^}]*\}\s*from\s*"\./app\.js"', js)
@@ -546,12 +602,15 @@ def test_teams_markup():
 
 
 def test_check_site_strict_passes_all_pages():
-    """페이지 4개가 모두 있으므로 --allow-missing-pages 없이 통과한다."""
+    """저장소 site/는 --strict로 통과한다: 페이지 4개 모두 nav·#evidence·resources OK, 홈 ?fixture=edge OK, SKIP·FAIL 없음."""
     r = _run_check("--strict")
     assert r.returncode == 0, r.stdout + r.stderr
-    for check in ("nav", "#evidence", "resources"):
-        assert re.search(rf"\| {re.escape(check)}\s+\| teams\.html\s+\| OK", r.stdout), (check, r.stdout)
-    assert "| SKIP" not in r.stdout, r.stdout
+    for page in check_site.PAGES:
+        for check in ("parse", "nav", "#evidence", "resources"):
+            assert re.search(rf"\| {re.escape(check)}\s+\| {re.escape(page)}\s+\| OK", r.stdout), (check, page, r.stdout)
+    assert re.search(r"\| fixture-mode\s+\| index\.html\s+\| OK", r.stdout), r.stdout
+    assert re.search(r"\| assets\s+\| assets/\s+\| OK", r.stdout), r.stdout
+    assert "| SKIP" not in r.stdout and not re.search(r"\| FAIL\s*\|", r.stdout), r.stdout
 
 
 def test_teams_tiebreak_games_are_real_ties():
@@ -625,7 +684,8 @@ def test_import_site_strips_beacon(tmp_path, capsys):
     [backup] = list(backups.iterdir())
     assert backup.name.startswith("site-backup-")
     assert (backup / "index.html").read_text(encoding="utf-8") == before
-    assert check_site.run(site, DATA, ROOT / "docs" / "site" / "data-contract.md", strict=True)
+    rows = check_site.run(site, DATA, ROOT / "docs" / "site" / "data-contract.md", strict=True)
+    assert not [r for r in rows if r.result == "FAIL"]
 
 
 def test_import_site_restores_on_failure(tmp_path):
@@ -641,3 +701,29 @@ def test_import_site_restores_on_failure(tmp_path):
     assert (site / "teams.html").read_text(encoding="utf-8") == before
     assert import_site.main([*args, "--keep"]) == 1
     assert "images.genspark.ai" in (site / "teams.html").read_text(encoding="utf-8")
+
+
+def test_import_site_skips_hidden_zip_entries(tmp_path, capsys):
+    """macOS zip의 __MACOSX/._index.html·.DS_Store 같은 숨김 항목은 건너뛰고 알린다(반영은 계속). 절대 경로·'..'만 멈춘다(exit 2)."""
+    import zipfile
+    from scripts import import_site
+    site = _tmp_site(tmp_path)
+    archive = _zip(_export_dir(tmp_path), tmp_path / "mac.zip")
+    with zipfile.ZipFile(archive, "a") as zf:
+        zf.writestr("__MACOSX/genspark-kbo/._index.html", b"\x00\x05\x16\x07 AppleDouble")
+        zf.writestr("genspark-kbo/.DS_Store", b"\x00\x00\x00\x01Bud1")
+    args = [str(archive), "--site", str(site), "--backup-root", str(tmp_path / "bk")]
+    assert import_site.main(args) == 0
+    out = capsys.readouterr().out
+    assert "건너뜀: __MACOSX/genspark-kbo/._index.html" in out and "건너뜀: genspark-kbo/.DS_Store" in out
+    assert "KBO Predict export (2).html → report.html" in out  # 최상위 폴더 하나를 벗기는 규칙도 그대로
+    assert not (site / "__MACOSX").exists() and not (site / ".DS_Store").exists()
+    assert "cloudflareinsights" not in (site / "index.html").read_text(encoding="utf-8")
+
+    for bad in ("../evil.html", "/abs/index.html"):
+        evil = tmp_path / "evil.zip"
+        with zipfile.ZipFile(evil, "w") as zf:
+            zf.writestr("index.html", "<!doctype html><title>x</title>")
+            zf.writestr(bad, "x")
+        assert import_site.main([str(evil), "--site", str(site), "--backup-root", str(tmp_path / "bk2")]) == 2, bad
+        assert "받을 수 없음" in capsys.readouterr().out

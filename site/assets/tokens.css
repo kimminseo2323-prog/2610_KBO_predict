@@ -15,6 +15,7 @@
   --body-strong: #1a1a1a;
   --body: #3a3a3a;
   --muted: #6a6a6a;
+  --muted-base: #6a6a6a;  /* --muted의 원래 값 (카드가 --muted를 바꿔도 크림 패널 .inset이 되돌릴 때 쓴다) */
   --muted-soft: #9a9a9a;
   --on-dark: #ffffff;        /* 핑크·틸 카드 위 글자 */
 

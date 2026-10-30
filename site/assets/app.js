@@ -122,11 +122,14 @@ function bust(url) {
   return `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
 }
 
-async function fetchOK(name, base) {
-  const url = bust(`${base}/${name}`);
+// 캐시 규칙: 매일(하루 두 번) 바뀌는 status.json · latest.json · history.csv · rewind/2026/index.json만 fresh로 읽는다
+// (?v=시각 + cache: "no-store"). 되감기 날짜 파일·players.json·teams.json·model_report.json은 많아야 주 1회 바뀌므로
+// 브라우저 기본 캐시를 쓴다(되감기 슬라이더를 오갈 때 같은 날짜를 다시 받지 않게).
+async function fetchOK(name, { base = DATA_BASE, fresh = false } = {}) {
+  const url = fresh ? bust(`${base}/${name}`) : `${base}/${name}`;
   let res;
   try {
-    res = await fetch(url, { cache: "no-store" });
+    res = await fetch(url, fresh ? { cache: "no-store" } : {});
   } catch (err) {
     throw new Error(`${name}을(를) 받지 못했습니다 (네트워크 오류).`, { cause: err });
   }
@@ -134,9 +137,12 @@ async function fetchOK(name, base) {
   return res;
 }
 
-/** data/public/{name}을 JSON으로 읽는다. 캐시 버스트(?v=시각), 실패하면 throw. base로 다른 폴더(예: 로컬 fixture)를 줄 수 있다. */
-export async function fetchJSON(name, base = DATA_BASE) {
-  const res = await fetchOK(name, base);
+/**
+ * data/public/{name}을 JSON으로 읽는다. 실패하면 throw.
+ * 옵션: fresh(true면 캐시 버스트 ?v=시각 + no-store — 매일 바뀌는 파일만), base(다른 폴더, 예: 로컬 fixture).
+ */
+export async function fetchJSON(name, opts = {}) {
+  const res = await fetchOK(name, opts);
   try {
     return await res.json();
   } catch (err) {
@@ -160,18 +166,56 @@ export function parseCSV(text) {
   });
 }
 
-/** data/public/{name}(CSV)을 객체 배열로 읽는다. 실패하면 throw. */
-export async function fetchCSV(name, base = DATA_BASE) {
-  const res = await fetchOK(name, base);
+/** data/public/{name}(CSV)을 객체 배열로 읽는다. 옵션은 fetchJSON과 같다. 실패하면 throw. */
+export async function fetchCSV(name, opts = {}) {
+  const res = await fetchOK(name, opts);
   return parseCSV(await res.text());
+}
+
+/**
+ * 읽기 결과를 state[key]에 넣는다: 성공하면 값(그리고 state.errors[key] 삭제), 실패하면 null + state.errors[key] = 오류 문구.
+ * 던지지 않으므로 Promise.all로 여러 파일을 함께 기다릴 수 있다. state에는 errors 객체가 있어야 한다.
+ */
+export async function settle(state, key, promise) {
+  try {
+    state[key] = await promise;
+    delete state.errors[key];
+  } catch (err) {
+    state[key] = null;
+    state.errors[key] = err.message;
+  }
 }
 
 // ---------- 숫자·날짜 포맷 ----------
 
+/** 유한한 숫자(또는 숫자 문자열)인가. null·undefined·""는 아니다. */
+export const fin = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
+
 /** 0.5195 → "52%". 값이 없으면 "—". */
 export function fmtPct(p, digits = 0) {
-  if (p === null || p === undefined || p === "" || !Number.isFinite(Number(p))) return "—";
+  if (!fin(p)) return "—";
   return `${(Number(p) * 100).toFixed(digits)}%`;
+}
+
+/** 야구·통계식 소수: 0.589 → ".589", 1 → "1.000", −0.12 → "-.120" (앞의 0을 뺌, 기본 3자리). 값이 없으면 "—". */
+export const fmtRate3 = (v, digits = 3) => (fin(v) ? Number(v).toFixed(digits).replace(/^(-?)0\./, "$1.") : "—");
+
+/** 1234 → "1,234". 값이 없으면 "—". */
+export const fmtInt = (v) => (fin(v) ? Number(v).toLocaleString("ko-KR") : "—");
+
+/** 시즌 목록 → "2015~2024" (하나면 "2026", 비면 "—"). */
+export const fmtRange = (a) => (a?.length ? (a[0] === a.at(-1) ? `${a[0]}` : `${a[0]}~${a.at(-1)}`) : "—");
+
+/**
+ * 이닝. 데이터는 아웃카운트를 3분의 1 소수로 반올림해 저장한다(103⅓ → 103.3, 47⅔ → 47.7, 정수 이닝은 .0).
+ * 소수 부분 × 3을 반올림한 아웃 수(0·1·2, 3이면 다음 이닝)로 ⅓ 표기를 만든다: 103.3 → "103⅓", 47.7 → "47⅔", 6 → "6".
+ */
+export function fmtInnings(v) {
+  if (!fin(v)) return "—";
+  const x = Number(v);
+  const whole = Math.floor(x + 1e-6);
+  const outs = Math.round((x - whole) * 3);
+  return outs === 3 ? String(whole + 1) : `${whole}${["", "⅓", "⅔"][outs]}`;
 }
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -234,6 +278,30 @@ export function el(tag, attrs = {}, children = []) {
   };
   add(children);
   return node;
+}
+
+/**
+ * 한 경기의 적중 배지. g = { status, winner, correct } (history.csv 행이나 되감기 result — 없는 키는 무시).
+ * 취소 → "취소", 무승부 → "무승부", correct 1/true → "적중", 0/false → "미적중", 그 밖(정산 전) → "결과 대기".
+ */
+export function verdictPill({ status, winner, correct } = {}) {
+  const pill = (tone, text) => el("span", { class: `pill pill--sm pill--${tone}` }, text);
+  if (status === "CANCELED") return pill("muted", "취소");
+  if (winner === "DRAW") return pill("muted", "무승부");
+  if (correct === true || correct === 1) return pill("ink", "적중");
+  if (correct === false || correct === 0) return pill("coral", "미적중");
+  return pill("muted", "결과 대기");
+}
+
+/**
+ * 한 경기의 결과 글자. g = { winner, home, away, status } (home·away = 팀 코드).
+ * "KIA 승" / "무승부", 승자가 없으면 status로: FINAL "—", CANCELED "취소", 그 밖 "경기 전".
+ */
+export function winnerText({ winner, home, away, status } = {}) {
+  if (winner === "HOME") return `${teamName(home)} 승`;
+  if (winner === "AWAY") return `${teamName(away)} 승`;
+  if (winner === "DRAW") return "무승부";
+  return status === "FINAL" ? "—" : status === "CANCELED" ? "취소" : "경기 전";
 }
 
 /**

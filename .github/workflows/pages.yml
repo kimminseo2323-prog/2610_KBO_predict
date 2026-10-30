@@ -2,6 +2,8 @@
 # 데이터는 배포본에 넣지 않는다 — 페이지가 raw.githubusercontent.com의 data/public/ JSON을 직접 fetch한다
 # (raw는 Access-Control-Allow-Origin: * 이라 Pages에서 읽을 수 있고, 일일 커밋이 사이트 재배포 없이 바로 보인다).
 # site/_preview.html은 gitignore라 체크아웃에 없으므로 배포본에도 들어가지 않는다.
+# 저장소 Settings → Pages에서 Source = GitHub Actions로 Pages가 미리 켜져 있어야 한다
+# (configure-pages의 enablement는 GITHUB_TOKEN 권한으로 Pages 사이트를 새로 만들 수 없다).
 name: pages
 
 on:
@@ -15,9 +17,10 @@ permissions:
   pages: write
   id-token: write
 
+# 진행 중인 배포는 끝까지 둔다(GitHub Pages 시작 워크플로와 같음) — 뒤의 실행은 줄을 서서 기다린다.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -28,9 +31,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true   # 저장소에서 Pages가 꺼져 있으면 첫 실행이 켠다(source = GitHub Actions)
+      - uses: actions/configure-pages@v5   # Pages가 켜져 있는지 확인하고 배포 설정을 읽는다(켜는 일은 하지 않음)
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

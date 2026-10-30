@@ -9,8 +9,8 @@
 // 피처 한글 이름은 app.js의 FACTOR_LABELS(파이썬 features.FACTOR_LABELS와 테스트로 고정)를 그대로 쓴다.
 
 import {
-  FACTOR_LABELS, el, fetchJSON, fetchCSV, fmtPct, fmtDate, fmtKST, teamName, typeColor,
-  renderNav, renderFooter, showError,
+  FACTOR_LABELS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInt, fmtRange, fmtDate, fmtKST,
+  teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError,
 } from "./app.js";
 import { barChart, calibrationChart } from "./charts.js";
 
@@ -20,13 +20,10 @@ const state = { report: null, history: null, status: null, errors: {} };
 
 // ---------- 작은 도우미 ----------
 
-const fin = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
 /** 소수 d자리. 값이 없으면 "—". */
 const num = (v, d = 3) => (fin(v) ? Number(v).toFixed(d) : "—");
-/** 0.345 → ".345" (앞의 0을 뺀 야구·통계식 표기). */
-const dot = (v, d = 3) => (fin(v) ? Number(v).toFixed(d).replace(/^(-?)0\./, "$1.") : "—");
 /** p값: 0.001 미만은 "< .001", 그 밖은 ".046". */
-const pval = (p) => (!fin(p) ? "—" : Number(p) < 0.001 ? "< .001" : dot(p, 3));
+const pval = (p) => (!fin(p) ? "—" : Number(p) < 0.001 ? "< .001" : fmtRate3(p));
 /** 정확도 차이(0~1 소수 두 개) → "+1.5%p". */
 const pp = (a, b) => {
   if (!fin(a) || !fin(b)) return "—";
@@ -36,8 +33,6 @@ const pp = (a, b) => {
 const ALPHA = 0.05;            // 유의수준
 const GOAL_PP = 3;             // 설계 목표: 가장 강한 기준선 +3%p 이상, 통계적으로 유의
 const SMALL_BIN = 30;          // 이보다 적은 경기가 든 신뢰도 구간은 "표본 적음"으로 적는다
-const range = (a) => (a?.length ? (a[0] === a.at(-1) ? `${a[0]}` : `${a[0]}~${a.at(-1)}`) : "—");
-const int = (v) => (fin(v) ? Number(v).toLocaleString("ko-KR") : "—");
 /** 받침에 따라 을/를: "로지스틱 회귀를", "LightGBM을". 한글이 아니면 마지막 글자 소리로 어림한다. */
 function eul(word) {
   const w = String(word ?? "");
@@ -76,22 +71,12 @@ function table(caption, cols, rows, cls = "") {
 
 // ---------- 읽기 ----------
 
-async function settle(key, promise) {
-  try {
-    state[key] = await promise;
-    delete state.errors[key];
-  } catch (err) {
-    state[key] = null;
-    state.errors[key] = err.message;
-  }
-}
-
-const loadReport = () => settle("report", fetchJSON("model_report.json"));
-const loadHistory = () => settle("history", fetchCSV("history.csv"));
+const loadReport = () => settle(state, "report", fetchJSON("model_report.json"));
+const loadHistory = () => settle(state, "history", fetchCSV("history.csv", { fresh: true }));
 
 async function init() {
   renderNav("report.html");
-  await Promise.all([loadReport(), loadHistory(), settle("status", fetchJSON("status.json"))]);
+  await Promise.all([loadReport(), loadHistory(), settle(state, "status", fetchJSON("status.json", { fresh: true }))]);
   renderFooter(state.status);
   renderReport();
   renderLive();
@@ -144,9 +129,9 @@ function renderBadges() {
     ]),
     seasonStrip(all, role),
     el("ul", { class: "strip-legend" }, [
-      legendItem("train", `학습 ${range(train)} (${int(n.train)}경기)`),
-      legendItem("val", `검증 ${r.val_season ?? "—"} (${int(n.val)}경기)`),
-      legendItem("test", `시험 ${r.test_season ?? "—"} (${int(n.test)}경기)`),
+      legendItem("train", `학습 ${fmtRange(train)} (${fmtInt(n.train)}경기)`),
+      legendItem("val", `검증 ${r.val_season ?? "—"} (${fmtInt(n.val)}경기)`),
+      legendItem("test", `시험 ${r.test_season ?? "—"} (${fmtInt(n.test)}경기)`),
     ]),
     el("p", { class: "badge__note" }, `선발 피처: ${starterText(r.starter_source?.train_test)} · 만든 날 ${fmtKST(r.generated_at)}`),
   ]);
@@ -183,7 +168,7 @@ function renderHoldout() {
   const goalMet = diffNum !== null && diffNum >= GOAL_PP && fin(sig.mcnemar_p) && sig.mcnemar_p < ALPHA;
 
   $("holdout-lead").textContent =
-    `${r.test_season ?? "시험"} 정규시즌 ${int(m.n)}경기, 학습과 모델 선택에 쓰지 않은 시즌의 성적`;
+    `${r.test_season ?? "시험"} 정규시즌 ${fmtInt(m.n)}경기, 학습과 모델 선택에 쓰지 않은 시즌의 성적`;
 
   const modelRow = (key) => {
     const t = r.models?.[key]?.test ?? {};
@@ -215,7 +200,7 @@ function renderHoldout() {
     el("div", { class: "holdout__top" }, [
       el("p", { class: "kpi holdout__kpi" }, [
         diff,
-        el("small", {}, `${baseName(sig.vs)} 규칙보다 (적중 ${int(sig.model_correct)} 대 ${int(sig.baseline_correct)}경기)`),
+        el("small", {}, `${baseName(sig.vs)} 규칙보다 (적중 ${fmtInt(sig.model_correct)} 대 ${fmtInt(sig.baseline_correct)}경기)`),
       ]),
       el("div", { class: "holdout__verdict" }, [
         el("p", { class: "verdict" }, [
@@ -225,7 +210,9 @@ function renderHoldout() {
         el("p", { class: "holdout__goal" },
           `비교 대상은 ${sig.selected_on === "val" ? `${r.val_season} 검증에서` : "미리"} 가장 강했던 규칙으로 정했습니다. ` +
           (goalMet ? `설계 목표(+${GOAL_PP}%p, 통계적으로 유의)를 넘었습니다.`
-            : `설계 목표(+${GOAL_PP}%p 이상, 통계적으로 유의)에는 아직 못 미칩니다. 한 시즌 ${int(m.n)}경기로는 이 차이를 우연과 구분할 수 없습니다.`)),
+            : `설계 목표(+${GOAL_PP}%p 이상, 통계적으로 유의)에는 아직 못 미칩니다.` +
+              // "우연과 구분할 수 없다"는 유의하지 않을 때만 (유의하지만 +3%p에 못 미친 경우에는 틀린 말)
+              (fin(sig.mcnemar_p) && sig.mcnemar_p >= ALPHA ? ` 한 시즌 ${fmtInt(m.n)}경기로는 이 차이를 우연과 구분할 수 없습니다.` : ""))),
       ]),
     ]),
     el("div", { class: "inset" }, table(
@@ -256,7 +243,7 @@ function renderCalibration() {
     const verdict = Math.abs(gap) < 3 ? "잘 맞습니다"
       : gap < 0 ? "약간 불리한 홈팀을 실제보다 후하게 봅니다" : "약간 불리한 홈팀을 실제보다 박하게 봅니다";
     notes.push(el("p", { class: "calibration__focus" }, [
-      el("b", {}, `${label(focus)} 구간 ${int(focus.n)}경기`),
+      el("b", {}, `${label(focus)} 구간 ${fmtInt(focus.n)}경기`),
       `는 예측 평균 ${fmtPct(focus.pred_mean)}인데 실제 홈 승률은 ${fmtPct(focus.actual_rate)}입니다. ${verdict}.`,
     ]));
   }
@@ -356,26 +343,26 @@ function renderVariants() {
 function clusterGroup(group, q) {
   const kRows = (q.k_table ?? []).map((row) => el("tr", { class: row.k === q.k ? "is-selected" : null }, [
     el("th", { scope: "row" }, [`K = ${row.k}`, row.k === q.k ? el("span", { class: "pill pill--sm pill--ink holdout__tag" }, "선택") : null]),
-    el("td", { class: "num" }, dot(row.silhouette)),
-    el("td", { class: "num" }, dot(row.retention)),
-    el("td", { class: "num" }, dot(row.score)),
+    el("td", { class: "num" }, fmtRate3(row.silhouette)),
+    el("td", { class: "num" }, fmtRate3(row.retention)),
+    el("td", { class: "num" }, fmtRate3(row.score)),
   ]));
   const chosen = (q.k_table ?? []).find((row) => row.k === q.k);
   const types = (q.types ?? []).map((t) => el("li", { class: "type" }, [
     el("span", { class: "pill type__pill" }, [
       el("span", { class: "dot", style: { background: `var(--${typeColor(group, t.id)})` }, "aria-hidden": "true" }),
-      t.name, el("b", { class: "num" }, int(t.n)),
+      t.name, el("b", { class: "num" }, fmtInt(t.n)),
     ]),
     el("span", { class: "type__ex" }, (t.examples ?? []).join(", ") || "—"),
   ]));
   return el("div", { class: "inset cluster" }, [
     el("h3", { class: "cluster__title" }, [
       `${GROUP[group]} · K = ${q.k ?? "—"}`,
-      el("span", { class: "cluster__sub" }, ` ${int(q.n_fit)}명으로 맞춤 (전체 ${int(q.n_all)}명)`),
+      el("span", { class: "cluster__sub" }, ` ${fmtInt(q.n_fit)}명으로 맞춤 (전체 ${fmtInt(q.n_all)}명)`),
     ]),
     table(`${GROUP[group]} K별 실루엣·유지율·점수`, [["K"], ["실루엣", "num"], ["유지율", "num"], ["점수", "num"]], kRows, "k-table"),
     el("p", { class: "cluster__stats" }, [
-      `실루엣 ${dot(chosen?.silhouette)} · 유지율(전체 ${int(q.n_all)}명 기준) ${dot(q.retention)} · GMM 일치율 ${dot(q.gmm_agreement)}`,
+      `실루엣 ${fmtRate3(chosen?.silhouette)} · 유지율(전체 ${fmtInt(q.n_all)}명 기준) ${fmtRate3(q.retention)} · GMM 일치율 ${fmtRate3(q.gmm_agreement)}`,
       q.membership_method === "kmeans_softmax" ? " · 소속 확률은 GMM 대신 중심까지 거리로 계산" : "",
     ]),
     el("p", { class: "cluster__cap" }, "유형별 인원과 대표 선수"),
@@ -391,33 +378,18 @@ function renderClusters() {
     return;
   }
   $("clusters-lead").textContent =
-    `${cq.version ?? "유형 모델"}: ${range(cq.fit_seasons)} 선수-시즌 기록으로 맞춘 K-means. 점수 = 실루엣 + 연도 간 유지율이 가장 큰 K를 골랐습니다.`;
+    `${cq.version ?? "유형 모델"}: ${fmtRange(cq.fit_seasons)} 선수-시즌 기록으로 맞춘 K-means. 점수 = 실루엣 + 연도 간 유지율이 가장 큰 K를 골랐습니다.`;
   const sil = ["batter", "pitcher"].map((g) => cq[g]?.k_table?.find((row) => row.k === cq[g]?.k)?.silhouette);
   body.replaceChildren(
     el("div", { class: "clusters" }, ["batter", "pitcher"].filter((g) => cq[g]).map((g) => clusterGroup(g, cq[g]))),
     el("ul", { class: "notes notes--on-dark" }, [
-      el("li", {}, `실루엣이 타자 ${dot(sil[0], 2)}, 투수 ${dot(sil[1], 2)}로 낮습니다. 선수 분포는 연속적이고, 유형은 그 분포를 부드럽게 나눈 구분입니다. 유지율은 연속 두 시즌 모두 자격인 선수의 유형이 그대로인 비율입니다.`),
+      el("li", {}, `실루엣이 타자 ${fmtRate3(sil[0], 2)}, 투수 ${fmtRate3(sil[1], 2)}로 낮습니다. 선수 분포는 연속적이고, 유형은 그 분포를 부드럽게 나눈 구분입니다. 유지율은 연속 두 시즌 모두 자격인 선수의 유형이 그대로인 비율입니다.`),
       cq.membership_note ? el("li", {}, cq.membership_note) : null,
     ]),
   );
 }
 
 // ---------- ⑥ 라이브 기록 ----------
-
-function verdictPill(h) {
-  if (h.status === "CANCELED") return el("span", { class: "pill pill--sm pill--muted" }, "취소");
-  if (h.winner === "DRAW") return el("span", { class: "pill pill--sm pill--muted" }, "무승부");
-  if (h.correct === 1 || h.correct === true) return el("span", { class: "pill pill--sm pill--ink" }, "적중");
-  if (h.correct === 0 || h.correct === false) return el("span", { class: "pill pill--sm pill--coral" }, "미적중");
-  return el("span", { class: "pill pill--sm pill--muted" }, "결과 대기");
-}
-
-function winnerText(h) {
-  if (h.winner === "HOME") return `${teamName(h.home)} 승`;
-  if (h.winner === "AWAY") return `${teamName(h.away)} 승`;
-  if (h.winner === "DRAW") return "무승부";
-  return h.status === "FINAL" ? "—" : h.status === "CANCELED" ? "취소" : "경기 전";
-}
 
 function renderLive() {
   const body = $("live-body");
@@ -438,9 +410,9 @@ function renderLive() {
     const correct = decided.reduce((s, h) => s + h.correct, 0);
     return el("tr", {}, [
       el("th", { scope: "row" }, v),
-      el("td", { class: "num" }, int(mine.length)),
-      el("td", { class: "num" }, int(decided.length)),
-      el("td", { class: "num" }, int(correct)),
+      el("td", { class: "num" }, fmtInt(mine.length)),
+      el("td", { class: "num" }, fmtInt(decided.length)),
+      el("td", { class: "num" }, fmtInt(correct)),
       el("td", { class: "num" }, decided.length ? fmtPct(correct / decided.length, 1) : "—"),
     ]);
   });
@@ -460,15 +432,15 @@ function renderLive() {
       el("div", { class: "live__copy" }, [
         el("p", {}, `라이브 기록은 ${fmtDate(first)}, ${first ? first.slice(0, 4) : ""} 포스트시즌부터 쌓기 시작했습니다. ` +
           (nDecided < LIVE_SHORT
-            ? `결과가 난 경기가 아직 ${int(nDecided)}경기라 위의 ${state.report?.test_season ?? "시험"} 성적과 견주기에는 너무 짧습니다.`
-            : `지금까지 결과가 난 경기는 ${int(nDecided)}경기입니다.`)),
+            ? `결과가 난 경기가 아직 ${fmtInt(nDecided)}경기라 위의 ${state.report?.test_season ?? "시험"} 성적과 견주기에는 너무 짧습니다.`
+            : `지금까지 결과가 난 경기는 ${fmtInt(nDecided)}경기입니다.`)),
         el("p", { class: "card__foot" }, "모델 버전이 바뀌면 줄을 나눠 셉니다. '결과'는 결과가 나온 경기 수(무승부 제외)이고, 확률 50% 이상인 쪽을 고른 것으로 봅니다. 표본이 작아 정확도만 적고 log loss는 적지 않습니다."),
       ]),
       el("div", { class: "inset live__summary" }, table("모델 버전별 라이브 기록",
         [["모델"], ["예측", "num"], ["결과", "num"], ["적중", "num"], ["정확도", "num"]], summary, "live-table")),
     ]),
     el("details", { class: "live__all" }, [
-      el("summary", {}, `전체 기록 보기 (${int(rows.length)}경기)`),
+      el("summary", {}, `전체 기록 보기 (${fmtInt(rows.length)}경기)`),
       el("div", { class: "inset" }, table("라이브 예측 전체 기록 (최근 순)",
         [["날짜"], ["대진 (원정 @ 홈)"], ["홈 승률", "num"], ["모델"], ["예측 시각"], ["결과"], ["적중", "r"]], full, "live-full")),
     ]),

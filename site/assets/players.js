@@ -1,7 +1,7 @@
 // KBO Predict — 선수 탐색. players.html 전용 모듈.
 //
 // 화면 순서: 머리(#players-lead) → 컨트롤(#controls: 타자/투수 토글 #group-toggle, #season-select, #team-select, #player-search)
-//   → #type-map(크림, 유형 지도) · #player-card(핑크, 선수 카드) → #similar(크림, 비슷한 선수) → #type-model(틸, 유형 모델 요약) → 푸터.
+//   → #type-map(크림, 유형 지도) · #player-card(핑크, 선수 카드) → #similar(라벤더, 비슷한 선수) → #type-model(틸, 유형 모델 요약) → 푸터.
 //
 // 데이터: players.json(1.77 MB)을 한 번만 받아 메모리 색인 Map("group-season-player_id" → 항목)을 만들고,
 // 그룹·시즌·팀 필터와 검색은 모두 메모리에서 한다. 유형 모델 요약은 model_report.json의 cluster_quality.
@@ -13,8 +13,8 @@
 // 팀 필터는 점을 지우지 않고 다른 팀 점을 흐리게만 한다(지도 모양 유지, charts.js scatter의 dim 옵션).
 
 import {
-  TEAMS, el, fetchJSON, fmtPct, teamName, teamNameFor, typeColor, colorVar, onColor,
-  renderNav, renderFooter, showError,
+  TEAMS, el, fetchJSON, settle, fin, fmtPct, fmtRate3, fmtInt, fmtRange, fmtInnings, teamName, teamNameFor,
+  typeColor, colorVar, onColor, renderNav, renderFooter, showError,
 } from "./app.js";
 import { scatter } from "./charts.js";
 
@@ -35,20 +35,8 @@ const state = {
 
 // ---------- 작은 도우미 ----------
 
-const fin = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
-const int = (v) => (fin(v) ? Number(v).toLocaleString("ko-KR") : "—");
-/** 0.217 → ".217" (야구식 표기). */
-const dot = (v, d = 3) => (fin(v) ? Number(v).toFixed(d).replace(/^(-?)0\./, "$1.") : "—");
 const pct1 = (v) => fmtPct(v, 1);
 const dec2 = (v) => (fin(v) ? Number(v).toFixed(2) : "—");
-/** 이닝: 47.7 → "47⅔", 12.3 → "12⅓" (소수 첫째 자리 3·7은 아웃카운트 1·2개). */
-function innings(v) {
-  if (!fin(v)) return "—";
-  const whole = Math.floor(Number(v) + 1e-9);
-  const tenth = Math.round((Number(v) - whole) * 10);
-  return tenth === 0 ? String(whole) : tenth === 3 ? `${whole}⅓` : tenth === 7 ? `${whole}⅔` : Number(v).toFixed(1);
-}
-const range = (a) => (a?.length ? (a[0] === a.at(-1) ? `${a[0]}` : `${a[0]}~${a.at(-1)}`) : "—");
 
 const GROUP = { batter: "타자", pitcher: "투수" };
 const LETTER = { batter: "b", pitcher: "p" };
@@ -58,10 +46,10 @@ const POS = {
 };
 // 선수 카드의 주요 기록: [키, 이름, 포맷]
 const STATS = {
-  batter: [["pa", "타석", int], ["avg", "타율", dot], ["obp", "출루율", dot], ["hr", "홈런", int], ["sb", "도루", int],
-    ["k_pct", "K%", pct1], ["bb_pct", "BB%", pct1], ["iso", "ISO", dot], ["babip", "BABIP", dot]],
-  pitcher: [["games", "경기", int], ["starts", "선발", int], ["ip", "이닝", innings], ["era", "ERA", dec2],
-    ["k_pct", "K%", pct1], ["bb_pct", "BB%", pct1], ["hr_pct", "피홈런%", pct1], ["babip", "BABIP", dot]],
+  batter: [["pa", "타석", fmtInt], ["avg", "타율", fmtRate3], ["obp", "출루율", fmtRate3], ["hr", "홈런", fmtInt], ["sb", "도루", fmtInt],
+    ["k_pct", "K%", pct1], ["bb_pct", "BB%", pct1], ["iso", "ISO", fmtRate3], ["babip", "BABIP", fmtRate3]],
+  pitcher: [["games", "경기", fmtInt], ["starts", "선발", fmtInt], ["ip", "이닝", fmtInnings], ["era", "ERA", dec2],
+    ["k_pct", "K%", pct1], ["bb_pct", "BB%", pct1], ["hr_pct", "피홈런%", pct1], ["babip", "BABIP", fmtRate3]],
 };
 const SEARCH_MAX = 8;
 
@@ -136,20 +124,14 @@ async function loadPlayers() {
 }
 
 const loadReport = async () => {
-  try {
-    state.report = await fetchJSON("model_report.json");
-    delete state.errors.report;
-  } catch (err) {
-    state.report = null;
-    state.errors.report = err.message;
-  }
+  await settle(state, "report", fetchJSON("model_report.json"));
   renderModel();
 };
 
 async function init() {
   renderNav("players.html");
   bindControls();
-  fetchJSON("status.json").then(renderFooter, () => renderFooter(null));
+  fetchJSON("status.json", { fresh: true }).then(renderFooter, () => renderFooter(null));
   loadReport();
   await loadPlayers();
 }
@@ -160,10 +142,10 @@ function renderLead() {
   const d = state.data;
   const nB = typesOf("batter").length, nP = typesOf("pitcher").length;
   $("players-lead").textContent =
-    `${range(state.seasons)} 시즌 선수-시즌 ${int(state.index.size)}개를 스탯만으로 타자 ${nB}유형·투수 ${nP}유형으로 나눴습니다. ` +
+    `${fmtRange(state.seasons)} 시즌 선수-시즌 ${fmtInt(state.index.size)}개를 스탯만으로 타자 ${nB}유형·투수 ${nP}유형으로 나눴습니다. ` +
     "지도는 여러 스탯을 PCA로 두 축에 눌러 담은 것이라, 가까운 점일수록 기록이 비슷합니다." +
     (d.fit_seasons?.length && d.fit_seasons.at(-1) < state.seasons.at(-1)
-      ? ` 유형은 ${range(d.fit_seasons)} 기록으로 정했고 ${state.seasons.at(-1)} 선수는 가장 가까운 유형에 넣었습니다.` : "");
+      ? ` 유형은 ${fmtRange(d.fit_seasons)} 기록으로 정했고 ${state.seasons.at(-1)} 선수는 가장 가까운 유형에 넣었습니다.` : "");
 }
 
 // ---------- 컨트롤 ----------
@@ -377,13 +359,13 @@ function renderMap() {
   const pool = viewPool();
   const types = typesOf(g);
   const team = state.team;
-  $("map-lead").textContent = `${state.season} ${GROUP[g]} ${int(all.length)}명` +
-    (team ? ` 중 ${teamNameFor(team, state.season)} ${int(pool.length)}명을 진하게 표시했습니다.` : "을 기록이 비슷할수록 가깝게 놓았습니다.") +
+  $("map-lead").textContent = `${state.season} ${GROUP[g]} ${fmtInt(all.length)}명` +
+    (team ? ` 중 ${teamNameFor(team, state.season)} ${fmtInt(pool.length)}명을 진하게 표시했습니다.` : "을 기록이 비슷할수록 가깝게 놓았습니다.") +
     " 점을 누르면 선수 카드가 바뀝니다.";
   $("map-legend").replaceChildren(...types.map((t) => el("li", { class: "type-legend__item" }, [
     el("span", { class: "dot", style: { background: colorVar(typeColor(g, t.id)) }, "aria-hidden": "true" }),
     t.name,
-    el("b", { class: "num" }, `${int(pool.filter((p) => p.type?.id === t.id).length)}명`),
+    el("b", { class: "num" }, `${fmtInt(pool.filter((p) => p.type?.id === t.id).length)}명`),
   ])));
   $("map-notes").replaceChildren(...types.flatMap((t) => [
     el("dt", {}, [el("span", { class: "dot", style: { background: colorVar(typeColor(g, t.id)) }, "aria-hidden": "true" }), t.name]),
@@ -478,7 +460,7 @@ function renderSimilar() {
     if (!e) {
       return el("tr", { class: "sim-row is-missing" }, [
         el("td", {}, "기록을 찾지 못함"), el("td", {}, "—"), el("td", { class: "num" }, String(s.season ?? "—")),
-        el("td", {}, "—"), el("td", { class: "num" }, dot(s.similarity)),
+        el("td", {}, "—"), el("td", { class: "num" }, fmtRate3(s.similarity)),
       ]);
     }
     const go = () => select(e, { from: "similar", focus: true });
@@ -493,7 +475,7 @@ function renderSimilar() {
         el("span", { class: "dot", style: { background: colorVar(typeColor(e.group, e.type?.id)) }, "aria-hidden": "true" }),
         e.type?.name ?? typeName(e.group, e.type?.id),
       ])),
-      el("td", { class: "num" }, dot(s.similarity)),
+      el("td", { class: "num" }, fmtRate3(s.similarity)),
     ]);
   });
   body.replaceChildren(rows.length
@@ -533,8 +515,8 @@ function renderModel() {
       el("h3", { class: "model__title" }, GROUP[g]),
       el("dl", { class: "model__stats" }, [
         el("div", {}, [el("dt", {}, "유형 수 K"), el("dd", { class: "num" }, String(q.k ?? "—"))]),
-        el("div", {}, [el("dt", {}, "실루엣"), el("dd", { class: "num" }, dot(sil))]),
-        el("div", {}, [el("dt", {}, "유지율"), el("dd", { class: "num" }, dot(q.retention))]),
+        el("div", {}, [el("dt", {}, "실루엣"), el("dd", { class: "num" }, fmtRate3(sil))]),
+        el("div", {}, [el("dt", {}, "유지율"), el("dd", { class: "num" }, fmtRate3(q.retention))]),
       ]),
     ]);
   };
@@ -556,7 +538,7 @@ function renderModelMeta() {
   const version = d?.model_version ?? cq?.version;
   const fit = d?.fit_seasons ?? cq?.fit_seasons;
   if (!version && !fit) return;
-  $("model-lead").textContent = `${version ?? "유형 모델"}: ${range(fit)} 시즌 선수-시즌 기록으로 맞춘 K-means` +
+  $("model-lead").textContent = `${version ?? "유형 모델"}: ${fmtRange(fit)} 시즌 선수-시즌 기록으로 맞춘 K-means` +
     (d?.generated_at ? ` · 선수 파일 ${String(d.generated_at).slice(0, 10)} 생성` : "");
 }
 

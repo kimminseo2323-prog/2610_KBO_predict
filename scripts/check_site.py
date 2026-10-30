@@ -4,11 +4,13 @@
   (1) 페이지 4개(index/teams/players/report.html): 존재·기본 구조(doctype, lang, title, viewport),
       <nav> 안 내부 링크 4개가 정해진 순서·이름이고 자기 페이지에 aria-current="page", "GitHub에서 보기" 링크, #evidence,
       외부 리소스는 허용 목록(https, 호스트 정확히 일치: fonts.googleapis.com, fonts.gstatic.com, cdn.jsdelivr.net/gh/orioncactus/pretendard@…)만, <script src>는 assets/ 상대 경로만(파일 존재),
-      인라인·assets JS의 import는 상대 경로만, assets CSS·인라인 <style>·style= 의 @import/url()도 외부 금지, 트래킹 스크립트 금지.
+      인라인·assets JS의 import는 상대 경로만, JS 문자열 속 https:// 주소는 허용 목록·RAW_BASE(데이터)·REPO_URL(과 커밋 링크)만,
+      페이지가 연결한 로컬 스타일시트(경로 무관)·assets CSS·인라인 <style>·style= 의 @import/url()도 외부 금지, 트래킹 스크립트 금지.
   (2) assets/app.js의 TEAMS(ko)·FACTOR_LABELS·TYPE_COLORS가 파이썬 원본(teams.py, features.py, cluster_labels.yaml)과 같다.
   (3) docs/site/data-contract.md 매핑 표(| 페이지 | 요소 | 파일 | 키 경로 |)의 키 경로가 샘플 파일에 실제로 있다.
       되감기 날짜 파일은 rewind/2026/index.json의 마지막 날짜 파일로 확인한다.
-  (4) --strict: index.html(또는 그 페이지의 assets 스크립트)이 ?fixture=edge 를 지원하고 fixture 파일이 있다.
+  (4) --strict: index.html의 스크립트(인라인, 또는 그 페이지가 불러오는 assets 스크립트)의 주석 아닌 코드에
+      ?fixture=edge 처리(.get("fixture"), === "edge", fixture 폴더와 latest_edge.json 경로)가 있고 fixture 파일이 있다.
 
 사용:
   python -X utf8 scripts/check_site.py [--site site] [--data data/public] [--contract docs/site/data-contract.md]
@@ -31,6 +33,7 @@ from bs4 import BeautifulSoup
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_URL = "https://github.com/kimminseo2323-prog/2610_KBO_predict"
+RAW_BASE = "https://raw.githubusercontent.com/kimminseo2323-prog/2610_KBO_predict/main/data/public"
 PAGES = ["index.html", "teams.html", "players.html", "report.html"]
 NAV = [("index.html", "오늘의 경기"), ("teams.html", "팀"), ("players.html", "선수"), ("report.html", "모델 성적표")]
 # 허용하는 외부 리소스: https + 호스트 정확히 일치 + (jsDelivr는) 경로 접두사. 그 밖의 외부 리소스는 모두 금지.
@@ -206,6 +209,128 @@ def _imports(js: str) -> list[str]:
     return re.findall(r"""(?:\bfrom\s*|\bimport\s*\(?\s*)["']([^"']+)["']""", js)
 
 
+# ---------- JS 토큰 나누기 (주석·문자열·정규식 리터럴 구분, 외부 의존 없이 어림) ----------
+
+_REGEX_BEFORE = set("(,=:[!&|?{};+-*%<>~^")
+_REGEX_KEYWORDS = {"return", "typeof", "case", "in", "of", "void", "delete", "instanceof", "new", "else", "do"}
+
+
+@dataclass
+class JsScan:
+    code: str            # 주석만 뺀 코드 (문자열은 그대로)
+    skeleton: str        # 주석을 빼고 문자열·템플릿·정규식 리터럴을 ""·/r/로 바꾼 코드 (괄호 짝 맞추기용)
+    strings: list[str]   # 문자열 리터럴과 템플릿 리터럴의 글자 부분
+
+
+def _skip_string(src: str, i: int) -> int:
+    """src[i]가 따옴표일 때, 닫는 따옴표 다음 위치."""
+    q, j = src[i], i + 1
+    while j < len(src) and src[j] != q and src[j] != "\n":
+        j += 2 if src[j] == "\\" else 1
+    return j + 1
+
+
+def _skip_template(src: str, i: int, parts: list[str]) -> int:
+    """src[i]가 `일 때, 닫는 ` 다음 위치. ${…} 안의 중첩 템플릿까지 건너뛰고, 글자 부분은 parts에 모은다."""
+    j, start = i + 1, i + 1
+    while j < len(src):
+        ch = src[j]
+        if ch == "\\":
+            j += 2
+        elif ch == "`":
+            parts.append(src[start:j])
+            return j + 1
+        elif src.startswith("${", j):
+            parts.append(src[start:j])
+            depth, j = 1, j + 2
+            while j < len(src) and depth:
+                c = src[j]
+                if c in "\"'":
+                    parts.append(src[j + 1:_skip_string(src, j) - 1])
+                    j = _skip_string(src, j)
+                    continue
+                if c == "`":
+                    j = _skip_template(src, j, parts)
+                    continue
+                depth += {"{": 1, "}": -1}.get(c, 0)
+                j += 1
+            start = j
+        else:
+            j += 1
+    parts.append(src[start:])
+    return len(src)
+
+
+def scan_js(src: str) -> JsScan:
+    """JS를 한 번 훑어 주석을 빼고 문자열·정규식 리터럴을 구분한다. 정규식은 앞 글자(연산자·여는 괄호·return 등)로 어림한다."""
+    code, skel, strings = [], [], []
+    i, n, prev, word = 0, len(src), "", ""
+    while i < n:
+        c = src[i]
+        if src.startswith("//", i):
+            j = src.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if src.startswith("/*", i):
+            j = src.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            continue
+        if c in "\"'":
+            j = _skip_string(src, i)
+            strings.append(src[i + 1:j - 1])
+            code.append(src[i:j]); skel.append('""')
+            i, prev, word = j, '"', ""
+            continue
+        if c == "`":
+            parts: list[str] = []
+            j = _skip_template(src, i, parts)
+            strings.append("".join(parts))
+            code.append(src[i:j]); skel.append('""')
+            i, prev, word = j, '"', ""
+            continue
+        if c == "/" and (prev == "" or prev in _REGEX_BEFORE or (prev.isalpha() and word in _REGEX_KEYWORDS)):
+            j, in_class = i + 1, False
+            while j < n and src[j] != "\n":
+                ch = src[j]
+                if ch == "\\":
+                    j += 2
+                    continue
+                if ch == "[":
+                    in_class = True
+                elif ch == "]":
+                    in_class = False
+                elif ch == "/" and not in_class:
+                    break
+                j += 1
+            j += 1
+            while j < n and src[j].isalpha():
+                j += 1
+            code.append(src[i:j]); skel.append("/r/")
+            i, prev, word = j, "/", ""
+            continue
+        code.append(c); skel.append(c)
+        if c.isalnum() or c in "_$":
+            word = word + c if i and (src[i - 1].isalnum() or src[i - 1] in "_$") else c
+        elif not c.isspace():
+            word = ""
+        if not c.isspace():
+            prev = c
+        i += 1
+    return JsScan("".join(code), "".join(skel), strings)
+
+
+def js_external_urls(src: str) -> list[str]:
+    """JS 문자열 리터럴 안의 https:// 주소 중 허용 밖인 것. 허용: 글꼴(ALLOWED), RAW_BASE 아래 데이터, REPO_URL과 그 커밋 링크."""
+    bad = []
+    for s in scan_js(src).strings:
+        for url in re.findall(r"https://[^\s\"'`<>()]+", s):
+            ok = (_allowed(url) or url.startswith(RAW_BASE) or url.rstrip("/") == REPO_URL
+                  or url.startswith(f"{REPO_URL}/commit/"))
+            if not ok:
+                bad.append(url)
+    return bad
+
+
 def check_page(site: Path, page: str) -> list[Row]:
     rows: list[Row] = []
     path = site / page
@@ -267,13 +392,17 @@ def check_page(site: Path, page: str) -> list[Row]:
         if src is None:
             body = script.string or ""
             bad += [f"inline import {u}" for u in _imports(body) if not u.startswith(("./assets/", "assets/"))]
+            bad += [f"inline JS 주소 {u}" for u in js_external_urls(body)]
             if TRACKERS.search(body):
                 bad.append("inline 트래킹 코드")
     for link in soup.find_all("link", href=True):
         href = link["href"]
         if not ABSOLUTE.match(href) and "stylesheet" in (link.get("rel") or []):
-            if not (site / href.split("?")[0]).exists():
+            css = site / href.split("?")[0].split("#")[0]
+            if not css.is_file():
                 bad.append(f"<link href={href}> 파일 없음")
+            else:  # 경로와 상관없이 페이지가 연결한 로컬 스타일시트 전부
+                bad += [f"{href}: {u}" for u in _css_external(css.read_text(encoding="utf-8"))]
     for style in soup.find_all("style"):
         bad += [f"<style> {u}" for u in _css_external(style.get_text())]
     for node in soup.find_all(style=True):
@@ -285,12 +414,14 @@ def check_page(site: Path, page: str) -> list[Row]:
 
 
 def check_assets(site: Path) -> list[Row]:
-    """assets/*.js의 import는 상대 경로만, assets/*.css의 @import·url()은 외부 금지, 트래킹 금지."""
+    """assets/*.js의 import는 상대 경로만, 문자열 속 https:// 주소는 허용 목록·데이터·저장소 링크만,
+    assets/*.css의 @import·url()은 외부 금지, 트래킹 금지."""
     bad = []
     assets = site / "assets"
     for js in sorted(assets.glob("**/*.js")):
         text = js.read_text(encoding="utf-8")
         bad += [f"{js.name}: import {u}" for u in _imports(text) if not u.startswith(("./", "../"))]
+        bad += [f"{js.name}: 주소 {u}" for u in js_external_urls(text)]
         if TRACKERS.search(text):
             bad.append(f"{js.name}: 트래킹 코드")
     for css in sorted(assets.glob("**/*.css")):
@@ -371,13 +502,25 @@ def check_fixture_mode(site: Path) -> list[Row]:
         p = site / s["src"].split("?")[0].removeprefix("./")
         if p.exists():
             texts.append(p.read_text(encoding="utf-8"))
-    joined = "\n".join(texts)
+    for tag in soup.find_all("script", src=False):  # 인라인 스크립트
+        texts.append(tag.string or "")
+    joined = "\n".join(texts[1:])
     for path in sorted((site / "assets").glob("*.js")):  # 인라인 모듈이 import하는 스크립트까지
         if re.search(rf"""["']\.?/?(?:assets/)?{re.escape(path.name)}["']""", joined):
             joined += "\n" + path.read_text(encoding="utf-8")
-    ok = "fixture" in joined and "latest_edge" in joined and FIXTURE.exists()
-    return [Row("fixture-mode", "index.html", "OK" if ok else "FAIL",
-                "?fixture=edge 지원" if ok else "?fixture=edge 처리 또는 tests/fixtures/site/latest_edge.json 없음")]
+    # 주석이 아닌 코드에 실제 처리 패턴이 있어야 한다: ?fixture 읽기, === "edge" 비교, fixture 폴더와 latest_edge.json 경로
+    code = scan_js(joined).code
+    need = {
+        '.get("fixture")': r"""\.get\(\s*["']fixture["']\s*\)""",
+        '=== "edge"': r"""===\s*["']edge["']""",
+        '"latest_edge.json"': r"""["'`](?:[./\w-]*/)?latest_edge\.json["'`]""",
+        '"…tests/fixtures/site"': r"""["'`][./]*tests/fixtures/site/?["'`]""",
+    }
+    missing = [name for name, pat in need.items() if not re.search(pat, code)]
+    if not FIXTURE.exists():
+        missing.append("tests/fixtures/site/latest_edge.json 파일")
+    return [Row("fixture-mode", "index.html", "FAIL" if missing else "OK",
+                f"?fixture=edge 처리 없음: {', '.join(missing)}" if missing else "?fixture=edge 지원")]
 
 
 # ---------- 실행 ----------
