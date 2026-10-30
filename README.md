@@ -13,7 +13,7 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 
 4단계에서는 저장소가 사람 손 없이 돌아가게 했습니다. GitHub Actions 워크플로 3개가 매일 수집·추론, 매주 재학습·군집 재계산, push·PR마다 테스트와 parity 검사(커밋된 산출물을 원본 데이터로 다시 만들어 값이 같은지)를 맡습니다. 2026 정규시즌 165일을 날짜별로 다시 예측한 되감기 JSON([`rewind/2026/`](data/public/rewind/2026/index.json))과, 가을야구 진출·포스트시즌 시리즈 확률을 몬테카를로로 계산하는 `outlook` 블록도 만들었습니다(아래 "자동화와 되감기" 절). 노트북 05가 오늘 경기 하나를 처음부터 끝까지 따라갑니다.
 
-5단계에서는 이 공개 파일을 읽는 정적 사이트 4페이지를 만들고 GitHub Pages 배포 설정까지 마쳤습니다. 첫 push 뒤 `pages.yml`이 배포하면 공개됩니다(아래 "사이트" 절).
+5단계에서는 이 공개 파일을 읽는 정적 사이트 4페이지를 만들어 GitHub Pages에 공개했고(2026-10-30), 이어서 Genspark 코드 에이전트로 4페이지의 레이아웃을 다시 디자인해 교체했습니다(아래 "사이트" 절).
 
 ## 사이트
 
@@ -36,12 +36,14 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 
 저장소 루트에서 `python -m http.server 8000`을 실행하고 `http://localhost:8000/site/`를 엽니다. localhost에서는 raw URL 대신 저장소의 `data/public/`을 읽습니다. `http://localhost:8000/site/?fixture=edge`는 취소·선발 미정 경기를 그리는 검증 화면, `?date=2026-09-01`은 그 날짜의 되감기입니다.
 
-### Genspark 제작본 반영
+### Genspark 재디자인 (반영 완료)
 
-지금 사이트는 Genspark로 다시 만들 수 있는 참조 구현이기도 합니다. 제작본은 검증을 통과하고 더 마음에 들 때만 `site/`를 교체합니다.
+지금 공개된 4페이지는 Genspark 코드 에이전트(Claude Sonnet 5.5)가 다시 디자인한 것입니다(2026-10-30, 홈 → 성적표 → 선수 → 팀 순서로 한 페이지씩). 처음 손으로 만든 참조 구현에 [브리프](docs/site/genspark-brief.md)를 그대로 주면 복사본이 나와서, "레이아웃·분위기는 다시 설계하되 데이터 연결·요소 id·디자인 토큰·외부 리소스 규칙은 유지"라는 지시를 앞에 붙였습니다. 각 페이지는 한 장면이 화면을 압도하고 나머지 카드는 조연으로 물러나는 구성입니다(홈 "당겨진 경계선" 중계 무대, 성적표 "좋은 숫자 / 한계" 판결 무대, 선수 "지도 + 선수 카드" 짝, 팀 "순위표 점 그래프"). 공통 파일(`tokens.css`·`app.css`·`app.js`·`charts.js`)과 데이터 연결은 바뀌지 않았고, 제작본마다 아래 절차로 검증했습니다. 팀을 가리키는 점·선·막대는 `tokens.css`의 구단 대표색 `--team-<코드>`를 씁니다.
 
-1. [Genspark 브리프](docs/site/genspark-brief.md)의 공통 규칙과 페이지별 프롬프트를 붙여 넣고, 해당 `site/*.html` + `site/assets/*`를 참조로 첨부해 페이지를 만듭니다(홈 → 성적표 → 선수 → 팀).
-2. 페이지마다 HTML로 내보내 `index.html`·`teams.html`·`players.html`·`report.html`로 이름을 맞추고 zip으로 묶습니다.
+다시 만들 때의 절차:
+
+1. [Genspark 브리프](docs/site/genspark-brief.md)의 공통 규칙과 페이지별 프롬프트를 붙여 넣습니다(홈 → 성적표 → 선수 → 팀). 파일 첨부 대신 이 공개 저장소를 `git clone` 하라고 지시하면 됩니다.
+2. 페이지마다 바뀐 파일(`<페이지>.html` + `assets/<페이지>.css`·`.js`)을 sandbox 미리보기에서 내려받아 zip으로 묶습니다(Genspark 미리보기가 끼워 넣는 `sandbox_inspect.js`는 반영 스크립트가 지웁니다).
 3. `python -X utf8 scripts/import_site.py genspark.zip --dry-run`으로 미리 확인한 뒤 `python -X utf8 scripts/import_site.py genspark.zip`. 지금 `site/`를 `artifacts/site-backup-<시각>/`에 백업하고, Cloudflare beacon 같은 허용 밖 외부 스크립트를 지우고 `file://` 경로를 상대 경로로 고친 뒤 `site/`에 덮어씁니다.
 4. 스크립트가 `scripts/check_site.py --strict`를 실행합니다(실패하면 백업으로 되돌림, `--keep`이면 남김). 통과하면 로컬 미리보기에서 1280px·360px 화면을 확인합니다.
 5. `site/`를 커밋·push하면 `pages.yml`이 다시 배포합니다.
