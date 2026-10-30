@@ -141,7 +141,7 @@ export function parseCSV(text) {
     const row = {};
     head.forEach((h, i) => {
       const v = cells[i] ?? "";
-      row[h] = v === "" ? null : /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v;
+      row[h] = v.trim() === "" ? null : Number.isFinite(+v) ? +v : v;
     });
     return row;
   });
@@ -157,7 +157,7 @@ export async function fetchCSV(name, base = DATA_BASE) {
 
 /** 0.5195 → "52%". 값이 없으면 "—". */
 export function fmtPct(p, digits = 0) {
-  if (p === null || p === undefined || Number.isNaN(Number(p))) return "—";
+  if (p === null || p === undefined || p === "" || !Number.isFinite(Number(p))) return "—";
   return `${(Number(p) * 100).toFixed(digits)}%`;
 }
 
@@ -174,7 +174,7 @@ function kstParts(date) {
   return { y: +get("year"), m: +get("month"), d: +get("day"), hh: get("hour"), mm: get("minute"), wd };
 }
 
-/** "2026-10-30"(또는 시각이 붙은 ISO) → "10월 30일 (목)". 날짜만 있으면 그 날짜 그대로(시간대 변환 없음). */
+/** "2026-10-30"(또는 시각이 붙은 ISO) → "10월 30일 (금)". 날짜만 있으면 그 날짜 그대로(시간대 변환 없음). */
 export function fmtDate(iso) {
   if (!iso) return "—";
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
@@ -264,9 +264,9 @@ export function renderFooter(status, mount = document.getElementById("evidence")
   const link = (href, text, label) => el("a", { href, "aria-label": label }, text);
   const id = runId(status.run_url);
   const sha = status.commit_sha ?? null;
-  const run = status.run_url
-    ? ["Actions 실행 ", link(status.run_url, `#${id ?? "?"}`, `GitHub Actions 실행 ${id ?? ""} 기록 열기`)]
-    : ["로컬 실행"];
+  const run = !status.run_url ? ["로컬 실행"]
+    : id ? ["Actions 실행 ", link(status.run_url, `#${id}`, `GitHub Actions 실행 ${id} 기록 열기`)]
+    : [link(status.run_url, "Actions 실행 기록", "GitHub Actions 실행 기록 열기")];
   const commit = sha
     ? ["커밋 ", link(`${REPO_URL}/commit/${sha}`, sha.slice(0, 7), `커밋 ${sha.slice(0, 7)} 보기`)]
     : ["커밋 —"];

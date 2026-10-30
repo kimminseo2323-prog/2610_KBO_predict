@@ -3,8 +3,8 @@
 검사 항목 (결과 표 + exit code: FAIL이 하나라도 있으면 1):
   (1) 페이지 4개(index/teams/players/report.html): 존재·기본 구조(doctype, lang, title, viewport),
       <nav> 안 내부 링크 4개가 정해진 순서·이름이고 자기 페이지에 aria-current="page", "GitHub에서 보기" 링크, #evidence,
-      외부 리소스는 허용 목록(Google Fonts, jsDelivr의 Pretendard)만, <script src>는 assets/ 상대 경로만(파일 존재),
-      인라인·assets JS의 import는 상대 경로만, assets CSS의 @import/url()도 외부 금지, 트래킹 스크립트 금지.
+      외부 리소스는 허용 목록(https, 호스트 정확히 일치: fonts.googleapis.com, fonts.gstatic.com, cdn.jsdelivr.net/gh/orioncactus/pretendard@…)만, <script src>는 assets/ 상대 경로만(파일 존재),
+      인라인·assets JS의 import는 상대 경로만, assets CSS·인라인 <style>·style= 의 @import/url()도 외부 금지, 트래킹 스크립트 금지.
   (2) assets/app.js의 TEAMS(ko)·FACTOR_LABELS·TYPE_COLORS가 파이썬 원본(teams.py, features.py, cluster_labels.yaml)과 같다.
   (3) docs/site/data-contract.md 매핑 표(| 페이지 | 요소 | 파일 | 키 경로 |)의 키 경로가 샘플 파일에 실제로 있다.
       되감기 날짜 파일은 rewind/2026/index.json의 마지막 날짜 파일로 확인한다.
@@ -22,6 +22,7 @@ import ast
 import csv
 import json
 import re
+from urllib.parse import urlsplit
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,11 +33,12 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO_URL = "https://github.com/kimminseo2323-prog/2610_KBO_predict"
 PAGES = ["index.html", "teams.html", "players.html", "report.html"]
 NAV = [("index.html", "오늘의 경기"), ("teams.html", "팀"), ("players.html", "선수"), ("report.html", "모델 성적표")]
-ALLOWED_PREFIXES = (
-    "fonts.googleapis.com/",
-    "fonts.gstatic.com",
-    "cdn.jsdelivr.net/gh/orioncactus/pretendard",
-)
+# 허용하는 외부 리소스: https + 호스트 정확히 일치 + (jsDelivr는) 경로 접두사. 그 밖의 외부 리소스는 모두 금지.
+ALLOWED = {
+    "fonts.googleapis.com": "/",                              # Inter 글꼴 CSS
+    "fonts.gstatic.com": "",                                  # 글꼴 파일 (preconnect)
+    "cdn.jsdelivr.net": "/gh/orioncactus/pretendard@",        # Pretendard 글꼴 CSS
+}
 TRACKERS = re.compile(r"cloudflareinsights|googletagmanager|google-analytics|gtag\(|beacon\.min\.js|hotjar|clarity\.ms",
                       re.I)
 ABSOLUTE = re.compile(r"^(?:[a-z][a-z0-9+.-]*:)?//", re.I)
@@ -109,7 +111,7 @@ def key_exists(obj, path: str) -> bool:
     values = [obj]
     for seg in path.split("."):
         m = _SEG.match(seg)
-        if not m:
+        if not seg or not m:
             raise ValueError(f"bad key path segment {seg!r} in {path!r}")
         name, suffix = m.group(1), m.group(2)
         if name is not None:
@@ -174,7 +176,10 @@ def check_contract_keys(rows: list[ContractRow], data: Path):
             out.extend((r, k, False) for k in r.keys)
             continue
         for k in r.keys:
-            ok = k in sample if isinstance(sample, set) else key_exists(sample, k)
+            try:
+                ok = k in sample if isinstance(sample, set) else key_exists(sample, k)
+            except ValueError:  # 잘못 쓴 키 경로 (빈 칸 등)
+                ok = False
             out.append((r, k, ok))
     return out
 
@@ -182,8 +187,19 @@ def check_contract_keys(rows: list[ContractRow], data: Path):
 # ---------- (1) 페이지 ----------
 
 def _allowed(url: str) -> bool:
-    bare = re.sub(r"^(?:https?:)?//", "", url, flags=re.I)
-    return url.lower().startswith(("https:", "//")) and bare.startswith(ALLOWED_PREFIXES)
+    parts = urlsplit(url.strip())
+    if parts.scheme.lower() != "https" or parts.username or parts.password or parts.port:
+        return False
+    prefix = ALLOWED.get((parts.hostname or "").lower())
+    return prefix is not None and parts.path.startswith(prefix)
+
+
+_CSS_URL = re.compile(r"""(?:@import\s+(?:url\()?|url\()\s*["']?([^"')\s;]+)""", re.I)
+
+
+def _css_external(text: str) -> list[str]:
+    """CSS 텍스트 안의 @import·url() 중 허용 목록 밖의 외부 주소."""
+    return [u for u in _CSS_URL.findall(text) if ABSOLUTE.match(u) and not _allowed(u)]
 
 
 def _imports(js: str) -> list[str]:
@@ -258,6 +274,10 @@ def check_page(site: Path, page: str) -> list[Row]:
         if not ABSOLUTE.match(href) and "stylesheet" in (link.get("rel") or []):
             if not (site / href.split("?")[0]).exists():
                 bad.append(f"<link href={href}> 파일 없음")
+    for style in soup.find_all("style"):
+        bad += [f"<style> {u}" for u in _css_external(style.get_text())]
+    for node in soup.find_all(style=True):
+        bad += [f"style= {u}" for u in _css_external(node["style"])]
     if TRACKERS.search(html) and not any("트래킹" in b for b in bad):
         bad.append("트래킹 코드")
     rows.append(Row("resources", page, "FAIL" if bad else "OK", "; ".join(bad) if bad else "외부는 폰트 CSS만"))
@@ -275,9 +295,7 @@ def check_assets(site: Path) -> list[Row]:
             bad.append(f"{js.name}: 트래킹 코드")
     for css in sorted(assets.glob("**/*.css")):
         text = css.read_text(encoding="utf-8")
-        for url in re.findall(r"""(?:@import\s+(?:url\()?|url\()\s*["']?([^"')\s;]+)""", text):
-            if ABSOLUTE.match(url) and not _allowed(url):
-                bad.append(f"{css.name}: {url}")
+        bad += [f"{css.name}: {u}" for u in _css_external(text)]
     return [Row("assets", "assets/", "FAIL" if bad else "OK", "; ".join(bad) if bad else "JS import·CSS url 모두 로컬")]
 
 

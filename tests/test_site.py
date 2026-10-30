@@ -14,6 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 from scripts import check_site
@@ -92,6 +93,13 @@ def test_card_colors_and_text_contrast_rules():
     assert ":focus-visible" in css and "prefers-reduced-motion" in css
     assert "max-width: 1280px" in css
     assert "box-shadow" not in css  # 그림자 없음 (DESIGN)
+    # 포커스 링·선택 점은 문맥 색 --focus, 보조 글자는 카드별 단색 --muted (글자에 투명도 쓰지 않음)
+    assert re.search(r":focus-visible\s*\{[^}]*var\(--focus\)", css)
+    assert re.search(r"\.card--teal\s*\{\s*--focus:\s*var\(--on-dark\)", css)
+    assert re.search(r"\.inset\s*\{[^}]*--focus:\s*var\(--ink\)", css)
+    for sel in (".card__lead", ".card__foot", ".kpi small", ".chart .c-axis"):
+        rule = re.search(re.escape(sel) + r"\s*\{([^}]*)\}", css).group(1)
+        assert "opacity" not in rule and "var(--muted)" in rule, sel
 
 
 # ---------- app.js 상수가 파이썬과 같다 ----------
@@ -158,7 +166,7 @@ def _skeleton(page: str) -> str:
 <title>KBO Predict</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="assets/tokens.css"><link rel="stylesheet" href="assets/app.css"></head>
 <body><header class="topnav"><a class="brand" href="index.html">KBO Predict</a>
 <nav aria-label="주 메뉴"><ul>{links}</ul></nav>
@@ -212,6 +220,25 @@ def test_check_site_rejects_external_css_import(tmp_path):
     assert r.returncode == 1 and "evil.example" in r.stdout
 
 
+def test_check_site_rejects_other_jsdelivr_and_inline_style(tmp_path):
+    """허용은 호스트 정확히 일치 + jsDelivr는 /gh/orioncactus/pretendard@ 경로만. 인라인 <style>·style=의 외부 url()도 금지."""
+    site = _tmp_site(tmp_path)
+    page = site / "players.html"
+    html = page.read_text(encoding="utf-8")
+    page.write_text(html.replace("</head>", '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/x"></head>'),
+                    encoding="utf-8")
+    r = _run_check("--site", str(site))
+    assert r.returncode == 1 and "cdn.jsdelivr.net/npm/x" in r.stdout
+    page.write_text(html.replace("</head>", '<link rel="stylesheet" href="https://fonts.googleapis.com.evil.example/x.css"></head>')
+                    .replace('<main id="main">', '<main id="main" style="background:url(https://img.example/a.png)">')
+                    .replace("</head>", "<style>@import url('https://evil.example/s.css');</style></head>"),
+                    encoding="utf-8")
+    r = _run_check("--site", str(site))
+    assert r.returncode == 1
+    for bad in ("fonts.googleapis.com.evil.example", "img.example/a.png", "evil.example/s.css"):
+        assert bad in r.stdout, bad
+
+
 def test_contract_keys_exist_in_samples():
     rows = check_site.contract_rows((ROOT / "docs" / "site" / "data-contract.md").read_text(encoding="utf-8"))
     assert len(rows) >= 35
@@ -234,6 +261,9 @@ def test_key_path_syntax():
     assert check_site.key_exists(obj, "vs[].m{}")
     assert not check_site.key_exists(obj, "games[].home.starter.era")
     assert not check_site.key_exists(obj, "teams{}.q")
+    for bad in ("games..home", "", ".teams", "teams{}."):
+        with pytest.raises(ValueError):
+            check_site.key_exists(obj, bad)
 
 
 # ---------- fixture (홈 방어용) ----------
