@@ -211,6 +211,7 @@ function select(p, { from = "code", focus = false } = {}) {
 function refresh({ map = false, hash = true } = {}) {
   syncControls();
   if (map) renderMap();
+  renderPicked();
   renderCard();
   renderSimilar();
   if (hash) writeHash();
@@ -338,6 +339,11 @@ function buildMapShell() {
         el("p", { class: "map__axis map__axis--x" }, ["PCA 1", el("span", { "aria-hidden": "true" }, " →")]),
       ]),
     ]),
+    // 지금 고른 선수 이름표 (+ 좁은 화면: 선수 카드로 건너뛰는 버튼). 점을 누르면 바로 아래에서 무엇이 골라졌는지 보인다.
+    el("div", { class: "map__picked" }, [
+      el("p", { class: "picked__chip", id: "map-picked" }),
+      el("button", { class: "btn map__jump", type: "button", onclick: jumpToCard }, "선수 카드 보기 ↓"),
+    ]),
     el("ul", { class: "type-legend", id: "map-legend", "aria-label": "유형별 선수 수" }),
     el("details", { class: "type-notes", id: "map-details" }, [
       el("summary", {}, "유형 설명 보기"),
@@ -351,6 +357,25 @@ function buildMapShell() {
     $("map-details").open = wide.matches;
     wide.addEventListener?.("change", (e) => { const d = $("map-details"); if (d) d.open = e.matches; });
   }
+}
+
+function jumpToCard() {
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  $("player-card").scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  $("card-name")?.focus({ preventScroll: true });
+}
+
+/** 지도 아래 "지금 고른 선수" 이름표. */
+function renderPicked() {
+  const chip = $("map-picked");
+  if (!chip) return;
+  const p = state.sel;
+  if (!p) { chip.replaceChildren("고른 선수 없음"); return; }
+  chip.replaceChildren(
+    el("span", { class: "dot", style: { background: colorVar(typeColor(p.group, p.type?.id)) }, "aria-hidden": "true" }),
+    el("span", {}, [el("span", { class: "sr-only" }, "지금 고른 선수: "), nameOf(p)]),
+    el("small", {}, `${teamNameFor(p.team, p.season)} · ${p.season}`),
+  );
 }
 
 function renderMap() {
@@ -384,6 +409,7 @@ function renderMap() {
     colorKey: (pt) => typeColor(g, pt.entry.type?.id),
     typeLabel: (pt) => pt.entry.type?.name ?? "—",
     selectedId: state.sel?.player_id,
+    height: "fill", // 지도 높이는 CSS(.map__chart)가 정한다
     dim: team ? (pt) => pt.entry.team !== team : undefined,
     onSelect: (pt) => select(pt.entry, { from: "map" }),
     label: `${state.season} ${GROUP[g]} 유형 지도${team ? ` (${teamNameFor(team, state.season)})` : ""}: 점 하나가 한 선수, 화살표 키로 이동하고 Enter로 고릅니다`,
@@ -415,9 +441,9 @@ function renderCard() {
       el("span", { class: "member__pct num" }, fmtPct(v)),
     ]);
   });
-  const stats = (STATS[p.group] ?? []).map(([k, label, f]) => el("tr", {}, [
-    el("th", { scope: "row" }, label),
-    el("td", { class: "num" }, f(p.stats?.[k])),
+  const stats = (STATS[p.group] ?? []).map(([k, label, f]) => el("div", { class: "stat" }, [
+    el("dt", {}, label),
+    el("dd", { class: "num" }, f(p.stats?.[k])),
   ]));
   body.replaceChildren(
     el("p", { class: "pcard__type" }, el("span", {
@@ -436,10 +462,10 @@ function renderCard() {
       el("p", { class: "pcard__note" }, "중심까지 거리 기반 상대 확신도입니다. 실제 빈도로 맞춘 확률은 아닙니다."),
       el("ul", { class: "members", "aria-label": "유형별 소속 확신도" }, members),
     ]),
-    el("div", { class: "inset pcard__stats" }, el("table", { class: "table stats-table" }, [
-      el("caption", {}, `${p.season} 시즌 주요 기록`),
-      el("tbody", {}, stats),
-    ])),
+    el("div", { class: "inset pcard__stats" }, [
+      el("p", { class: "pcard__cap" }, `${p.season} 시즌 주요 기록`),
+      el("dl", { class: "stats-grid" }, stats),
+    ]),
   );
 }
 

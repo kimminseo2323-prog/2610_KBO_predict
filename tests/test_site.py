@@ -539,7 +539,7 @@ def test_players_markup():
     assert soup.find(id="player-search").get("type") == "search"
     for cid in ("season-select", "team-select", "player-search"):  # 보이는 이름표
         assert soup.find("label", attrs={"for": cid}) is not None, cid
-    cards = soup.select(".explore > section")
+    cards = soup.select("main section.card")  # 지도·선수 카드는 .stage 래퍼 안에 있어도 문서 순서로 센다
     assert [c["id"] for c in cards] == PLAYERS_SECTIONS
     colors = [next(k for k in c["class"] if k.startswith("card--")) for c in cards]
     assert colors == ["card--cream", "card--pink", "card--lavender", "card--teal"]

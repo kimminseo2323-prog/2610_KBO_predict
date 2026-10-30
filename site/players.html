@@ -69,11 +69,11 @@
   <noscript><p class="error-box">이 페이지는 자바스크립트로 데이터를 읽어 그립니다. 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
   <p class="sr-only" id="selection-status" aria-live="polite"></p>
 
-  <!-- 크림(지도) → 핑크(선수 카드) → 크림(비슷한 선수) → 틸(유형 모델) -->
-  <div class="explore">
+  <!-- 무대: 크림 지도 | 핑크 선수 카드(6px 크림 선으로 맞붙은 한 장면) → 조연: 라벤더(비슷한 선수) · 틸(유형 모델) -->
+  <div class="stage">
     <section class="card card--cream map-card" id="type-map" aria-labelledby="map-title">
       <h2 class="card__title" id="map-title">선수 유형 지도</h2>
-      <p class="card__lead" id="map-lead">점 하나가 한 선수의 한 시즌입니다. 점을 누르면 오른쪽 카드가 바뀝니다.</p>
+      <p class="card__lead" id="map-lead">점 하나가 한 선수의 한 시즌입니다. 점을 누르면 선수 카드가 바뀝니다.</p>
       <div id="map-body" aria-busy="true">
         <div class="inset map__frame"><div class="skeleton map-skeleton"></div></div>
         <p class="map__loading" id="map-loading">선수-시즌 기록 불러오는 중…</p>
@@ -85,10 +85,13 @@
       <div id="card-body" aria-busy="true">
         <div class="skeleton pcard-skeleton pcard-skeleton--name"></div>
         <div class="inset"><div class="skeleton" style="height:160px"></div></div>
-        <div class="inset"><div class="skeleton" style="height:220px"></div></div>
+        <div class="inset"><div class="skeleton" style="height:150px"></div></div>
       </div>
     </section>
+  </div>
 
+  <p class="rubric">이 선수와 유형 모델</p>
+  <div class="support">
     <section class="card card--lavender similar-card" id="similar" aria-labelledby="similar-title">
       <h2 class="card__title" id="similar-title">비슷한 선수</h2>
       <p class="card__lead" id="similar-lead">같은 구분(타자 또는 투수) 안에서 스탯이 가장 가까운 선수-시즌 5개. 행을 누르면 그 선수로 옮겨 갑니다.</p>
