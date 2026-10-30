@@ -1,0 +1,196 @@
+/* KBO Predict — 선수 탐색 전용. tokens.css · app.css 다음에 불러온다.
+   한 곳만 크게: 핑크 선수 카드의 한글 이름(야구 카드처럼). 지도·표·컨트롤은 조용하게.
+   핑크 위 작은 글자는 모두 크림 패널(.inset) 안에 둔다 — 핑크 위 흰 글자는 큰 이름과 카드 제목뿐. */
+
+[hidden] { display: none !important; }
+
+.players-head { padding-bottom: var(--sp-24); }
+.players-head h1 { max-width: none; }
+.players-head .lead { max-width: 72ch; }
+
+/* ---------- 컨트롤 바 ---------- */
+.controls {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-16) var(--sp-24);
+  margin-bottom: var(--sp-24); padding: var(--sp-16) 20px;
+  background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--r-lg);
+}
+.ctl { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ctl__label { font-size: 13px; font-weight: 500; color: var(--muted); line-height: 1.4; }
+.ctl--search { flex: 1 1 260px; }
+
+/* 타자/투수 토글 (눌린 쪽 잉크) */
+.seg {
+  display: inline-flex; padding: 3px; gap: 2px; height: 44px;
+  background: var(--surface-card); border-radius: var(--r-md);
+}
+.seg__btn {
+  min-width: 64px; padding: 0 16px; border: 0; border-radius: 9px; cursor: pointer;
+  background: transparent; color: var(--body); font-size: 14px; font-weight: 600;
+}
+.seg__btn:hover { color: var(--ink); }
+.seg__btn[aria-pressed="true"] { background: var(--ink); color: var(--on-dark); }
+.seg__btn[disabled] { cursor: progress; }
+
+.ctl__select, .ctl__input {
+  height: 44px; border: 1px solid var(--hairline); border-radius: var(--r-md);
+  background: var(--canvas); color: var(--ink); font-size: 15px;
+}
+.ctl__select {
+  min-width: 112px; padding: 0 36px 0 14px; cursor: pointer; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position: calc(100% - 19px) 19px, calc(100% - 14px) 19px;
+  background-size: 5px 5px; background-repeat: no-repeat;
+}
+.ctl__input { width: 100%; padding: 0 14px; }
+.ctl__input::placeholder { color: var(--muted-soft); }
+.ctl__select:hover, .ctl__input:hover { border-color: var(--muted-soft); }
+
+/* 검색 결과 (입력칸 아래로 펼침, 최대 8개) */
+.search { position: relative; }
+.search__results {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 5;
+  list-style: none; margin: 0; padding: 6px;
+  background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--r-md);
+  box-shadow: 0 12px 28px rgba(10, 10, 10, 0.08);
+}
+.search__hit {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 10px;
+  border: 0; border-radius: var(--r-sm); background: transparent; cursor: pointer; text-align: left;
+}
+.search__hit:hover, .search__hit:focus-visible { background: var(--surface-card); }
+.search__hit:focus-visible { outline-offset: -2px; }
+.search__name { font-size: 15px; font-weight: 600; }
+.search__meta { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.search__none { padding: 10px; font-size: 14px; color: var(--muted); }
+
+/* ---------- 2열: 지도(넓게) | 선수 카드, 그 아래 전체 폭 두 장 ---------- */
+.explore {
+  display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--sp-16);
+}
+.similar-card, .model-card { grid-column: 1 / -1; }
+
+/* ---------- 유형 지도 ---------- */
+.map__frame { padding: var(--sp-12) var(--sp-16) 10px; }
+.map-skeleton { height: 420px; }
+.map__loading { margin-top: var(--sp-12); font-size: 14px; color: var(--muted); }
+.map__chart { min-height: 260px; }
+.map__axis { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.map__axis--y { margin-bottom: 4px; }
+.map__foot { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-12); margin-top: 4px; }
+.map__hint { font-size: 12px; color: var(--muted); }
+.map__empty { padding: 96px 0; text-align: center; }
+
+.type-legend { list-style: none; padding: 0; margin-top: var(--sp-16); display: flex; flex-wrap: wrap; gap: var(--sp-8); }
+.type-legend__item {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
+  background: var(--canvas); border-radius: var(--r-pill); font-size: 13px; font-weight: 500;
+}
+.type-legend__item b { font-weight: 600; margin-left: 2px; font-variant-numeric: tabular-nums; }
+.type-legend .dot, .type-notes .dot, .members .dot, .sim__type .dot, .search__hit .dot { border: 1.5px solid var(--canvas); width: 12px; height: 12px; }
+
+.type-notes { margin-top: var(--sp-12); }
+.type-notes summary { cursor: pointer; font-size: 14px; font-weight: 600; line-height: 32px; width: fit-content; }
+.type-notes__list { margin: var(--sp-8) 0 0; font-size: 14px; }
+.type-notes__list dt { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.type-notes__list dd { margin: 2px 0 12px 18px; color: var(--body); max-width: 60ch; }
+.type-notes__list dd:last-child { margin-bottom: 0; }
+
+/* ---------- 선수 카드 (핑크) ---------- */
+.pcard__title { font-size: 20px; }  /* 핑크 위 흰 글자는 큰 글자로만 */
+.pcard-skeleton--name { height: 64px; margin-top: var(--sp-16); background: rgba(255, 255, 255, 0.35); }
+.pcard__type { margin-top: var(--sp-16); }
+.pcard__pill {
+  font-size: 15px; font-weight: 600; padding: 6px 16px;
+  box-shadow: 0 0 0 2px var(--on-dark);  /* 핑크 유형이 핑크 카드 위에 와도 보이게 흰 테 */
+}
+.pcard__name {
+  margin-top: var(--sp-12);
+  font-size: clamp(44px, 30px + 3.2vw, 64px); font-weight: 500; letter-spacing: -2px; line-height: 1.02;
+  color: var(--on-dark); word-break: keep-all; overflow-wrap: anywhere;
+}
+.pcard__name:focus { outline: none; }
+.pcard__name:focus-visible { outline: 3px solid var(--on-dark); outline-offset: 4px; border-radius: 4px; }
+.pcard__meta {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-12);
+  padding: 10px var(--sp-16);
+}
+.pcard__roman { font-size: 15px; font-weight: 600; }
+.pcard__facts { font-size: 14px; color: var(--body); }
+
+.pcard__fit { padding-top: var(--sp-16); }
+.pcard__prob { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-12); }
+.pcard__prob-label { font-size: 15px; font-weight: 600; }
+.pcard__prob-num { font-size: 36px; font-weight: 500; letter-spacing: -1.2px; line-height: 1; }
+.pcard__note { margin-top: 6px; font-size: 13px; color: var(--muted); }
+.members { list-style: none; padding: 0; margin-top: var(--sp-12); display: grid; gap: 8px; }
+.member {
+  display: grid; grid-template-columns: minmax(7.5em, auto) minmax(0, 1fr) 3.2em; align-items: center; gap: var(--sp-12);
+  font-size: 13px;
+}
+.member__name { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.member__track { height: 10px; border-radius: var(--r-pill); background: var(--surface-strong); overflow: hidden; }
+.member__fill { display: block; height: 100%; border-radius: var(--r-pill); min-width: 0; }
+.member__pct { text-align: right; color: var(--body); }
+.member.is-own { font-weight: 600; }
+.member.is-own .member__pct { color: var(--ink); }
+
+.pcard__stats { padding-top: 6px; padding-bottom: 6px; }
+.stats-table caption { padding: 8px 0 4px; font-weight: 600; color: var(--ink); font-size: 14px; }
+.stats-table tbody th {
+  font-size: 14px; font-weight: 400; color: var(--body); white-space: nowrap;
+  padding: 7px var(--sp-12) 7px 0; border-bottom: 1px solid var(--hairline-soft);
+}
+.stats-table tbody td { padding: 7px 0; font-weight: 600; font-size: 15px; }
+.stats-table tr:last-child th { border-bottom: 0; }
+
+/* ---------- 비슷한 선수 ---------- */
+.sim-table { margin-top: var(--sp-16); }
+.sim-table td { vertical-align: middle; }
+.sim-row { cursor: pointer; }
+.sim-row:hover td { background: var(--surface-strong); }
+.sim-row.is-missing { cursor: default; color: var(--muted); }
+.sim-row.is-missing:hover td { background: none; }
+.linkbtn {
+  display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-8);
+  min-height: 32px; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
+  font-size: 15px; font-weight: 600; text-decoration: underline; text-decoration-color: var(--muted-soft); text-underline-offset: 4px;
+}
+.linkbtn:hover { text-decoration-color: var(--ink); }
+.sim__roman { font-size: 13px; font-weight: 400; color: var(--muted); text-decoration: none; display: inline-block; }
+.sim__type { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+/* ---------- 유형 모델 (틸 — 숫자는 크림 패널 안) ---------- */
+.model__groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-16); }
+.model__group { min-width: 0; }
+.model__title { font-size: 16px; font-weight: 600; }
+.model__stats { margin: var(--sp-8) 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-12); }
+.model__stats dt { font-size: 13px; color: var(--muted); }
+.model__stats dd { margin: 2px 0 0; font-size: 28px; font-weight: 500; letter-spacing: -0.8px; line-height: 1.1; }
+.model__notes { margin-top: var(--sp-16); padding-left: 18px; font-size: 14px; color: var(--on-dark); max-width: 90ch; }
+.model__notes li + li { margin-top: 6px; }
+.model__link { margin-top: var(--sp-24); }
+
+/* ---------- 반응형 ---------- */
+@media (max-width: 900px) {
+  .explore { grid-template-columns: minmax(0, 1fr); }  /* 지도 먼저, 카드 다음 */
+}
+@media (max-width: 767px) {
+  .controls { padding: var(--sp-16); gap: var(--sp-12) var(--sp-16); }
+  .ctl--search { flex-basis: 100%; }
+  .model__groups { grid-template-columns: minmax(0, 1fr); }
+  .map-skeleton { height: 260px; }
+}
+@media (max-width: 479px) {
+  .ctl:not(.ctl--search) { flex: 1 1 auto; }
+  .ctl__select { min-width: 0; width: 100%; }
+  .seg__btn { min-width: 56px; padding: 0 12px; }
+  .search__meta { display: block; margin-left: 0; }
+  .search__hit { flex-wrap: wrap; }
+  .member { grid-template-columns: minmax(6.5em, auto) minmax(0, 1fr) 3em; gap: var(--sp-8); }
+  .sim-table th, .sim-table td { padding-right: var(--sp-8); }
+  .sim__roman { display: none; }
+  .model__stats dd { font-size: 24px; }
+}
+
+/* 한글 문장은 낱말 중간에서 줄을 바꾸지 않게 */
+.players-head .lead, .player-card, .similar-card .card__lead, .map-card .card__lead, .type-notes__list dd, .model-card { word-break: keep-all; overflow-wrap: anywhere; }

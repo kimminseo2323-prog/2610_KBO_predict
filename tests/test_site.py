@@ -238,7 +238,7 @@ def test_check_site_rejects_other_jsdelivr_and_inline_style(tmp_path):
     r = _run_check("--site", str(site))
     assert r.returncode == 1 and "cdn.jsdelivr.net/npm/x" in r.stdout
     page.write_text(html.replace("</head>", '<link rel="stylesheet" href="https://fonts.googleapis.com.evil.example/x.css"></head>')
-                    .replace('<main id="main">', '<main id="main" style="background:url(https://img.example/a.png)">')
+                    .replace('<main id="main"', '<main id="main" style="background:url(https://img.example/a.png)"', 1)
                     .replace("</head>", "<style>@import url('https://evil.example/s.css');</style></head>"),
                     encoding="utf-8")
     r = _run_check("--site", str(site))
@@ -426,3 +426,69 @@ def test_check_site_strict_passes_with_report():
     for check in ("nav", "#evidence", "resources"):
         assert re.search(rf"\| {re.escape(check)}\s+\| report\.html\s+\| OK", r.stdout), (check, r.stdout)
     assert "report.html | SKIP" not in r.stdout.replace("  ", " ")
+
+
+# ---------- 선수 탐색 (players.html) ----------
+
+PLAYERS_SECTIONS = ["type-map", "player-card", "similar", "type-model"]  # 순서 고정: 크림 → 핑크 → 크림 → 틸
+
+
+def _players_soup():
+    from bs4 import BeautifulSoup
+    return BeautifulSoup((SITE / "players.html").read_text(encoding="utf-8"), "html.parser")
+
+
+def test_players_markup():
+    """컨트롤(토글·시즌·팀·검색) → 지도·선수 카드 → 비슷한 선수 → 유형 모델, #evidence, players.js 모듈 하나."""
+    soup = _players_soup()
+    for cid in ("controls", "group-toggle", "season-select", "team-select", "player-search", "search-results",
+                "map-body", "card-body", "similar-body", "model-body", "players-lead", "evidence"):
+        assert soup.find(id=cid) is not None, cid
+    toggle = soup.find(id="group-toggle")
+    assert [b["data-group"] for b in toggle.find_all("button")] == ["batter", "pitcher"]
+    assert all(b.get("aria-pressed") in ("true", "false") for b in toggle.find_all("button"))
+    assert soup.find(id="season-select").name == "select" and soup.find(id="team-select").name == "select"
+    assert soup.find(id="player-search").get("type") == "search"
+    for cid in ("season-select", "team-select", "player-search"):  # 보이는 이름표
+        assert soup.find("label", attrs={"for": cid}) is not None, cid
+    cards = soup.select(".explore > section")
+    assert [c["id"] for c in cards] == PLAYERS_SECTIONS
+    colors = [next(k for k in c["class"] if k.startswith("card--")) for c in cards]
+    assert colors == ["card--cream", "card--pink", "card--cream", "card--teal"]
+    for c in cards:
+        h2 = c.find("h2")
+        assert h2 is not None and c.get("aria-labelledby") == h2.get("id")
+    html = str(soup)
+    assert html.index('id="controls"') < html.index('id="type-map"')
+    assert soup.find("a", attrs={"aria-current": "page"})["href"] == "players.html"
+    assert [s["src"] for s in soup.find_all("script", src=True)] == ["assets/players.js"]
+    assert soup.find("script", src="assets/players.js").get("type") == "module"
+    assert soup.find(id="type-model").find("a", href="report.html") is not None
+    js = (ASSETS / "players.js").read_text(encoding="utf-8")
+    assert 'fetchJSON("players.json")' in js and 'fetchJSON("model_report.json")' in js
+    assert "history.replaceState" in js and "hashchange" in js
+    assert re.search(r'import\s*\{[^}]*\btypeColor\b[^}]*\}\s*from\s*"\./app\.js"', js)
+    assert not re.search(r"\b(?:const|let|var)\s+TYPE_COLORS\b", js)  # 유형 색은 app.js 하나뿐
+
+
+def test_type_colors_cover_all_types():
+    """players.json types의 모든 유형 id(그리고 각 선수의 type.id)에 TYPE_COLORS 색이 있고, 색은 팔레트 토큰이다."""
+    colors = check_site.parse_js_const((ASSETS / "app.js").read_text(encoding="utf-8"), "TYPE_COLORS")
+    players = json.loads((DATA / "players.json").read_text(encoding="utf-8"))
+    tokens = set(re.findall(r"--([a-z-]+):", (ASSETS / "tokens.css").read_text(encoding="utf-8")))
+    for group, types in players["types"].items():
+        assert group in colors, group
+        for t in types:
+            assert str(t["id"]) in colors[group], (group, t)
+            assert colors[group][str(t["id"])] in tokens, (group, t)
+    used = {(p["group"], str(p["type"]["id"])) for p in players["players"]}
+    assert all(tid in colors[g] for g, tid in used)
+
+
+def test_check_site_strict_passes_with_players():
+    r = _run_check("--strict", "--allow-missing-pages")
+    assert r.returncode == 0, r.stdout + r.stderr
+    for check in ("nav", "#evidence", "resources"):
+        assert re.search(rf"\| {re.escape(check)}\s+\| players\.html\s+\| OK", r.stdout), (check, r.stdout)
+    skipped = re.findall(r"\| page\s+\| (\S+)\s+\| SKIP", r.stdout)
+    assert skipped in ([], ["teams.html"]), skipped

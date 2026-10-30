@@ -215,6 +215,7 @@ button.pill { cursor: pointer; min-height: 32px; }
 .chart [role="button"].c-point { cursor: pointer; }
 .chart .c-point:focus { outline: none; }
 .chart .c-point:focus-visible, .chart .c-point.is-selected { stroke: var(--focus); stroke-width: 3; }
+.chart .c-point--dim { stroke: none; pointer-events: none; }  /* scatter의 dim(): 모양만 남긴 흐린 점 */
 .chart-legend { list-style: none; padding: 0; margin-top: var(--sp-12); display: flex; flex-wrap: wrap; gap: var(--sp-8) var(--sp-16); font-size: 13px; }
 .chart-legend li { display: inline-flex; align-items: center; gap: 6px; }
 .chart-legend .dot { border: 1.5px solid var(--canvas); width: 12px; height: 12px; }  /* 카드와 같은 색 점도 보이게 */

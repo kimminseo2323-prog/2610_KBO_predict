@@ -185,16 +185,19 @@ export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, l
  * 산점도(선수 유형 지도). points = [{id, x, y, label, …}] — x·y가 숫자가 아닌 점은 뺀다.
  * options: colorKey(키 이름 또는 p → 토큰 함수, 기본 "color"), onSelect(p)(주면 점을 클릭·키보드로 고를 수 있다:
  * 화살표로 이동, Enter/Space로 선택), selectedId, label, legend([[이름, 토큰]]), typeLabel(p)(표의 "유형" 칸;
- * 없으면 legend에서 점 색으로 찾음), height.
+ * 없으면 legend에서 점 색으로 찾음), height,
+ * dim(p)(true인 점은 흐리게만 그린다: 지도 모양은 그대로 두고 고를 수 없으며 표·키보드 이동에서도 빠진다 — 선수 페이지의 팀 필터).
  */
-export function scatter(el, points, { colorKey = "color", onSelect, selectedId, label = "산점도", legend, typeLabel, height } = {}) {
+export function scatter(el, points, { colorKey = "color", onSelect, selectedId, label = "산점도", legend, typeLabel, height, dim } = {}) {
   const pts = (points ?? []).filter((p) => p && fin(p.x) && fin(p.y));
   if (!pts.length) return empty(el);
+  const isDim = (p) => (dim ? Boolean(dim(p)) : false);
   const colorOf = (p) => (typeof colorKey === "function" ? colorKey(p) : p[colorKey]) ?? "muted-soft";
   const typeOf = (p) => (typeLabel ? typeLabel(p) : legend?.find(([, tok]) => tok === colorOf(p))?.[0]) ?? "—";
   const xv = pts.map((p) => +p.x), yv = pts.map((p) => +p.y);
   const [xl, xh, yl, yh] = [Math.min(...xv), Math.max(...xv), Math.min(...yv), Math.max(...yv)];
-  const order = [...pts].sort((a, b) => a.x - b.x || a.y - b.y);
+  const live = pts.filter((p) => !isDim(p)); // 고를 수 있는 점 (dim이 없으면 전부)
+  const order = [...live].sort((a, b) => a.x - b.x || a.y - b.y);
   return mount(el, (W) => {
     const H = height ?? Math.round(Math.min(480, Math.max(260, W * 0.72)));
     const P = 14;
@@ -222,8 +225,15 @@ export function scatter(el, points, { colorKey = "color", onSelect, selectedId, 
       c.setAttribute("tabindex", 0);
       c.focus();
     };
-    const first = pts.find((p) => p.id === selectedId) ?? order[0];
-    [...pts].sort((a, b) => (a.id === selectedId) - (b.id === selectedId)).forEach((p) => {
+    const first = live.find((p) => p.id === selectedId) ?? order[0];
+    // 그리는 순서: 흐린 점 → 보통 점 → 선택된 점 (위에 그린 것이 보인다)
+    const rank = (p) => (isDim(p) ? 0 : p.id === selectedId ? 2 : 1);
+    [...pts].sort((a, b) => rank(a) - rank(b)).forEach((p) => {
+      if (isDim(p)) {
+        svg.append(svgEl("circle", { class: "c-point c-point--dim", cx: X(+p.x).toFixed(1), cy: Y(+p.y).toFixed(1), r: 5,
+          style: `fill:${cv(colorOf(p))}`, "fill-opacity": 0.22, "aria-hidden": "true" }));
+        return;
+      }
       const on = p.id === selectedId;
       const c = svgEl("circle", { class: `c-point${on ? " is-selected" : ""}`, cx: X(+p.x).toFixed(1), cy: Y(+p.y).toFixed(1), r: on ? 9 : 6,
         style: `fill:${cv(colorOf(p))}`, "fill-opacity": 0.9 }, svgEl("title", {}, p.label ?? String(p.id)));
@@ -240,7 +250,7 @@ export function scatter(el, points, { colorKey = "color", onSelect, selectedId, 
       nodes.set(p.id, c);
       svg.append(c);
     });
-    const table = srTable(label, ["이름", "유형", "x", "y"], pts.map((p) => [p.label ?? String(p.id), typeOf(p), (+p.x).toFixed(2), (+p.y).toFixed(2)]));
+    const table = srTable(label, ["이름", "유형", "x", "y"], live.map((p) => [p.label ?? String(p.id), typeOf(p), (+p.x).toFixed(2), (+p.y).toFixed(2)]));
     return legend ? [svg, legendList(legend), table] : [svg, table];
   });
 }

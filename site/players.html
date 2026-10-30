@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>선수 탐색 · KBO Predict</title>
+<meta name="description" content="KBO 2015~2026 선수-시즌 기록을 스탯만으로 나눈 타자 4유형·투수 4유형. 유형 지도, 선수 카드, 비슷한 선수.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/players.css">
+</head>
+<body>
+<a class="skip-link" href="#main">본문으로 건너뛰기</a>
+<header class="topnav">
+  <div class="topnav__inner wrap">
+    <a class="brand" href="index.html"><i class="brand__mark" aria-hidden="true"></i>KBO Predict</a>
+    <nav aria-label="주 메뉴"><ul>
+      <li><a href="index.html">오늘의 경기</a></li>
+      <li><a href="teams.html">팀</a></li>
+      <li><a href="players.html" aria-current="page">선수</a></li>
+      <li><a href="report.html">모델 성적표</a></li>
+    </ul></nav>
+    <a class="btn" href="https://github.com/kimminseo2323-prog/2610_KBO_predict">GitHub에서 보기</a>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <div class="page-head players-head">
+    <div>
+      <h1 class="display-md">선수 탐색</h1>
+      <p class="lead" id="players-lead">2015~2026 시즌 선수-시즌 2,918개를 스탯만으로 타자 4유형·투수 4유형으로 나눴습니다. 지도는 여러 스탯을 PCA로 두 축에 눌러 담은 것이라, 가까운 점일수록 기록이 비슷합니다.</p>
+    </div>
+  </div>
+
+  <!-- 컨트롤: 타자/투수 토글 · 시즌 · 팀 · 이름 검색 -->
+  <form class="controls" id="controls" role="search" aria-label="선수 고르기">
+    <div class="ctl">
+      <span class="ctl__label" id="group-label">구분</span>
+      <div class="seg" id="group-toggle" role="group" aria-labelledby="group-label">
+        <button class="seg__btn" type="button" data-group="batter" aria-pressed="true">타자</button>
+        <button class="seg__btn" type="button" data-group="pitcher" aria-pressed="false">투수</button>
+      </div>
+    </div>
+    <div class="ctl">
+      <label class="ctl__label" for="season-select">시즌</label>
+      <select class="ctl__select" id="season-select">
+        <option value="2026" selected>2026</option>
+      </select>
+    </div>
+    <div class="ctl">
+      <label class="ctl__label" for="team-select">팀</label>
+      <select class="ctl__select" id="team-select">
+        <option value="" selected>전체</option>
+      </select>
+    </div>
+    <div class="ctl ctl--search">
+      <label class="ctl__label" for="player-search">이름 검색</label>
+      <div class="search">
+        <input class="ctl__input" type="search" id="player-search" placeholder="한글 또는 영문 이름" autocomplete="off"
+               aria-controls="search-results" aria-describedby="search-status" disabled>
+        <ul class="search__results" id="search-results" aria-label="검색 결과" hidden></ul>
+      </div>
+      <p class="sr-only" id="search-status" aria-live="polite"></p>
+    </div>
+  </form>
+  <noscript><p class="error-box">이 페이지는 자바스크립트로 데이터를 읽어 그립니다. 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
+  <p class="sr-only" id="selection-status" aria-live="polite"></p>
+
+  <!-- 크림(지도) → 핑크(선수 카드) → 크림(비슷한 선수) → 틸(유형 모델) -->
+  <div class="explore">
+    <section class="card card--cream map-card" id="type-map" aria-labelledby="map-title">
+      <h2 class="card__title" id="map-title">선수 유형 지도</h2>
+      <p class="card__lead" id="map-lead">점 하나가 한 선수의 한 시즌입니다. 점을 누르면 오른쪽 카드가 바뀝니다.</p>
+      <div id="map-body" aria-busy="true">
+        <div class="inset map__frame"><div class="skeleton map-skeleton"></div></div>
+        <p class="map__loading" id="map-loading">선수 2,918명 불러오는 중…</p>
+      </div>
+    </section>
+
+    <section class="card card--pink player-card" id="player-card" aria-labelledby="card-title">
+      <h2 class="card__title pcard__title" id="card-title">선수 카드</h2>
+      <div id="card-body" aria-busy="true">
+        <div class="skeleton pcard-skeleton pcard-skeleton--name"></div>
+        <div class="inset"><div class="skeleton" style="height:160px"></div></div>
+        <div class="inset"><div class="skeleton" style="height:220px"></div></div>
+      </div>
+    </section>
+
+    <section class="card card--cream similar-card" id="similar" aria-labelledby="similar-title">
+      <h2 class="card__title" id="similar-title">비슷한 선수</h2>
+      <p class="card__lead" id="similar-lead">같은 구분(타자 또는 투수) 안에서 스탯이 가장 가까운 선수-시즌 5개. 행을 누르면 그 선수로 옮겨 갑니다.</p>
+      <div id="similar-body"><div class="skeleton" style="height:200px;margin-top:16px"></div></div>
+    </section>
+
+    <section class="card card--teal model-card" id="type-model" aria-labelledby="model-title">
+      <h2 class="card__title" id="model-title">유형 모델</h2>
+      <p class="card__lead" id="model-lead">선수-시즌 기록을 K-means로 나눈 유형 모델의 요약</p>
+      <div id="model-body"><div class="inset"><div class="skeleton" style="height:120px"></div></div></div>
+      <p class="model__link"><a class="btn btn--on-color" href="report.html">모델 성적표에서 자세히 보기</a></p>
+    </section>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="footer__inner wrap">
+    <p id="evidence" class="evidence">갱신 정보를 불러오는 중…</p>
+    <p class="footer__note">데이터: MyKBOStats(비공식 팬 사이트)의 박스스코어를 집계했습니다. 개인 학습용 프로젝트이며 베팅 조언이 아닙니다.</p>
+  </div>
+  <div class="footer__mtn" aria-hidden="true"><b></b><b></b><b></b></div>
+</footer>
+<script type="module" src="assets/players.js"></script>
+</body>
+</html>
