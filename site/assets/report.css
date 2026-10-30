@@ -1,12 +1,104 @@
 /* KBO Predict — 모델 성적표 전용. tokens.css · app.css 다음에 불러온다.
-   한 곳만 크게: ① 홀드아웃 카드의 "+차이%p"와 그 옆 유의성 판정. 좋은 숫자와 한계를 같은 크기로 나란히 둔다.
-   나머지는 표와 짧은 문장으로 조용하게. */
+
+   디자인 아이디어 (셋 이상을 비교해 하나를 골랐다)
+     A. 판결 무대 — 홈의 중계 무대를 이어 쓴다. 왼쪽 핑크 "좋은 숫자" | 오른쪽 틸 "한계"를 정확히 같은 크기(50:50)로 마주 세우고,
+        아래에 정확도 눈금(모델 점 + 95% 신뢰구간 띠 + 기준선 3개)을 깔아 "차이가 오차 안에 있다"를 눈으로 보여 준다. ← 채택
+     B. 영수증/성적표 — 한 줄씩 항목과 점수. 정직하지만 한 장면이 압도하지 못하고 표의 연속으로 보여 기각.
+     C. 신호등 — 초록/노랑/빨강 한 개. 색만으로 뜻을 전하게 되고(접근성 규칙 위반) 숫자가 사라져 기각.
+     D. 저울 — 좋은 숫자와 한계를 양팔에 올려 기울이기. 기울기가 "결론"을 미리 정해 버려 정직한 병렬이 깨져 기각.
+   → A. 좋은 숫자가 크면 한계도 같은 크기. 어느 쪽도 작은 글씨로 숨기지 않는다. 나머지 6장은 조용한 조연. */
 
 [hidden] { display: none !important; }
 .nowrap { white-space: nowrap; }
 
+/* ---------- 판결 무대: 핑크(좋은 숫자) | 틸(한계). 모바일 우선 = 위아래로 쌓기 ---------- */
+.stage-wrap { margin-bottom: var(--sp-16); }
+.stage-skeleton { height: 520px; border-radius: var(--r-xl); }
+.stage {
+  --muted: var(--on-dark);
+  position: relative; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: var(--r-xl); background: var(--teal); color: var(--on-dark);
+}
+.stage__top { order: 0; padding: var(--sp-16) var(--sp-24); background: var(--pink); color: var(--ink); }
+.stage__top .pills { gap: var(--sp-8); }
+.stage .side { display: flex; flex-direction: column; gap: var(--sp-16); min-width: 0; padding: var(--sp-16) var(--sp-24) var(--sp-24); }
+.stage .side--good { order: 1; background: var(--pink); color: var(--ink); --muted: var(--ink); }
+.stage .side--limit { order: 2; padding-top: var(--sp-24); }
+.stage .side__role { font-size: 13px; font-weight: 500; }
+/* 핑크 위에서는 24px 이상의 큰 글자(제목·큰 숫자)만 흰색. 작은 글자는 잉크, 상세는 크림 칩 안에 */
+.stage .side__team { font-family: var(--font-display); font-size: clamp(26px, 18px + 2vw, 40px); font-weight: 500; line-height: 1.1; letter-spacing: -1px; overflow-wrap: anywhere; }
+.stage .side--good .side__team, .stage .side--good .side__num { color: var(--on-dark); }
+.stage .side__prob { display: flex; flex-direction: column; align-items: flex-start; }
+.stage .side__num {
+  display: block; font-family: var(--font-display); font-size: 80px; font-weight: 500; line-height: 0.85;
+  letter-spacing: -0.055em; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.stage .side__num small { font-size: max(0.24em, 19px); font-weight: 600; letter-spacing: 0; margin-left: 0.1em; }
+.stage .side__num .num__pre { margin: 0 0.25em 0 0; font-size: 0.3em; font-weight: 500; letter-spacing: 0; }
+.stage .side__who {
+  display: inline-block; margin-top: var(--sp-12); padding: 2px 10px; border-radius: var(--r-pill);
+  background: var(--canvas); color: var(--ink); font-size: 13px; font-weight: 600; line-height: 1.5;
+}
+.stage .side__chip { padding: 12px 14px; border-radius: var(--r-md); background: var(--canvas); color: var(--ink); font-size: 13px; line-height: 1.5; }
+.chip__row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--sp-12); font-size: 14px; }
+.chip__row b { font-weight: 600; }
+.chip__sub { font-size: 13px; color: var(--body); }
+
+/* 칩 안 세 줄 목록 */
+.stat { list-style: none; padding: 0; margin-top: var(--sp-8); }
+.stat li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 var(--sp-12); padding: 7px 0; border-top: 1px solid var(--hairline); }
+.stat__k { font-size: 13px; color: var(--ink); }
+.stat__tag { display: inline-block; margin-left: 6px; white-space: nowrap; padding: 0 8px; border-radius: var(--r-pill); background: var(--ochre); color: var(--ink); font-size: 11px; font-style: normal; font-weight: 600; line-height: 1.6; vertical-align: 1px; }
+.stat__v { font-size: 14px; font-weight: 600; text-align: right; }
+.stat__w { grid-column: 1 / -1; font-size: 12px; color: var(--body); }
+
+.stage__vs { display: none; }
+
+/* 눈금 패널 (크림, 무대 맨 아래) */
+.stage__ruler { order: 3; margin: 0 var(--sp-16) var(--sp-16); padding: var(--sp-16); border-radius: var(--r-lg); background: var(--canvas); color: var(--ink); --muted: var(--muted-base); --focus: var(--ink); display: grid; gap: var(--sp-16); }
+.stage__ruler :focus-visible { outline-color: var(--ink); }
+.ruler__title { font-size: 16px; font-weight: 600; }
+.ruler__sub { font-size: 13px; color: var(--muted); }
+.ruler__legend { list-style: none; padding: 0; margin-top: var(--sp-8); display: grid; gap: 4px; font-size: 13px; color: var(--body); }
+.ruler__legend li { display: flex; gap: 8px; align-items: baseline; }
+.ruler__legend b { font-weight: 600; color: var(--ink); white-space: nowrap; }
+.key { flex: none; display: inline-block; width: 12px; height: 12px; border-radius: 50%; transform: translateY(1px); }
+.key--model { background: var(--ink); }
+.key--base { background: var(--canvas); border: 2.5px solid var(--ink); }
+.ruler__notes { display: grid; gap: var(--sp-8); align-content: start; }
+.ruler__note { font-size: 13px; color: var(--body); }
+.ruler__note b { font-weight: 600; color: var(--ink); }
+.stage__ruler .chart { margin-top: var(--sp-8); }
+
+/* 무대 (태블릿·데스크톱 ≥768px): 50 : 50 — 좋은 숫자와 한계는 같은 크기 */
+@media (min-width: 768px) {
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto 1fr auto; background: linear-gradient(90deg, var(--pink) calc(50% - 3px), var(--canvas) calc(50% - 3px) calc(50% + 3px), var(--teal) calc(50% + 3px)); }
+  .stage:not(.is-settled) { animation: stage-in 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .stage__top { grid-column: 1 / -1; grid-row: 1; background: none; padding: var(--sp-24) var(--sp-32) 0; position: relative; z-index: 1; }
+  .stage .side { background: none !important; grid-row: 2; padding: var(--sp-16) var(--sp-32) var(--sp-24); min-height: 420px; }
+  .stage .side--good { grid-column: 1; }
+  .stage .side--limit { grid-column: 2; padding-top: var(--sp-16); }
+  .stage .side__prob { margin-top: auto; padding-top: var(--sp-24); }
+  .stage .side__num { font-size: clamp(88px, 36px + 7vw, 148px); }
+  .stage__vs { display: grid; place-items: center; position: absolute; z-index: 2; left: 50%; top: 92px; translate: -50% 0; width: 64px; height: 64px; border-radius: 50%; background: var(--canvas); color: var(--ink); font-size: 14px; font-weight: 600; letter-spacing: -0.2px; }
+  .stage__ruler { grid-column: 1 / -1; grid-row: 3; margin: 0 var(--sp-24) var(--sp-24); padding: var(--sp-24); grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--sp-24) var(--sp-32); }
+}
+@keyframes stage-in { from { opacity: 0; translate: 0 10px; } }
+
+.rubric {
+  display: flex; align-items: center; gap: var(--sp-16); margin: var(--sp-24) 0 var(--sp-16);
+  font-size: 13px; font-weight: 500; color: var(--muted);
+}
+.rubric::before, .rubric::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+.rubric::before { max-width: 32px; }
+
+/* 조연 카드: 한 걸음 물러난 안쪽 여백·제목 */
+.report-bento > .card { padding: var(--sp-24); }
+.report-bento .card__title { font-size: 16px; }
+.holdout__pointer { margin-top: var(--sp-12); font-size: 13px; color: var(--body); }
+
 /* ---------- 머리: "어느 모델, 어느 기간" 배지 ---------- */
-.report-head { padding-bottom: var(--sp-16); }
+.report-head { padding-block: var(--sp-32) var(--sp-16); }
 .report-head h1 { max-width: none; }
 .model-badges {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-16);
@@ -59,21 +151,7 @@
 .notes li + li { margin-top: 6px; }
 .notes--on-dark { color: var(--on-dark); }
 
-/* ---------- ① 홀드아웃 ---------- */
-.holdout__top {
-  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
-  gap: var(--sp-16) var(--sp-32); margin-bottom: var(--sp-8);
-}
-.holdout__kpi { margin-top: var(--sp-16); }
-.holdout__kpi small { max-width: 30ch; }
-.holdout__verdict { flex: 1 1 260px; max-width: 400px; }
-.verdict {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-12);
-  padding: 12px var(--sp-16); border: 1.5px solid var(--ink); border-radius: var(--r-md);
-}
-.verdict__p { font-size: 15px; font-weight: 500; }
-.verdict__word { font-size: 18px; font-weight: 600; letter-spacing: -0.2px; }
-.holdout__goal { margin-top: var(--sp-8); font-size: 13px; color: var(--body); }
+/* ---------- ① 홀드아웃 (상세 표) ---------- */
 /* 모델 행과 규칙 행 사이 구분선 */
 .holdout-table tbody tr:not(.is-baseline) + tr.is-baseline th,
 .holdout-table tbody tr:not(.is-baseline) + tr.is-baseline td { border-top: 1px solid var(--hairline); }
@@ -136,5 +214,8 @@
 @media (max-width: 767px) {
   .model-badges { grid-template-columns: minmax(0, 1fr); }
   .clusters { grid-template-columns: minmax(0, 1fr); }
-  .holdout__verdict { max-width: none; }
+}
+@media (max-width: 479px) {
+  .stage .side__num { font-size: 72px; }
+  .stage__ruler { margin-inline: var(--sp-12); padding: var(--sp-16) var(--sp-12); }
 }

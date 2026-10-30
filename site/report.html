@@ -28,18 +28,28 @@
 </header>
 
 <main id="main" class="wrap">
-  <!-- 머리: 제목 + "어느 모델, 어느 기간" 배지 2개 (report-2026 · 라이브) -->
+  <!-- 머리: 제목 + 한 줄 안내 (어느 모델·어느 기간은 바로 아래 무대의 알약과 그 밑 배지에 적는다) -->
   <div class="page-head report-head">
     <div>
       <h1 class="display-md">모델 성적표</h1>
       <p class="lead">어느 모델이 어느 기간으로 배웠고, 배우지 않은 시즌을 얼마나 맞혔는지 적었습니다. 좋은 숫자와 함께 한계도 그대로 둡니다.</p>
     </div>
   </div>
+  <noscript><p class="error-box">이 페이지는 자바스크립트로 데이터를 읽어 그립니다. 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
+
+  <!-- 판결 무대: 왼쪽(핑크) = 좋은 숫자, 오른쪽(틸) = 한계. 같은 크기로 마주 보게 한다. 아래 크림 패널은 오차 범위를 함께 보여 주는 점 그래프 -->
+  <section class="stage-wrap" aria-labelledby="stage-title">
+    <h2 class="sr-only" id="stage-title">한눈에 보는 결론: 좋은 숫자와 한계</h2>
+    <div id="stage" aria-busy="true"><div class="skeleton stage-skeleton"></div></div>
+  </section>
+
+  <!-- 어느 모델, 어느 기간 -->
   <section class="model-badges" id="model-badges" aria-label="어느 모델, 어느 기간" aria-busy="true">
     <div class="skeleton badge-skeleton"></div>
     <div class="skeleton badge-skeleton"></div>
   </section>
-  <noscript><p class="error-box">이 페이지는 자바스크립트로 데이터를 읽어 그립니다. 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
+
+  <p class="rubric"><span>이 숫자를 뜯어 보면</span></p>
 
   <!-- 벤토: 크림 → 라벤더 → 피치 → 오커 → 틸 → 크림 (같은 색이 맞닿지 않음) -->
   <div class="bento report-bento">
