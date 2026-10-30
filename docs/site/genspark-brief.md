@@ -49,7 +49,7 @@
 - 스크립트는 인라인이거나 assets/ 아래 상대 경로(<script type="module" src="assets/xxx.js">)만. 모든 링크·경로는 상대 경로
   (앞에 "/"를 붙이지 않는다 — 사이트는 /2610_KBO_predict/ 하위 경로에서 열린다). file:// 경로 금지.
 
-■ 데이터 — 7개 파일, 기준 주소 + 파일 이름
+■ 데이터 — 8개 파일, 기준 주소 + 파일 이름
   기준 주소: https://raw.githubusercontent.com/kimminseo2323-prog/2610_KBO_predict/main/data/public/
   1. status.json            파이프라인 상태(푸터 증거 바, 라이브/되감기 결정)
   2. latest.json            오늘 경기 예측(라이브)
@@ -58,8 +58,10 @@
   5. rewind/2026/{date}.json 그날의 되감기(예: rewind/2026/2026-09-01.json)
   6. players.json           선수-시즌 2,918개(1.77 MB — 로딩 상태 필수)
   7. teams.json             팀-시즌 120개
-  (+ model_report.json      모델 성적표 — 성적표·홈·선수·팀이 함께 읽음)
-- 모든 요청 끝에 캐시 버스트 ?v=<Date.now()>를 붙인다. raw CDN 캐시가 최대 5분이라 갱신 직후 파일끼리 시각이 잠깐 어긋날 수 있다.
+  8. model_report.json      모델 성적표(고정 파일) — 성적표·홈·선수·팀이 함께 읽음
+- 매일 바뀌는 1~4번(status.json, latest.json, history.csv, rewind/2026/index.json)만 끝에 캐시 버스트 ?v=<Date.now()>를 붙이고
+  cache: "no-store"로 읽는다(참조 구현 fetchJSON(name, { fresh: true })). 5~8번은 많아야 주 1회 바뀌므로 브라우저 기본 캐시.
+  raw CDN 캐시가 최대 5분이라 갱신 직후 파일끼리 시각이 잠깐 어긋날 수 있다.
 - 로컬 미리보기(location.hostname이 localhost 또는 127.0.0.1)에서는 기준 주소 대신 ../data/public/을 쓴다
   (참조 구현 assets/app.js의 DATA_BASE 규칙을 그대로 유지).
 - 숫자를 HTML에 직접 쓰지 않는다. 적중률·경기 수·확률·연도·선수 수 등 모든 값은 JSON에서 읽는다.
@@ -206,7 +208,7 @@
    - 타자 기록: stats.pa, avg, obp, hr, sb, k_pct, bb_pct, iso, babip
    - 투수 기록: stats.games, starts, ip, era, k_pct, bb_pct, hr_pct, babip
    핑크 위 작은 글씨는 ink 글자 + 크림 안쪽 상자.
-3. 크림 "비슷한 선수": players[].similar[](player_id, season, similarity) 5명 — 이름·팀·유형은 같은 group의 players에서 찾아 표로.
+3. 라벤더 "비슷한 선수": players[].similar[](player_id, season, similarity) 5명 — 이름·팀·유형은 같은 group의 players에서 찾아 표로.
    행을 누르면 그 선수로 이동.
 4. 틸 "유형 모델": model_report.json의 cluster_quality.version, fit_seasons[], membership_note, batter/pitcher.k, retention,
    k_table[].k·silhouette + players.json의 model_version, fit_seasons[], generated_at.

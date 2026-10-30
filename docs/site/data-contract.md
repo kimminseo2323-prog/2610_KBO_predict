@@ -7,7 +7,7 @@
 ## 읽는 법
 
 - 위치: 로컬 미리보기(`localhost`, `127.0.0.1`)에서는 `../data/public/…`, 배포본에서는 아래 raw URL을 씁니다(`site/assets/app.js`의 `DATA_BASE`).
-- 모든 요청에 `?v=<Date.now()>`를 붙여 브라우저 캐시를 피합니다. raw.githubusercontent.com의 CDN 캐시는 최대 5분이라, 갱신 직후에는 파일끼리 `generated_at`이 잠깐 어긋날 수 있습니다. 푸터는 `status.json`을 기준으로 씁니다.
+- 캐시: 매일(하루 두 번) 바뀌는 `status.json`·`latest.json`·`history.csv`·`rewind/2026/index.json`만 `?v=<Date.now()>`를 붙이고 `cache: "no-store"`로 읽어 브라우저 캐시를 피합니다(`fetchJSON(name, { fresh: true })`, `fetchCSV`도 같음). `rewind/2026/{date}.json`·`players.json`·`teams.json`·`model_report.json`은 많아야 주 1회 바뀌므로 브라우저 기본 캐시를 씁니다(되감기 슬라이더를 오가도 같은 날짜를 다시 받지 않음). raw.githubusercontent.com의 CDN 캐시는 최대 5분이라, 갱신 직후에는 파일끼리 `generated_at`이 잠깐 어긋날 수 있습니다. 푸터는 `status.json`을 기준으로 씁니다.
 - 읽기에 실패하면 빈 화면 대신 오류 문구와 "다시 불러오기" 버튼을 보여 줍니다(`showError`).
 - 시각은 모두 KST(`+09:00`) ISO 문자열이고, 날짜는 `YYYY-MM-DD`입니다. 확률과 비율은 0~1 소수입니다(화면에서 %로 바꿈).
 - 팀 코드: `OB` 두산, `LT` 롯데, `KT` KT, `WO` 키움, `SK` SSG, `SS` 삼성, `HH` 한화, `HT` KIA, `LG` LG, `NC` NC(`src/kbo_predict/teams.py`, 사이트 `TEAMS`).

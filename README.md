@@ -13,11 +13,11 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 
 4단계에서는 저장소가 사람 손 없이 돌아가게 했습니다. GitHub Actions 워크플로 3개가 매일 수집·추론, 매주 재학습·군집 재계산, push·PR마다 테스트와 parity 검사(커밋된 산출물을 원본 데이터로 다시 만들어 값이 같은지)를 맡습니다. 2026 정규시즌 165일을 날짜별로 다시 예측한 되감기 JSON([`rewind/2026/`](data/public/rewind/2026/index.json))과, 가을야구 진출·포스트시즌 시리즈 확률을 몬테카를로로 계산하는 `outlook` 블록도 만들었습니다(아래 "자동화와 되감기" 절). 노트북 05가 오늘 경기 하나를 처음부터 끝까지 따라갑니다.
 
-5단계에서는 이 공개 파일을 읽는 정적 사이트 4페이지를 만들어 GitHub Pages로 띄웠습니다(아래 "사이트" 절).
+5단계에서는 이 공개 파일을 읽는 정적 사이트 4페이지를 만들고 GitHub Pages 배포 설정까지 마쳤습니다. 첫 push 뒤 `pages.yml`이 배포하면 공개됩니다(아래 "사이트" 절).
 
 ## 사이트
 
-**https://kimminseo2323-prog.github.io/2610_KBO_predict/**
+**배포 설정 완료, 첫 push 후 공개** — 공개 주소(첫 배포가 끝나면 열림): **https://kimminseo2323-prog.github.io/2610_KBO_predict/**
 
 | 페이지 | 보여 주는 것 |
 | --- | --- |
@@ -26,11 +26,11 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 | [선수](https://kimminseo2323-prog.github.io/2610_KBO_predict/players.html) (`site/players.html`) | 2015~2026 타자·투수 유형 지도(PCA 2D), 선수 카드(유형·소속 확신도·기록), 비슷한 선수 5명 |
 | [모델 성적표](https://kimminseo2323-prog.github.io/2610_KBO_predict/report.html) (`site/report.html`) | report-2026의 2026 홀드아웃 성적과 기준선·유의성, 신뢰도 곡선, 피처 중요도, 빼고 더해 본 모델, 선수 유형 품질, 라이브 기록 |
 
-- **데이터는 저장소 JSON을 바로 읽습니다.** 페이지는 `https://raw.githubusercontent.com/kimminseo2323-prog/2610_KBO_predict/main/data/public/`의 파일을 `fetch`하므로(raw는 `Access-Control-Allow-Origin: *`), 일일 Actions가 JSON을 커밋하면 사이트를 다시 배포하지 않아도 바뀝니다. raw CDN 캐시 때문에 갱신이 최대 5분 늦게 보일 수 있습니다. 숫자는 HTML에 직접 쓰지 않습니다.
+- **데이터는 저장소 JSON을 바로 읽습니다.** 페이지는 `https://raw.githubusercontent.com/kimminseo2323-prog/2610_KBO_predict/main/data/public/`의 파일을 `fetch`하므로(raw는 `Access-Control-Allow-Origin: *`), 일일 Actions가 JSON을 커밋하면 사이트를 다시 배포하지 않아도 바뀝니다. 매일 바뀌는 `status.json`·`latest.json`·`history.csv`·되감기 목차만 브라우저 캐시를 피해 읽고(나머지는 많아야 주 1회 바뀌어 기본 캐시), raw CDN 캐시 때문에 갱신이 최대 5분 늦게 보일 수 있습니다. 숫자는 HTML에 직접 쓰지 않습니다.
 - 빌드 없는 HTML + CSS + 바닐라 ES 모듈, 차트는 인라인 SVG(외부 라이브러리 없음), 외부 리소스는 글꼴 CSS(Inter, Pretendard)뿐이고 트래킹은 없습니다. 디자인은 [`DESIGN_clay.md`](DESIGN_clay.md)(크림 캔버스, 카드 6색 순환), 확정 목업은 [`docs/design/clay-hybrid.html`](docs/design/clay-hybrid.html).
 - 모든 페이지 아래의 **증거 바**가 `status.json`으로 "마지막 갱신 · Actions 실행 번호 · 커밋 · 모델"을 링크와 함께 보여 줍니다.
 - 페이지 요소별로 어느 파일의 어느 키를 읽는지는 [데이터 계약](docs/site/data-contract.md)에 표로 고정했고, [`scripts/check_site.py`](scripts/check_site.py)가 메뉴·증거 바·외부 리소스·상수·키 경로를 검사합니다.
-- 배포: [`.github/workflows/pages.yml`](.github/workflows/pages.yml)이 main의 `site/**` 변경(또는 수동 실행) 때 `site/`를 GitHub Pages에 올립니다.
+- 배포: [`.github/workflows/pages.yml`](.github/workflows/pages.yml)이 main의 `site/**` 변경(또는 수동 실행) 때 `site/`를 GitHub Pages에 올립니다. 워크플로의 `GITHUB_TOKEN`으로는 Pages 사이트를 새로 만들 수 없으므로, 저장소 Settings → Pages에서 Source를 **GitHub Actions**로 먼저 켜 둡니다.
 
 ### 로컬 미리보기
 
@@ -444,7 +444,7 @@ python scripts/import_site.py <zip|폴더|html> [--as index.html] [--dry-run] [-
 - `config/cluster_labels.yaml`(유형 이름)은 패키지 위치 기준으로 찾으므로 어느 폴더에서 실행해도 같은 이름이 나옵니다. 군집은 단일 스레드로 계산해 같은 기계에서는 비트 단위로 재현되지만, 다른 BLAS(예: Linux의 Actions)에서는 마지막 자리가 다를 수 있어 커밋된 `models/clusters.pkl`이 기준입니다. `cluster compare`가 다시 맞춘 군집을 커밋본과 비교하고(중심 차이 1e-9 이내, 맞춤 시즌 라벨 동일), Linux ci에서도 유형표 해시(`types_sha256`)가 같았습니다.
 - `check_parity`는 재생성본을 `--out`(기본 `artifacts/parity/`, gitignore)에만 쓰고 `data/public`·`models` 아래로의 출력은 거부합니다. 노트북 02는 스스로 `data/processed/features.parquet`를 씁니다(gitignore).
 
-테스트는 `python -X utf8 -m pytest -q -m "not slow"`(367개, ci와 같음 — 사이트 30개 포함)이고, `-m slow`로 6개를 더 돌립니다(노트북 01~05 실행 5개 + 실데이터 `check_parity --quick` 1개). 전부 돌리려면 `python -X utf8 -m pytest -q`입니다.
+테스트는 `python -X utf8 -m pytest -q -m "not slow"`(369개, ci와 같음 — 사이트 32개 포함)이고, `-m slow`로 6개를 더 돌립니다(노트북 01~05 실행 5개 + 실데이터 `check_parity --quick` 1개). 전부 돌리려면 `python -X utf8 -m pytest -q`입니다.
 
 ## 데이터 출처
 
