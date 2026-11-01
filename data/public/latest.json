@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-10-31T23:29:02+09:00",
+  "generated_at": "2026-11-01T14:55:08+09:00",
   "date": "2026-11-01",
   "mode": "live",
   "model_version": "v0.2",
-  "commit_sha": "805f3c3702915d22823f2c218fdd20cd128e0e3e",
-  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/41210294372",
+  "commit_sha": "0042f4e82d916f9d448f4aa6154393bfc2275b3e",
+  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/41278712739",
   "games": [
     {
       "game_id": 14054,
@@ -12,7 +12,7 @@
       "time": "14:00",
       "stadium": "Daegu",
       "round": "postseason",
-      "status": "SCHEDULED",
+      "status": "LIVE",
       "home": {
         "code": "SS",
         "name": "삼성",
