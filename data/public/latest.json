@@ -1,19 +1,27 @@
 {
-  "generated_at": "2026-11-01T14:55:08+09:00",
-  "date": "2026-11-01",
+  "generated_at": "2026-11-02T00:00:01+09:00",
+  "date": "2026-11-03",
   "mode": "live",
   "model_version": "v0.2",
-  "commit_sha": "0042f4e82d916f9d448f4aa6154393bfc2275b3e",
-  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/41278712739",
+  "commit_sha": "41e1f4fafce3df57f48ca8876866a677115975ae",
+  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/41318913297",
   "games": [
     {
-      "game_id": 14054,
-      "date": "2026-11-01",
-      "time": "14:00",
-      "stadium": "Daegu",
+      "game_id": 14056,
+      "date": "2026-11-03",
+      "time": "18:30",
+      "stadium": "Suwon",
       "round": "postseason",
-      "status": "LIVE",
+      "status": "SCHEDULED",
       "home": {
+        "code": "KT",
+        "name": "KT",
+        "starter": null,
+        "win_pct_season": 0.647,
+        "last10": 1.0,
+        "run_diff": 1.22
+      },
+      "away": {
         "code": "SS",
         "name": "삼성",
         "starter": null,
@@ -21,15 +29,7 @@
         "last10": 0.4,
         "run_diff": 0.96
       },
-      "away": {
-        "code": "HT",
-        "name": "KIA",
-        "starter": null,
-        "win_pct_season": 0.556,
-        "last10": 0.7,
-        "run_diff": 0.73
-      },
-      "home_win_prob": 0.5647,
+      "home_win_prob": 0.5289,
       "factors": [
         {
           "name": "기본 홈 어드밴티지",
@@ -37,19 +37,19 @@
         },
         {
           "name": "선발투수 기록 유무",
-          "contribution_pp": 1.6
+          "contribution_pp": 1.7
+        },
+        {
+          "name": "팀 승률 차이",
+          "contribution_pp": 0.8
+        },
+        {
+          "name": "홈팀의 홈 경기 승률",
+          "contribution_pp": -0.8
         },
         {
           "name": "타선 삼진 비율 차이",
-          "contribution_pp": 1.5
-        },
-        {
-          "name": "지난 시즌 승률 차이",
-          "contribution_pp": 1.1
-        },
-        {
-          "name": "타선 홈런 비율 차이",
-          "contribution_pp": -0.8
+          "contribution_pp": -0.7
         }
       ],
       "starter_known": false,
@@ -58,29 +58,29 @@
   ],
   "outlook": {
     "type": "series",
-    "as_of": "2026-11-01",
-    "name": "플레이오프",
-    "best_of": 5,
+    "as_of": "2026-11-03",
+    "name": "한국시리즈",
+    "best_of": 7,
     "teams": [
-      "SS",
-      "HT"
+      "KT",
+      "SS"
     ],
     "head_start": [
       0,
       0
     ],
     "wins": [
-      2,
-      2
+      0,
+      0
     ],
     "win_prob": [
-      0.5685,
-      0.4315
+      0.4778,
+      0.5222
     ],
-    "most_common_result": "3-2",
-    "goes_distance_prob": 1.0,
-    "games_remaining_max": 1,
+    "most_common_result": "2-4",
+    "goes_distance_prob": 0.3093,
+    "games_remaining_max": 7,
     "today_game_prob_source": "win_model (starter-inclusive)",
-    "next_game_date": "2026-11-01"
+    "next_game_date": "2026-11-03"
   }
 }
