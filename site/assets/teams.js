@@ -215,10 +215,11 @@ function renderStandings(rows) {
 
   const dom = rulerDomain(rows);
   const cols = [
-    ["순위", "num rank-col"], ["팀", "team-col"], ["승-패-무", "num"], ["승률", "num win-col"], ["피타고리안", "num"],
-    ...(hasModel ? [[["모델 기대 승률", el("span", { class: "th-note" }, `${version} 홀드아웃 예측 평균`)], "num model-col"]] : []),
+    ["순위", "num rank-col"], ["팀", "team-col"], ["승-패-무", "num"], ["승률", "num win-col"],
+    [[el("span", { class: "tn-full" }, "피타고리안"), el("span", { class: "tn-short" }, "피타")], "num"],
+    ...(hasModel ? [[[el("span", { class: "tn-full" }, "모델 기대 승률"), el("span", { class: "tn-short" }, "모델"), el("span", { class: "th-note" }, `${version} 홀드아웃 예측 평균`)], "num model-col"]] : []),
     [[el("span", { class: "sr-only" }, "한눈에 비교 (눈금)"), rulerHead(dom)], "ruler-col"],
-    ["경기", "num"], ["홈 승률", "num"], ["원정 승률", "num"],
+    ["경기", "num hide-sm"], ["홈 승률", "num hide-sm"], ["원정 승률", "num hide-sm"],
   ];
   const tr = (r) => el("tr", { class: r.rank <= PLAYOFF_SPOTS ? "is-playoff" : null }, [
     el("td", { class: "num rank-col" }, [String(r.rank), r.tied ? el("span", { class: "tie-mark", title: "승률 동률" }, "†") : null]),
@@ -231,9 +232,9 @@ function renderStandings(rows) {
     el("td", { class: "num" }, fmtRate3(r.pyth_pct)),
     hasModel ? el("td", { class: "num model-col" }, fmtRate3(r.model_expected)) : null,
     el("td", { class: "ruler-col" }, rulerRow(r, dom)),
-    el("td", { class: "num" }, String(r.games ?? "—")),
-    el("td", { class: "num" }, fmtRate3(r.home_pct)),
-    el("td", { class: "num" }, fmtRate3(r.away_pct)),
+    el("td", { class: "num hide-sm" }, String(r.games ?? "—")),
+    el("td", { class: "num hide-sm" }, fmtRate3(r.home_pct)),
+    el("td", { class: "num hide-sm" }, fmtRate3(r.away_pct)),
   ]);
 
   // 무대 위 한 줄: 눈금 범례 + 실제 승률이 피타고리안과 가장 크게 어긋난 두 팀 (접전 운)

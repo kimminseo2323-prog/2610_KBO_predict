@@ -92,10 +92,22 @@
 .tie-mark { margin-left: 2px; font-size: 13px; font-weight: 500; color: var(--muted); }
 .team-dot { width: 10px; height: 10px; margin-right: 10px; vertical-align: 1px; }
 .tn-short { display: none; }
+/* 좁은 화면: 눈금 열과 경기·홈·원정 열은 숨겨 순위·팀·승-패-무·승률·피타고리안·모델 기대가 한 화면에 들어오게 (값은 툴팁·넓은 화면에서) */
+@media (max-width: 639px) {
+  .standings .hide-sm, .standings .ruler-col { display: none; }
+  .standings th, .standings td { padding-inline: 5px; font-size: 13px; }
+  .standings th.model-col { width: auto; min-width: 0; }
+  .standings th .th-note { display: none; }
+  .standings td.rank-col { font-size: 16px; padding-left: 0; }
+  .standings-scroll { padding-inline: 8px; }
+  .standings th, .standings td { padding-inline: 4px; }
+  .standings td.win-col { font-size: 15px; }
+  .standings .model-col { padding-inline: 5px; }
+}
 @media (max-width: 599px) {
   .tn-full { display: none; }
   .tn-short { display: inline; }
-  .standings { min-width: 780px; }
+  .standings { min-width: 0; width: 100%; }  /* 열을 숨겼으므로 가로 스크롤 없이 한 화면에 */
   .standings-scroll { padding-inline: var(--sp-12); }
 }
 
