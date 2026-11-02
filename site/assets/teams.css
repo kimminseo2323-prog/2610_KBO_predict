@@ -100,7 +100,10 @@
   .standings th .th-note { display: none; }
   .standings td.rank-col { font-size: 16px; padding-left: 0; }
   .standings-scroll { padding-inline: 8px; }
-  .standings th, .standings td { padding-inline: 4px; }
+  .standings th, .standings td { padding-inline: 3px; font-size: 12.5px; }
+  .standings .team-dot { margin-right: 6px; }
+  .standings td.rank-col { font-size: 15px; }
+  .standings td.win-col { font-size: 14px; }
   .standings td.win-col { font-size: 15px; }
   .standings .model-col { padding-inline: 5px; }
 }
