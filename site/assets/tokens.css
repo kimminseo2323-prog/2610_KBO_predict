@@ -1,42 +1,41 @@
-/* KBO Predict — 디자인 토큰.
-   DESIGN_clay.md(Clay 디자인 시스템)의 값을 CSS 변수로 그대로 옮겼다. 값을 바꾸려면 DESIGN_clay.md부터 바꾼다
-   (tests/test_site.py::test_tokens_match_design_md가 둘이 같은지 확인한다).
-   Plain Black(라이선스 폰트) 대신 Inter 500 + 음수 자간, 한글은 Pretendard. */
+/* KBO Predict — 디자인 토큰 (DESIGN_broadcast.md "야구 중계 그래픽" 시스템).
+   흰 바탕 + 잉크 + 그날 두 팀의 구단 색만 쓴다. 모서리는 각지게, 숫자는 좁은 이탤릭 서체(Barlow Condensed),
+   한글은 Pretendard. 값을 바꾸려면 DESIGN_broadcast.md부터 바꾼다(tests/test_site.py::test_tokens_match_design_md). */
 
 :root {
-  /* 바탕 — 크림 캔버스. 회색 캔버스 금지 */
-  --canvas: #fffaf0;
-  --surface-soft: #faf5e8;   /* 푸터 */
-  --surface-card: #f5f0e0;   /* 크림 카드 */
-  --surface-strong: #ebe6d6;
+  /* 바탕 */
+  --canvas: #ffffff;
+  --surface-soft: #f4f4f6;   /* 푸터·옅은 띠 */
+  --surface-card: #f4f4f6;   /* 안쪽 패널(.inset) */
+  --surface-strong: #e7e8eb; /* 비활성(취소 경기)·막대 트랙 */
 
   /* 글자 */
-  --ink: #0a0a0a;
-  --body-strong: #1a1a1a;
-  --body: #3a3a3a;
-  --muted: #6a6a6a;
-  --muted-base: #6a6a6a;  /* --muted의 원래 값 (카드가 --muted를 바꿔도 크림 패널 .inset이 되돌릴 때 쓴다) */
-  --muted-soft: #9a9a9a;
-  --on-dark: #ffffff;        /* 틸 카드·잉크 버튼 위 글자. 핑크 위에서는 24px 이상 표시용 글자만(app.css 규칙) */
+  --ink: #0d0d0f;
+  --body-strong: #18191c;
+  --body: #2b2d31;
+  --muted: #5a5e66;
+  --muted-base: #5a5e66;
+  --muted-soft: #8d929a;
+  --on-dark: #ffffff;
 
   /* 선 */
-  --hairline: #e5e5e5;
-  --hairline-soft: #f0f0f0;
+  --hairline: #e3e4e7;
+  --hairline-soft: #eeeff1;
+  --rule: 4px;               /* 섹션 머리 위 굵은 선 */
 
-  /* 피처 카드 6색 (크림 포함) — 같은 색 연속 금지 */
-  --pink: #ff4d8b;
-  --teal: #1a3a3a;
-  --lavender: #b8a4ed;
-  --peach: #ffb084;
-  --ochre: #e8b94a;
-  --cream: #f5f0e0;          /* = --surface-card */
+  /* 선수 유형·차트 계열색 (데이터 표시에만 — 면이나 카드 바탕으로 쓰지 않는다) */
+  --pink: #e8336f;
+  --teal: #1d4e4a;
+  --lavender: #8f7ad6;
+  --peach: #f08c4f;
+  --ochre: #d9a521;
+  --cream: #f4f4f6;
+  --mint: #5fb39b;
+  --coral: #e5483a;
 
-  /* 보조 강조 (작은 배지·점·일러스트에만) */
-  --mint: #a4d4c5;
-  --coral: #ff6b5a;
-
-  /* 구단 대표색 — 각 구단 상징색(로고·유니폼)의 근사치. 순위표 점·되감기 선·전망 막대 같은 "팀을 가리키는 표시"에만 쓰고
-     글자 바탕으로는 쓰지 않는다(대비 미검증). 두산·KT·롯데는 셋 다 남색·검정 계열이라 되감기 선은 KT 점선, 롯데 점점선(teams.js LINE_DASH).
+  /* 구단 대표색 — 각 구단 상징색(로고·유니폼)의 근사치. 매치업 면·순위표 띠·되감기 선·전망 막대처럼 "팀을 가리키는 표시"에 쓴다.
+     매치업 면의 글자색은 home.js teamSideColors가 밝기로 정한다(어두우면 흰색, SSG 노랑·한화 주황은 잉크).
+     두산·KT·롯데는 셋 다 남색·검정 계열이라 되감기 선은 KT 점선, 롯데 점점선(teams.js LINE_DASH).
      SSG는 빨강이 KIA와 겹쳐 보조색 노랑을 쓴다. 코드 = teams.py 구단 코드 소문자. */
   --team-lg: #c30452;   /* LG 자주 */
   --team-ob: #131230;   /* 두산 네이비 */
@@ -50,17 +49,17 @@
   --team-wo: #570514;   /* 키움 버건디 */
 
   /* 의미 색 */
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --error: #ef4444;
+  --success: #0b7a4b;
+  --warning: #b7791f;
+  --error: #c8322b;
 
-  /* 라운드 */
-  --r-xs: 6px;
-  --r-sm: 8px;
-  --r-md: 12px;              /* 버튼·입력 */
-  --r-lg: 16px;              /* 콘텐츠 카드 */
-  --r-xl: 24px;              /* 피처 카드 */
-  --r-pill: 9999px;
+  /* 모서리 — 중계 그래픽은 각지다. 작은 태그·버튼만 2px */
+  --r-xs: 2px;
+  --r-sm: 2px;
+  --r-md: 2px;
+  --r-lg: 0;
+  --r-xl: 0;
+  --r-pill: 2px;
 
   /* 간격 (기본 단위 4px) */
   --sp-4: 4px;
@@ -72,18 +71,20 @@
   --sp-48: 48px;
   --sp-96: 96px;
 
-  /* 글꼴 — 영문·숫자는 Inter, 한글 글리프는 Pretendard로 넘어간다 */
-  --font-display: "Inter", "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-  --font-body: "Inter", "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  /* 글꼴 — 한글·본문 Pretendard, 큰 숫자·브랜드는 Barlow Condensed */
+  --font-display: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-num: "Barlow Condensed", "Pretendard Variable", "Pretendard", sans-serif;
 }
 
-/* 타입 스케일 — DESIGN_clay.md typography 값. 큰 크기는 clamp(모바일 최소, 유동, DESIGN 값)로 줄어든다. */
-.display-lg { font-family: var(--font-display); font-size: clamp(36px, 20px + 4.2vw, 56px); font-weight: 500; line-height: 1.05; letter-spacing: -2px; }
-.display-md { font-family: var(--font-display); font-size: clamp(30px, 22px + 2vw, 40px); font-weight: 500; line-height: 1.1; letter-spacing: -1px; }
-.display-sm { font-family: var(--font-display); font-size: clamp(26px, 20px + 1.4vw, 32px); font-weight: 500; line-height: 1.15; letter-spacing: -0.5px; }
-.title-lg { font-family: var(--font-body); font-size: clamp(21px, 18px + 0.8vw, 24px); font-weight: 600; line-height: 1.3; letter-spacing: -0.3px; }
-.title-md { font-family: var(--font-body); font-size: 18px; font-weight: 600; line-height: 1.4; letter-spacing: 0; }
-.title-sm { font-family: var(--font-body); font-size: 16px; font-weight: 600; line-height: 1.4; letter-spacing: 0; }
-.body-md { font-family: var(--font-body); font-size: 16px; font-weight: 400; line-height: 1.55; letter-spacing: 0; }
+/* 타입 스케일 — DESIGN_broadcast.md typography 값. 큰 크기는 clamp(모바일 최소, 유동, 최대). */
+.display-lg { font-family: var(--font-display); font-size: clamp(34px, 20px + 3.6vw, 52px); font-weight: 900; line-height: 1.05; letter-spacing: -2px; }
+.display-md { font-family: var(--font-display); font-size: clamp(28px, 20px + 2vw, 40px); font-weight: 900; line-height: 1.1; letter-spacing: -1.2px; }
+.display-sm { font-family: var(--font-display); font-size: clamp(24px, 18px + 1.4vw, 30px); font-weight: 900; line-height: 1.15; letter-spacing: -0.8px; }
+.title-lg { font-family: var(--font-body); font-size: clamp(20px, 17px + 0.8vw, 22px); font-weight: 900; line-height: 1.3; letter-spacing: -0.6px; }
+.title-md { font-family: var(--font-body); font-size: 18px; font-weight: 800; line-height: 1.4; letter-spacing: -0.3px; }
+.title-sm { font-family: var(--font-body); font-size: 15px; font-weight: 800; line-height: 1.4; letter-spacing: 0; }
+.body-md { font-family: var(--font-body); font-size: 15px; font-weight: 400; line-height: 1.55; letter-spacing: 0; }
 .body-sm { font-family: var(--font-body); font-size: 14px; font-weight: 400; line-height: 1.55; letter-spacing: 0; }
-.caption { font-family: var(--font-body); font-size: 13px; font-weight: 500; line-height: 1.4; letter-spacing: 0; }
+.caption { font-family: var(--font-body); font-size: 12px; font-weight: 600; line-height: 1.4; letter-spacing: 0; }
+.num-xl { font-family: var(--font-num); font-size: clamp(72px, 40px + 8vw, 150px); font-weight: 800; font-style: italic; line-height: 0.82; letter-spacing: -3px; }

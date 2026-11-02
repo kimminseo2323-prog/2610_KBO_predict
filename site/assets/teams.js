@@ -275,7 +275,7 @@ function renderStandings(rows) {
       el("thead", {}, el("tr", {}, cols.map(([t, c]) => el("th", { scope: "col", class: c ?? null }, t)))),
       el("tbody", {}, bodyRows),
     ])),
-    el("ul", { class: "notes" }, notes),
+    el("details", { class: "more" }, [el("summary", {}, "표 읽는 법"), el("ul", {}, notes)]),
   );
 }
 
@@ -468,10 +468,10 @@ function drawRewind() {
   const first = days.find((d) => d.outlook?.teams);
   body.replaceChildren(
     el("div", { class: "inset rewind__frame" }, chart),
-    el("p", { class: "card__foot rewind__note" },
+    el("details", { class: "more rewind__note" }, [el("summary", {}, "그래프 읽는 법"), el("p", {},
       `${fmtDate(first?.outlook?.as_of ?? first?.date)}부터 ${fmtDate(lastDay?.outlook?.as_of ?? lastDay?.date)}까지 약 일주일 간격 ${days.length - rw.failed}개 날짜. ` +
       "각 점은 그날 경기 전 성적으로 남은 경기를 1만 번 시뮬레이션해 5위 안에 든 비율입니다. 범례 숫자는 마지막 날짜의 확률이고, 선 색은 구단 대표색입니다(남색 계열인 KT는 점선, 롯데는 점점선)." +
-      (rw.failed ? ` 날짜 ${rw.failed}개는 받지 못해 선을 끊었습니다.` : "")),
+      (rw.failed ? ` 날짜 ${rw.failed}개는 받지 못해 선을 끊었습니다.` : ""))]),
   );
   lineChart(chart, series, {
     yDomain: [0, 1], yFormat: (v) => fmtPct(v), height: 300, endLabels: true,

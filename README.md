@@ -21,13 +21,13 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 
 | 페이지 | 보여 주는 것 |
 | --- | --- |
-| [오늘의 경기](https://kimminseo2323-prog.github.io/2610_KBO_predict/) (`site/index.html`) | 오늘 경기의 홈팀 승리 확률(원정 핑크 / 홈 틸 매치업 카드), 확률을 가른 요인 5개, 모델 적중률, 두 선발의 유형, 시리즈·가을야구 전망, 선수 유형 지도, 최근 예측. 경기가 없는 날(비시즌)에는 2026 시즌 되감기 슬라이더로 열려 "그날 모델의 예측과 실제 결과"를 보여 줍니다 |
+| [오늘의 경기](https://kimminseo2323-prog.github.io/2610_KBO_predict/) (`site/index.html`) | 오늘 경기의 홈팀 승리 확률(두 구단 색 면이 사선으로 맞붙는 매치업 슬랩, 경계가 승률만큼 밀림), 확률을 가른 요인 5개, 모델 적중률, 두 선발의 유형, 시리즈·가을야구 전망, 선수 유형 지도, 최근 예측. 경기가 없는 날(비시즌)에는 2026 시즌 되감기 슬라이더로 열려 "그날 모델의 예측과 실제 결과"를 보여 줍니다 |
 | [팀](https://kimminseo2323-prog.github.io/2610_KBO_predict/teams.html) (`site/teams.html`) | 시즌별 순위표(실제·피타고리안·모델 기대 승률), 로스터 유형 구성, 상대 전적 격자, 2026 가을야구 확률 되감기 |
 | [선수](https://kimminseo2323-prog.github.io/2610_KBO_predict/players.html) (`site/players.html`) | 2015~2026 타자·투수 유형 지도(PCA 2D), 선수 카드(유형·소속 확신도·기록), 비슷한 선수 5명 |
 | [모델 성적표](https://kimminseo2323-prog.github.io/2610_KBO_predict/report.html) (`site/report.html`) | report-2026의 2026 홀드아웃 성적과 기준선·유의성, 신뢰도 곡선, 피처 중요도, 빼고 더해 본 모델, 선수 유형 품질, 라이브 기록 |
 
 - **데이터는 저장소 JSON을 바로 읽습니다.** 페이지는 `https://raw.githubusercontent.com/kimminseo2323-prog/2610_KBO_predict/main/data/public/`의 파일을 `fetch`하므로(raw는 `Access-Control-Allow-Origin: *`), 일일 Actions가 JSON을 커밋하면 사이트를 다시 배포하지 않아도 바뀝니다. 매일 바뀌는 `status.json`·`latest.json`·`history.csv`·되감기 목차만 브라우저 캐시를 피해 읽고(나머지는 많아야 주 1회 바뀌어 기본 캐시), raw CDN 캐시 때문에 갱신이 최대 5분 늦게 보일 수 있습니다. 숫자는 HTML에 직접 쓰지 않습니다.
-- 빌드 없는 HTML + CSS + 바닐라 ES 모듈, 차트는 인라인 SVG(외부 라이브러리 없음), 외부 리소스는 글꼴 CSS(Inter, Pretendard)뿐이고 트래킹은 없습니다. 디자인은 [`DESIGN_clay.md`](DESIGN_clay.md)(크림 캔버스, 카드 6색 순환), 확정 목업은 [`docs/design/clay-hybrid.html`](docs/design/clay-hybrid.html).
+- 빌드 없는 HTML + CSS + 바닐라 ES 모듈, 차트는 인라인 SVG(외부 라이브러리 없음), 외부 리소스는 글꼴 CSS(Barlow Condensed, Pretendard)뿐이고 트래킹은 없습니다. 디자인은 [`DESIGN_broadcast.md`](DESIGN_broadcast.md)(야구 중계 그래픽형), 시안은 [`docs/design/redesign/`](docs/design/redesign/).
 - 모든 페이지 아래의 **증거 바**가 `status.json`으로 "마지막 갱신 · Actions 실행 번호 · 커밋 · 모델"을 링크와 함께 보여 줍니다.
 - 페이지 요소별로 어느 파일의 어느 키를 읽는지는 [데이터 계약](docs/site/data-contract.md)에 표로 고정했고, [`scripts/check_site.py`](scripts/check_site.py)가 메뉴·증거 바·외부 리소스·상수·키 경로를 검사합니다.
 - 배포: [`.github/workflows/pages.yml`](.github/workflows/pages.yml)이 main의 `site/**` 변경(또는 수동 실행) 때 `site/`를 GitHub Pages에 올립니다. 워크플로의 `GITHUB_TOKEN`으로는 Pages 사이트를 새로 만들 수 없으므로, 저장소 Settings → Pages에서 Source를 **GitHub Actions**로 먼저 켜 둡니다.
@@ -40,9 +40,13 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
 
 저장소 루트에서 `python -m http.server 8000`을 실행하고 `http://localhost:8000/site/`를 엽니다. localhost에서는 raw URL 대신 저장소의 `data/public/`을 읽습니다. `http://localhost:8000/site/?fixture=edge`는 취소·선발 미정 경기를 그리는 검증 화면, `?date=2026-09-01`은 그 날짜의 되감기입니다.
 
-### Genspark 재디자인 (반영 완료)
+### 디자인: 야구 중계 그래픽형 (2026-11)
 
-지금 공개된 4페이지는 Genspark 코드 에이전트(Claude Sonnet 5.5)가 다시 디자인한 것입니다(2026-10-30, 홈 → 성적표 → 선수 → 팀 순서로 한 페이지씩). 처음 손으로 만든 참조 구현에 [브리프](docs/site/genspark-brief.md)를 그대로 주면 복사본이 나와서, "레이아웃·분위기는 다시 설계하되 데이터 연결·요소 id·디자인 토큰·외부 리소스 규칙은 유지"라는 지시를 앞에 붙였습니다. 각 페이지는 한 장면이 화면을 압도하고 나머지 카드는 조연으로 물러나는 구성입니다(홈 "당겨진 경계선" 중계 무대, 성적표 "좋은 숫자 / 한계" 판결 무대, 선수 "지도 + 선수 카드" 짝, 팀 "순위표 점 그래프"). 공통 파일(`tokens.css`·`app.css`·`app.js`·`charts.js`)과 데이터 연결은 바뀌지 않았고, 제작본마다 아래 절차로 검증했습니다. 팀을 가리키는 점·선·막대는 `tokens.css`의 구단 대표색 `--team-<코드>`를 씁니다.
+지금 4페이지는 [DESIGN_broadcast.md](DESIGN_broadcast.md)의 "야구 중계 그래픽" 문법입니다. 맨 위 검정 스코어 버그(라이브 시리즈 중에는 전적), 두 구단 색 면이 사선으로 맞붙는 매치업 슬랩, 굵은 선으로 시작하는 섹션, 좁은 이탤릭 숫자(Barlow Condensed), 각진 모서리. 움직임은 데이터가 자라나는 것만 씁니다(경계가 승률로 밀림, 숫자 세어 올리기, 막대 성장, 선 그리기, 점 튀어나오기 — `prefers-reduced-motion`이면 끔). 모든 차트는 마우스를 올리거나 탭하면 값이 뜨고, 긴 설명은 "표 읽는 법" 접기 안에 있습니다.
+
+### Genspark 재디자인 (2026-10-30, 이전 단계)
+
+중계 그래픽형 이전의 4페이지 레이아웃은 Genspark 코드 에이전트(Claude Sonnet 5.5)가 다시 디자인한 것입니다(2026-10-30, 홈 → 성적표 → 선수 → 팀 순서로 한 페이지씩). 처음 손으로 만든 참조 구현에 [브리프](docs/site/genspark-brief.md)를 그대로 주면 복사본이 나와서, "레이아웃·분위기는 다시 설계하되 데이터 연결·요소 id·디자인 토큰·외부 리소스 규칙은 유지"라는 지시를 앞에 붙였습니다. 각 페이지는 한 장면이 화면을 압도하고 나머지 카드는 조연으로 물러나는 구성입니다(홈 "당겨진 경계선" 중계 무대, 성적표 "좋은 숫자 / 한계" 판결 무대, 선수 "지도 + 선수 카드" 짝, 팀 "순위표 점 그래프"). 공통 파일(`tokens.css`·`app.css`·`app.js`·`charts.js`)과 데이터 연결은 바뀌지 않았고, 제작본마다 아래 절차로 검증했습니다. 팀을 가리키는 점·선·막대는 `tokens.css`의 구단 대표색 `--team-<코드>`를 씁니다.
 
 다시 만들 때의 절차:
 
@@ -474,6 +478,6 @@ python scripts/import_site.py <zip|폴더|html> [--as index.html] [--dry-run] [-
 - 사이트: [데이터 계약](docs/site/data-contract.md), [Genspark 브리프](docs/site/genspark-brief.md), [확정 목업](docs/design/clay-hybrid.html)
 - 이월 항목: [docs/superpowers/plans/2026-10-27-stage0-deferred.md](docs/superpowers/plans/2026-10-27-stage0-deferred.md)
 - 데이터 조사: [docs/research/kbo-data-sources.md](docs/research/kbo-data-sources.md)
-- 디자인 시스템: [DESIGN_clay.md](DESIGN_clay.md)
+- 디자인 시스템: [DESIGN_broadcast.md](DESIGN_broadcast.md) (야구 중계 그래픽형, 2026-11). 이전 Clay 시스템은 [DESIGN_clay.md](DESIGN_clay.md)에 기록으로 남김
 
 저장소: https://github.com/kimminseo2323-prog/2610_KBO_predict

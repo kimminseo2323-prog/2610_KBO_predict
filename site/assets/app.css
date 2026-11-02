@@ -1,31 +1,20 @@
-/* KBO Predict — 공통 레이아웃·컴포넌트. 토큰은 tokens.css (먼저 불러온다).
-   원칙(DESIGN_clay.md): 크림 캔버스, 포화색 피처 카드(24px 라운드, 그림자 없음), 크림 푸터, 호버 장식 최소.
-   돋보이는 것은 카드 색과 큰 숫자 하나뿐이고 나머지 크롬은 조용하게 둔다. */
+/* KBO Predict — 공통 레이아웃·컴포넌트 (DESIGN_broadcast.md). 토큰은 tokens.css (먼저 불러온다).
+   야구 중계 그래픽의 문법: 맨 위 검정 "스코어 버그" 띠, 굵은 선으로 시작하는 섹션, 각진 면, 좁은 이탤릭 숫자.
+   색 면은 그날 경기 두 팀의 구단 색뿐이고 나머지는 흰 바탕과 잉크다. 그림자·둥근 카드·파스텔 면은 쓰지 않는다. */
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
-  margin: 0;
-  background: var(--canvas);
-  color: var(--ink);
-  font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
+  margin: 0; background: var(--canvas); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
 }
 img, svg { max-width: 100%; }
-h1, h2, h3, h4, p, ul, ol, figure { margin: 0; }
+h1, h2, h3, h4, p, ul, ol, figure, dl, dd { margin: 0; }
 a { color: inherit; text-underline-offset: 3px; }
 button, input, select { font: inherit; color: inherit; }
 
-/* ---------- 문맥 색: 포커스 링·보조 글자 ----------
-   --focus  포커스 링·선택된 점 테두리. 기본 잉크, 틸 카드 위는 흰색, 카드 안 크림 패널(.inset)은 다시 잉크.
-   --muted  보조 글자(리드·축·표 머리글). 카드 바탕마다 대비가 맞는 단색으로 바꾼다(투명도 대신). */
+/* ---------- 문맥 색: 포커스 링·보조 글자 ---------- */
 :root { --focus: var(--ink); }
-.card--lavender, .card--peach, .card--ochre { --muted: var(--body); }
-.card--pink { --muted: var(--ink); }
-.card--teal { --muted: var(--on-dark); }
-.card--teal { --focus: var(--on-dark); }
 .inset { --muted: var(--muted-base); --focus: var(--ink); }
 
 /* ---------- 접근성 ---------- */
@@ -34,229 +23,221 @@ button, input, select { font: inherit; color: inherit; }
   position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+/* 화면 낭독기용 표는 줄 수만큼 높이를 차지해 페이지 아래에 빈 공간을 만든다 — 고정 위치로 문서 흐름·스크롤 범위에서 뺀다 */
+table.sr-only { position: fixed !important; top: 0; left: 0; }
 .skip-link {
-  position: absolute; left: var(--sp-16); top: -100px; z-index: 20;
+  position: absolute; left: var(--sp-16); top: -100px; z-index: 30;
   background: var(--ink); color: var(--on-dark); padding: var(--sp-12) var(--sp-16);
-  border-radius: var(--r-md); font-weight: 600; font-size: 14px; text-decoration: none;
+  font-weight: 700; font-size: 14px; text-decoration: none;
 }
 .skip-link:focus { top: var(--sp-8); }
 
 /* ---------- 레이아웃 ---------- */
-.wrap { width: 100%; max-width: 1280px; margin-inline: auto; padding-inline: 20px; }
+.wrap { width: 100%; max-width: 1200px; margin-inline: auto; padding-inline: 20px; }
 main { display: block; padding-bottom: var(--sp-96); }
 .stack > * + * { margin-top: var(--sp-16); }
-
 .page-head {
   display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
-  gap: var(--sp-24); padding-block: var(--sp-48) var(--sp-24);
+  gap: var(--sp-16) var(--sp-24); padding-block: var(--sp-32) var(--sp-24);
 }
-.page-head h1 { max-width: 20ch; }
-.page-head .lead { margin-top: var(--sp-8); color: var(--body); max-width: 60ch; }
-.section { margin-top: var(--sp-48); }
-.section > h2 { margin-bottom: var(--sp-16); }
+.page-head h1 { max-width: 22ch; }
+.page-head .lead { margin-top: var(--sp-8); color: var(--muted); font-size: 14px; max-width: 60ch; }
 .muted { color: var(--muted); }
-.small { font-size: 14px; }
+.small { font-size: 13px; }
 .num { font-variant-numeric: tabular-nums; }
 .r { text-align: right; }
+.nowrap { white-space: nowrap; }
 
-/* ---------- 상단 내비 (64px, 크림) ---------- */
-.topnav { background: var(--canvas); position: relative; z-index: 10; }
-.topnav__inner {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-24);
-  min-height: 64px;
-}
+/* ---------- 머리: 스코어 버그(검정 띠) + 메뉴 ---------- */
+.topnav { position: sticky; top: 0; z-index: 20; }
+.bugbar { background: var(--ink); color: var(--on-dark); }
+.bugbar__inner { display: flex; align-items: stretch; min-height: 52px; gap: var(--sp-16); }
 .brand {
-  display: inline-flex; align-items: center; gap: 10px; flex: none;
-  font-weight: 600; font-size: 16px; letter-spacing: -0.2px; text-decoration: none; color: var(--ink);
+  display: inline-flex; align-items: center; gap: 10px; flex: none; text-decoration: none; color: var(--on-dark);
+  font-family: var(--font-num); font-style: italic; font-weight: 800; font-size: 22px; letter-spacing: 0.4px; line-height: 1;
 }
-/* 작은 점토 공 — 로고 대신 */
-.brand__mark {
-  width: 22px; height: 22px; border-radius: 50%; flex: none;
-  background: radial-gradient(circle at 35% 30%, #fff 0 18%, var(--coral) 20% 100%);
+.brand__ball { width: 22px; height: 22px; flex: none; }
+.bug-slot { display: flex; align-items: stretch; margin-left: auto; font-family: var(--font-num); font-weight: 700; font-size: 20px; line-height: 1; }
+.bug-slot:empty { display: none; }
+.bug-slot .bug__lbl { display: flex; align-items: center; padding: 0 12px; font-family: var(--font-body); font-size: 12px; font-weight: 700; color: #b9bcc3; }
+.bug-slot .bug__team { display: flex; align-items: center; gap: 8px; padding: 0 14px; }
+.bug-slot .bug__team b { font-weight: 800; }
+.bugbar .btn--bug {
+  align-self: center; height: 32px; padding: 0 12px; background: transparent; color: #d7d9de;
+  outline: 1px solid #3a3c42; outline-offset: -1px; font-size: 12px; font-weight: 700;
 }
-.topnav nav ul { list-style: none; display: flex; gap: var(--sp-4); padding: 0; }
-.topnav nav a {
-  display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px;
-  border-radius: var(--r-pill); font-size: 14px; font-weight: 500; line-height: 1.4;
-  color: var(--muted); text-decoration: none; white-space: nowrap;
+.bugbar .btn--bug:hover { color: var(--on-dark); outline-color: #6a6d75; }
+.bug-slot:empty + .btn--bug { margin-left: auto; }
+.menubar { background: var(--canvas); border-bottom: 3px solid var(--ink); }
+.menubar ul { list-style: none; display: flex; gap: 0; padding-block: 0; overflow-x: auto; scrollbar-width: none; }
+.menubar ul::-webkit-scrollbar { display: none; }
+.menubar a {
+  display: flex; align-items: center; min-height: 44px; padding: 0 14px; white-space: nowrap;
+  font-size: 14px; font-weight: 800; color: var(--muted); text-decoration: none;
 }
-.topnav nav a:hover { color: var(--ink); }
-.topnav nav a[aria-current="page"] { background: var(--surface-card); color: var(--ink); }
-@media (min-width: 768px) {
-  .topnav { position: sticky; top: 0; }
-}
-@media (max-width: 767px) {
-  .topnav__inner { flex-wrap: wrap; gap: 0 var(--sp-12); padding-block: var(--sp-8); }
-  .topnav nav { order: 3; flex: 1 0 100%; margin-inline: -6px; overflow-x: auto; scrollbar-width: none; }
-  .topnav nav::-webkit-scrollbar { display: none; }
-  .topnav nav a { padding: 0 12px; }
-  .topnav .btn { height: 40px; padding: 0 14px; }
+.menubar a:hover { color: var(--ink); }
+.menubar a[aria-current="page"] { color: var(--ink); background: linear-gradient(var(--ink), var(--ink)) bottom / 100% 4px no-repeat; }
+.menubar li:first-child a { padding-left: 0; }
+@media (max-width: 479px) {
+  .brand { font-size: 19px; }
+  .bugbar .btn--bug { display: none; }
+  .bug-slot { font-size: 18px; }
+  .bug-slot .bug__lbl { display: none; }
+  .bug-slot .bug__team { padding: 0 10px; }
+  .menubar a { padding: 0 11px; }
 }
 
 /* ---------- 버튼 ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-8);
-  height: 44px; padding: 0 20px; border-radius: var(--r-md); border: 0; cursor: pointer;
-  font-size: 14px; font-weight: 600; line-height: 1; white-space: nowrap; text-decoration: none;
+  height: 44px; padding: 0 18px; border-radius: var(--r-md); border: 0; cursor: pointer;
+  font-size: 14px; font-weight: 800; line-height: 1; white-space: nowrap; text-decoration: none;
   background: var(--ink); color: var(--on-dark);
 }
-.btn--secondary { background: var(--canvas); color: var(--ink); border: 1px solid var(--hairline); }
+.btn--secondary { background: var(--canvas); color: var(--ink); outline: 1.5px solid var(--ink); outline-offset: -1.5px; }
 .btn--on-color { background: var(--canvas); color: var(--ink); }
-.btn[disabled] { background: var(--hairline); color: var(--muted); cursor: not-allowed; }
+.btn[disabled] { background: var(--hairline); color: var(--muted); cursor: not-allowed; outline: 0; }
 
-/* ---------- 카드 (피처 카드: 24px 라운드, 32px 패딩, 그림자 없음) ---------- */
+/* ---------- 섹션(.card): 굵은 선 + 제목, 면 없음 ---------- */
 .card {
-  position: relative; overflow: hidden; min-width: 0;
-  border-radius: var(--r-xl); padding: var(--sp-32);
-  background: var(--surface-card); color: var(--ink);
+  position: relative; min-width: 0; background: none; color: var(--ink);
+  border-top: var(--rule) solid var(--ink); padding: 12px 0 0;
 }
-.card--pink { background: var(--pink); }
-.card--teal { background: var(--teal); }
-.card--lavender { background: var(--lavender); }
-.card--peach { background: var(--peach); }
-.card--ochre { background: var(--ochre); }
-.card--cream { background: var(--cream); }
-/* 핑크(#ff4d8b) 위 흰 글자는 3.1:1 — 시스템 규칙: 핑크 위에서는 24px 이상(또는 19px 굵게)인 표시용 글자(팀 이름·큰 숫자·선수 이름)만
-   흰색이고, 그보다 작은 글자·알약·보조 글자는 잉크(6.3:1). 페이지 CSS는 그 큰 글자에만 --on-dark를 다시 준다
-   (home.css .side--away, players.css .pcard__name). 틸(#1a3a3a)은 흰 글자 12.6:1이라 그대로. */
-.card--pink { color: var(--ink); }
-.card--teal { color: var(--on-dark); }
-.card__title { font-size: 18px; font-weight: 600; line-height: 1.4; }
-.card__lead { margin-top: var(--sp-4); font-size: 14px; color: var(--muted); }
-.card__foot { margin-top: var(--sp-16); font-size: 13px; color: var(--muted); }
-/* 카드 안 제품 UI 조각 — 크림 패널 */
-.inset {
-  margin-top: var(--sp-16); padding: 14px var(--sp-16);
-  background: var(--canvas); color: var(--ink); border-radius: var(--r-lg); font-size: 14px;
-}
+.card__title { font-size: 20px; font-weight: 900; letter-spacing: -0.6px; line-height: 1.3; }
+.card__lead { margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.card__foot { margin-top: var(--sp-12); font-size: 12px; color: var(--muted); }
+/* 안쪽 패널 — 옅은 회색 면, 각짐 */
+.inset { margin-top: var(--sp-16); padding: 14px var(--sp-16); background: var(--surface-card); color: var(--ink); font-size: 14px; }
 .inset .muted { color: var(--muted); }
-/* 콘텐츠 카드 (흰 바탕 + 헤어라인, 16px 라운드) */
-.panel { background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--r-lg); padding: var(--sp-24); }
+.panel { background: var(--canvas); border: 1px solid var(--hairline); padding: var(--sp-24); }
 /* 큰 숫자 하나 */
-.kpi { font-size: clamp(44px, 32px + 3vw, 64px); font-weight: 500; letter-spacing: -2.5px; line-height: 1; margin-top: var(--sp-16); font-variant-numeric: tabular-nums; }
-.kpi small { display: block; margin-top: 6px; font-size: 14px; letter-spacing: 0; font-weight: 400; color: var(--muted); }
+.kpi { font-family: var(--font-num); font-style: italic; font-size: clamp(56px, 40px + 3vw, 76px); font-weight: 800; letter-spacing: -1px; line-height: 0.9; margin-top: var(--sp-16); font-variant-numeric: tabular-nums; }
+.kpi small { display: block; margin-top: 8px; font-family: var(--font-body); font-style: normal; font-size: 13px; letter-spacing: 0; font-weight: 700; color: var(--muted); }
 
-/* ---------- 벤토 (데스크톱 3열 · 태블릿 2열 · 모바일 1열) ---------- */
-.bento { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-16); }
-.span-2 { grid-column: span 2; }
-.span-all { grid-column: 1 / -1; }
-.row-2 { grid-row: span 2; }
-@media (max-width: 1024px) {
-  .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .span-2 { grid-column: 1 / -1; }
-  .row-2 { grid-row: auto; }
-}
-@media (max-width: 767px) {
-  .bento { grid-template-columns: minmax(0, 1fr); }
-  .card { padding: var(--sp-24); }
-  .page-head { padding-block: var(--sp-32) var(--sp-16); }
+/* ---------- 섹션 격자 ---------- */
+.bento { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--sp-48) var(--sp-32); }
+.bento > * { grid-column: span 6; }
+@media (max-width: 900px) {
+  .bento { grid-template-columns: minmax(0, 1fr); gap: var(--sp-32); }
+  .bento > * { grid-column: auto !important; grid-row: auto !important; }
 }
 @media (max-width: 479px) {
   .wrap { padding-inline: var(--sp-16); }
+  .page-head { padding-block: var(--sp-24) var(--sp-16); }
 }
 
-/* ---------- 알약 (배지·칩) ---------- */
+/* ---------- 태그(.pill) — 각진 작은 이름표 ---------- */
 .pill {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 12px; border-radius: var(--r-pill); border: 0;
+  padding: 4px 9px; border-radius: var(--r-pill); border: 0;
   background: var(--surface-card); color: var(--ink);
-  font-size: 13px; font-weight: 500; line-height: 1.4; white-space: nowrap;
+  font-size: 12px; font-weight: 800; line-height: 1.35; white-space: nowrap;
 }
-.pill--sm { font-size: 12px; padding: 2px 10px; }
+.pill--sm { font-size: 11px; padding: 3px 7px; }
 .pill--ink { background: var(--ink); color: var(--on-dark); }
-.pill--white { background: rgba(255, 255, 255, 0.92); color: var(--ink); }
-.pill--pink { background: var(--pink); color: var(--ink); }  /* 작은 글자는 핑크 위 잉크 (위 규칙) */
+.pill--white { background: var(--canvas); color: var(--ink); }
+.pill--pink { background: var(--pink); color: var(--on-dark); }
 .pill--teal { background: var(--teal); color: var(--on-dark); }
-.pill--lavender { background: var(--lavender); }
-.pill--peach { background: var(--peach); }
-.pill--ochre { background: var(--ochre); }
-.pill--mint { background: var(--mint); }
-.pill--coral { background: var(--coral); color: var(--ink); }
+.pill--lavender { background: var(--lavender); color: var(--on-dark); }
+.pill--peach { background: var(--peach); color: var(--ink); }
+.pill--ochre { background: var(--ochre); color: var(--ink); }
+.pill--mint { background: var(--mint); color: var(--ink); }
+.pill--coral { background: var(--coral); color: var(--on-dark); }
 .pill--muted { background: var(--surface-strong); color: var(--body); }
 button.pill { cursor: pointer; min-height: 32px; }
-.pills { display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: center; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
 
 /* ---------- 표 ---------- */
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.table caption { text-align: left; font-size: 13px; color: var(--muted); padding-bottom: var(--sp-8); }
+.table caption { text-align: left; font-size: 12px; color: var(--muted); padding-bottom: var(--sp-8); }
 .table th {
-  text-align: left; font-size: 13px; font-weight: 600; color: var(--muted);
-  padding: var(--sp-8) var(--sp-12) var(--sp-8) 0; border-bottom: 1px solid var(--hairline); white-space: nowrap;
+  text-align: left; font-size: 12px; font-weight: 800; color: var(--muted);
+  padding: var(--sp-8) var(--sp-12) var(--sp-8) 0; border-bottom: 2px solid var(--ink); white-space: nowrap;
 }
-.table td { padding: 9px var(--sp-12) 9px 0; border-bottom: 1px solid var(--hairline-soft); vertical-align: top; }
+.table td { padding: 10px var(--sp-12) 10px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; }
 .table th:last-child, .table td:last-child { padding-right: 0; }
 .table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .table tr:last-child td { border-bottom: 0; }
-.card--pink .table th, .card--teal .table th { border-color: rgba(255, 255, 255, 0.3); }
-.card--pink .table td, .card--teal .table td { border-color: rgba(255, 255, 255, 0.15); }
 
 /* ---------- 상태: 로딩·오류·빈 화면 ---------- */
-.skeleton {
-  display: block; border-radius: var(--r-lg); min-height: 1em;
-  background: var(--surface-strong); animation: pulse 1.4s ease-in-out infinite;
-}
-@keyframes pulse { 50% { opacity: 0.55; } }
+.skeleton { display: block; min-height: 1em; background: var(--surface-strong); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.5; } }
 .error-box {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-16);
-  padding: var(--sp-24); border-radius: var(--r-lg); background: var(--peach); color: var(--ink);
+  padding: var(--sp-16) var(--sp-24); background: var(--surface-card); border-left: 6px solid var(--error); color: var(--ink);
 }
-.card .error-box { background: var(--canvas); }  /* 카드 안에서는 크림 패널로 */
 .error-box p { max-width: 60ch; }
 .empty { color: var(--muted); font-size: 14px; }
+details.more { margin-top: var(--sp-12); font-size: 13px; color: var(--muted); }
+details.more > summary { cursor: pointer; font-weight: 800; color: var(--ink); list-style: none; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::before { content: "+"; display: inline-grid; place-items: center; width: 18px; height: 18px; background: var(--ink); color: var(--on-dark); font-size: 13px; line-height: 1; }
+details.more[open] > summary::before { content: "−"; }
+details.more > :not(summary) { margin-top: var(--sp-8); }
+details.more ul { padding-left: 18px; }
+details.more li + li { margin-top: 4px; }
+
+/* ---------- 야구공 (app.js ballSVG) ---------- */
+.ball { display: block; }
+.ball--spin { animation: ball-spin 9s linear infinite; }
+@keyframes ball-spin { to { transform: rotate(360deg); } }
 
 /* ---------- 차트 (charts.js가 그리는 인라인 SVG) ---------- */
 .chart { position: relative; width: 100%; min-width: 0; }
 .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
-.chart text { font-family: var(--font-body); font-size: 12px; fill: currentColor; pointer-events: none; }  /* 글자가 막대·점의 툴팁 히트를 가리지 않게 */
+.chart text { font-family: var(--font-body); font-size: 12px; fill: currentColor; pointer-events: none; }
 .chart .c-axis { fill: var(--muted); }
-.chart .c-label { font-size: 13px; }
-.chart .c-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.chart .c-grid { stroke: currentColor; opacity: 0.15; }
-.chart .c-zero { stroke: currentColor; opacity: 0.5; }
+.chart .c-label { font-size: 13px; font-weight: 600; }
+.chart .c-value { font-family: var(--font-num); font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chart .c-grid { stroke: currentColor; opacity: 0.12; }
+.chart .c-zero { stroke: currentColor; opacity: 0.6; }
 .chart .c-ref { stroke: currentColor; opacity: 0.55; stroke-dasharray: 4 4; fill: none; }
-.chart .c-end { font-size: 12px; font-weight: 600; }               /* lineChart endLabels: 줄 끝 이름표 */
+.chart .c-end { font-size: 12px; font-weight: 800; }
 .chart .c-leader { stroke: currentColor; opacity: 0.35; stroke-width: 1; }
-.chart .c-point { stroke: var(--canvas); stroke-width: 1.5; }  /* 같은 색 카드 위에서도 점이 보이게 */
+.chart .c-point { stroke: var(--canvas); stroke-width: 1.5; }
 .chart .c-hit { cursor: default; }
-.chart .c-hit:hover { fill: currentColor; fill-opacity: 0.06; }
-/* 차트 툴팁: 마우스를 올리거나(모바일) 탭한 표시의 값. body에 하나, charts.js가 위치를 잡는다 */
+.chart .c-hit:hover { fill: currentColor; fill-opacity: 0.05; }
 .chart-tip {
   position: fixed; z-index: 50; max-width: 280px; padding: 8px 12px; pointer-events: none;
-  background: var(--ink); color: var(--on-dark); border-radius: var(--r-md);
-  font-size: 13px; line-height: 1.45; font-variant-numeric: tabular-nums; white-space: pre-line; word-break: keep-all;
+  background: var(--ink); color: var(--on-dark); border-left: 4px solid var(--on-dark);
+  font-size: 13px; font-weight: 600; line-height: 1.45; font-variant-numeric: tabular-nums; white-space: pre-line; word-break: keep-all;
 }
 .chart [role="button"].c-point { cursor: pointer; }
 .chart .c-point:focus { outline: none; }
 .chart .c-point:focus-visible, .chart .c-point.is-selected { stroke: var(--focus); stroke-width: 3; }
-.chart .c-point--dim { stroke: none; pointer-events: none; }  /* scatter의 dim(): 모양만 남긴 흐린 점 */
-.chart-legend { list-style: none; padding: 0; margin-top: var(--sp-12); display: flex; flex-wrap: wrap; gap: var(--sp-8) var(--sp-16); font-size: 13px; }
+.chart .c-point--dim { stroke: none; pointer-events: none; }
+.chart-legend { list-style: none; padding: 0; margin-top: var(--sp-12); display: flex; flex-wrap: wrap; gap: var(--sp-8) var(--sp-16); font-size: 13px; font-weight: 600; }
 .chart-legend li { display: inline-flex; align-items: center; gap: 6px; }
-.chart-legend .dot { border: 1.5px solid var(--canvas); width: 12px; height: 12px; }  /* 카드와 같은 색 점도 보이게 */
-.chart-legend .dot--dash { border: 3px dotted; background: transparent; }  /* 점선 줄의 견본 */
+.chart-legend .dot { border: 1.5px solid var(--canvas); width: 12px; height: 12px; }
+.chart-legend .dot--dash { border: 3px dotted; background: transparent; }
 
-/* ---------- 푸터 (크림, 증거 바) ---------- */
-.footer {
-  position: relative; overflow: hidden; margin-top: var(--sp-48);
-  background: var(--surface-soft); color: var(--body); font-size: 14px; line-height: 1.55;
-}
-.footer__inner { position: relative; z-index: 1; padding-block: var(--sp-48) 120px; }
-.evidence { color: var(--body-strong); max-width: 70ch; }
+/* ---------- 등장 모션: 차트가 화면에 들어오면 한 번 (charts.js가 .is-in → .is-done) ----------
+   데이터가 자라나는 움직임만: 막대는 0에서 값까지, 선은 왼쪽에서 오른쪽으로 그려지고, 점은 튀어나온다. */
+.chart .c-bar { transform-box: fill-box; transform-origin: left center; }
+.chart .c-bar--neg { transform-origin: right center; }
+.chart .c-col { transform-box: fill-box; transform-origin: center bottom; }
+.chart:not(.is-in) .c-bar { transform: scale(0, 1); }
+.chart:not(.is-in) .c-col { transform: scale(1, 0); }
+.chart:not(.is-in) .c-lines, .chart:not(.is-in) .c-point:not(.is-selected) { opacity: 0; }
+.chart.is-in:not(.is-done) .c-bar { animation: grow-x 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.chart.is-in:not(.is-done) .c-col { animation: grow-y 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+.chart.is-in:not(.is-done) .c-lines { animation: sweep 1.4s cubic-bezier(0.3, 0.6, 0.2, 1) both; }
+.chart.is-in:not(.is-done) .c-point { animation: pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) both; animation-delay: calc(var(--i, 0) * 3ms); transform-box: fill-box; transform-origin: center; }
+@keyframes grow-x { from { transform: scale(0, 1); } }
+@keyframes grow-y { from { transform: scale(1, 0); } }
+@keyframes sweep { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes pop { from { transform: scale(0); opacity: 0; } }
+
+/* ---------- 푸터 ---------- */
+.footer { position: relative; overflow: hidden; margin-top: var(--sp-48); border-top: var(--rule) solid var(--ink); background: var(--canvas); color: var(--body); font-size: 13px; line-height: 1.55; }
+.footer__inner { position: relative; z-index: 1; padding-block: var(--sp-24) var(--sp-48); }
+.evidence { color: var(--body-strong); font-weight: 600; max-width: 70ch; }
 .evidence a { color: var(--ink); text-decoration: underline; font-variant-numeric: tabular-nums; }
 .footer__note { margin-top: var(--sp-8); color: var(--muted); max-width: 70ch; }
-/* 점토 산 세 개 — 오커·피치·라벤더 (장식) */
-.footer__mtn { position: absolute; right: 40px; bottom: -30px; width: 300px; height: 120px; pointer-events: none; }
-.footer__mtn b { position: absolute; bottom: 0; display: block; border-radius: 50% 50% 0 0; }
-.footer__mtn b:nth-child(1) { left: 0; width: 150px; height: 96px; background: radial-gradient(circle at 40% 20%, #f7d08a, var(--ochre) 60%); }
-.footer__mtn b:nth-child(2) { left: 100px; width: 180px; height: 120px; background: radial-gradient(circle at 40% 20%, #ffc9a6, var(--peach) 60%); }
-.footer__mtn b:nth-child(3) { left: 220px; width: 120px; height: 76px; background: radial-gradient(circle at 40% 20%, #d4c8f5, var(--lavender) 60%); }
-@media (min-width: 900px) {
-  .footer__inner { padding-block: 80px; padding-right: 380px; }
-}
-@media (max-width: 479px) {
-  .footer__mtn { right: -20px; width: 240px; transform: scale(0.8); transform-origin: bottom right; }
-}
+.footer__field { position: absolute; right: 24px; bottom: -70px; width: 260px; height: 260px; color: var(--hairline); pointer-events: none; }
+@media (max-width: 767px) { .footer__field { right: -60px; bottom: -110px; width: 220px; height: 220px; } }
 
 /* ---------- 움직임 줄이기 ---------- */
 @media (prefers-reduced-motion: reduce) {
@@ -265,4 +246,6 @@ button.pill { cursor: pointer; min-height: 32px; }
     transition-duration: 0.01ms !important; scroll-behavior: auto !important;
   }
   .skeleton { animation: none; }
+  .chart .c-bar, .chart .c-col { transform: none !important; }
+  .chart .c-lines, .chart .c-point { opacity: 1 !important; clip-path: none !important; }
 }

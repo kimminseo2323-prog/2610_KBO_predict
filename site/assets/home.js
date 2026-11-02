@@ -14,7 +14,7 @@
 
 import {
   IS_LOCAL, TEAMS, TYPE_COLORS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInnings, fmtDate, fmtKST,
-  teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError,
+  teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError, ballSVG, countUp,
 } from "./app.js";
 import { barChart, scatter } from "./charts.js";
 
@@ -311,10 +311,7 @@ function renderHead() {
     const series = day.outlook?.type === "series" ? ` ${day.outlook.name}` : "";
     $("day-title").textContent = `${fmtDate(day.date)}${series}`;
     const canceled = games.filter((g) => g.status === "CANCELED").length;
-    $("day-lead").replaceChildren(
-      `예측 시각 ${fmtKST(day.generated_at)} · 승패 모델 ${day.model_version ?? "—"} · ${games.length}경기`,
-      canceled ? ` (취소 ${canceled})` : "",
-    );
+    $("day-lead").replaceChildren(`${fmtKST(day.generated_at)} 예측`, canceled ? `, 취소 ${canceled}경기` : "");
   } else {
     const d = state.index.dates[state.dateIdx];
     const snapped = state.snappedFrom && /^\d{4}-\d{2}-\d{2}$/.test(state.snappedFrom)
@@ -322,9 +319,22 @@ function renderHead() {
     state.snappedFrom = null; // 처음 한 번만 알린다
     $("day-title").textContent = `${fmtDate(day.date)} 되감기`;
     $("day-lead").textContent = snapped + (d && d.decided
-      ? `이날 ${d.decided}경기 중 ${d.correct}경기 적중 · 2026 시즌 전체 ${fmtPct(state.index.accuracy, 1)}. 2026 경기를 학습에 쓰지 않은 ${day.model_version ?? "되감기"} 모델로 다시 예측했습니다.`
-      : `이날은 적중을 따질 경기가 없습니다(취소·무승부). ${day.model_version ?? "되감기"} 모델 기준.`);
+      ? `이날 ${d.decided}경기 중 ${d.correct}경기 적중 (시즌 전체 ${fmtPct(state.index.accuracy, 1)})`
+      : "이날은 적중을 따질 경기가 없습니다");
   }
+  renderBug();
+}
+
+/** 맨 위 검정 띠(스코어 버그)에 진행 중인 시리즈 전적. 라이브 시리즈가 아니면 비운다. */
+function renderBug() {
+  const slot = $("bug-slot");
+  if (!slot) return;
+  const o = state.day?.outlook;
+  if (state.mode !== "live" || o?.type !== "series") { slot.replaceChildren(); return; }
+  slot.replaceChildren(el("span", { class: "bug__lbl" }, o.name), ...o.teams.map((c, i) => el("span", {
+    class: "bug__team", style: { background: teamSideColors(c)[0], color: teamSideColors(c)[1] },
+    "aria-label": `${teamName(c)} ${o.wins[i]}승`,
+  }, [teamName(c), el("b", {}, String(o.wins[i]))])));
 }
 
 // ---------- 매치업 카드 ----------
@@ -362,7 +372,7 @@ function teamSideColors(code) {
   return out;
 }
 
-function sideBlock(g, side, prob, large) {
+function sideBlock(g, side, prob, large, animate = false) {
   const t = g[side];
   const s = t.starter;
   const role = side === "home" ? "홈" : "원정";
@@ -371,8 +381,10 @@ function sideBlock(g, side, prob, large) {
     el("h3", { class: "side__team" }, teamName(t.code)),
     large ? el("p", { class: "side__full" }, teamName(t.code, { full: true })) : null,
   ]);
+  const n = el("span", { class: "side__n" }, String(prob));
+  if (animate && prob !== "—") countUp(n, prob, { from: 50, dur: 1100 });
   const probEl = el("p", { class: "side__prob" }, [
-    el("span", { class: "side__num" }, prob === "—" ? "—" : [String(prob), el("small", {}, "%")]),
+    el("span", { class: "side__num" }, prob === "—" ? "—" : [n, el("small", {}, "%")]),
     el("span", { class: "side__who" }, `${teamName(t.code)} 승리`),
   ]);
   const stats = !s ? null
@@ -381,7 +393,6 @@ function sideBlock(g, side, prob, large) {
     s ? el("p", { class: "chip__row" }, [el("span", {}, ["선발 ", el("b", {}, starterName(s))]), typePill(s.type, false)])
       : el("p", { class: "chip__row" }, el("b", {}, "선발 미정")),
     large && stats ? el("p", { class: "chip__stats num" }, stats) : null,
-    large ? el("p", { class: "chip__stats num" }, `${recentForm(t.last10, t.win_pct_season)} · 시즌 승률 ${fmtRate3(t.win_pct_season)}`) : null,
   ]);
   return el("div", { class: `side side--${side}` }, [head, probEl, el("div", { class: "side__details" }, chip)]);
 }
@@ -463,9 +474,9 @@ function matchupCard(g, large, settled = false) {
     style: `--cut-to: ${cut.toFixed(1)}%; --c-away: ${cAway}; --t-away: ${tAway}; --c-home: ${cHome}; --t-home: ${tHome}`, "aria-label": label,
   }, [
     meta.some(Boolean) ? el("div", { class: "stage__top" }, meta) : null,
-    sideBlock(g, "away", away, large),
-    sideBlock(g, "home", home, large),
-    large ? el("span", { class: "stage__vs", "aria-hidden": "true" }, "VS") : null,
+    sideBlock(g, "away", away, large, large && !settled),
+    sideBlock(g, "home", home, large, large && !settled),
+    large ? el("span", { class: "stage__vs", "aria-hidden": "true" }, [ballSVG({ spin: true }), el("b", {}, "VS")]) : null,
     // 좁은 화면에서는 경계가 사라지므로 같은 비율의 가로 막대로 긴장감을 대신한다
     el("div", { class: "stage__meter", "aria-hidden": "true" }, [
       el("span", { class: "meter__away", style: { flexGrow: String(fin(p) ? share : 50) } }),
@@ -475,12 +486,36 @@ function matchupCard(g, large, settled = false) {
   ]);
 }
 
+/** 두 팀 비교(중계의 "테일 오브 더 테이프"): 가운데 항목, 양쪽 값 + 팀 색 막대. 더 나은 쪽은 굵게. */
+function tape(g) {
+  const last10 = (v, season) => recentForm(v, season).replace("최근 10경기 ", "").replace("최근 승률 ", "");
+  const signed = (v) => (fin(v) ? `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(2)}` : "—");
+  const rows = [
+    ["시즌 승률", g.away.win_pct_season, g.home.win_pct_season, (v) => fmtRate3(v)],
+    ["최근 10경기", g.away.last10, g.home.last10, (v, side) => last10(v, g[side].win_pct_season)],
+    ["경기당 득실", g.away.run_diff, g.home.run_diff, signed],
+  ];
+  const [cA] = teamSideColors(g.away.code);
+  const [cH] = teamSideColors(g.home.code);
+  return el("div", { class: "tape", role: "table", "aria-label": `${matchLabel(g)} 두 팀 비교` }, rows.map(([k, a, h, fmt], i) => {
+    const lo = k === "경기당 득실" ? Math.min(0, Number(a) || 0, Number(h) || 0) - 0.5 : 0;
+    const hi = Math.max(Number(a) || 0, Number(h) || 0);
+    const share = (v) => (fin(v) ? Math.max(0.06, (Number(v) - lo) / (hi - lo || 1)) : 0);
+    const win = fin(a) && fin(h) && Number(a) !== Number(h) ? (Number(a) > Number(h) ? "away" : "home") : null;
+    const side = (who, v, c) => el("div", { class: `tape__v tape__v--${who}${win === who ? " is-win" : ""}`, role: "cell" }, [
+      el("span", { class: "tape__n" }, fmt(v, who)),
+      el("span", { class: "tape__bar" }, el("i", { style: { width: `${(share(v) * 100).toFixed(1)}%`, background: c, "--i": String(i) } })),
+    ]);
+    return el("div", { class: "tape__row", role: "row" }, [side("away", a, cA), el("div", { class: "tape__k", role: "rowheader" }, k), side("home", h, cH)]);
+  }));
+}
+
 function renderMatchups() {
   const box = $("matchups");
   const games = ordered(state.day);
   box.setAttribute("aria-busy", "false");
   if (!games.length) {
-    box.replaceChildren(el("div", { class: "card card--cream" }, [
+    box.replaceChildren(el("div", { class: "card" }, [
       el("p", { class: "card__title" }, "이날은 경기가 없습니다."),
       el("p", { class: "card__lead" }, "위 되감기에서 2026 시즌 다른 날짜를 골라 보세요."),
     ]));
@@ -492,6 +527,7 @@ function renderMatchups() {
   const settled = state.stageKey === key;
   state.stageKey = key;
   const cards = [matchupCard(first, true, settled)];
+  if (first.status !== "CANCELED") cards.push(tape(first));
   if (rest.length) cards.push(el("div", { class: "matchups__rest" }, rest.map((g) => matchupCard(g, false, settled))));
   box.replaceChildren(...cards); // replaceChildren은 null을 "null" 글자로 넣으므로 배열로 모은다
 }
@@ -556,7 +592,7 @@ function renderFactors() {
     foot.textContent = "";
     return;
   }
-  $("factors-lead").textContent = `${teamName(g.home.code)}(홈) 쪽으로 기울게 한 요인은 +, ${teamName(g.away.code)}(원정) 쪽은 −. 단위 %p`;
+  $("factors-lead").textContent = `50%에서 각 요인이 민 만큼. + ${teamName(g.home.code)} 쪽, − ${teamName(g.away.code)} 쪽 (%p)`;
   const rows = (g.factors ?? []).map((f) => ({ label: f.name, value: f.contribution_pp }));
   if (!rows.length) {
     body.replaceChildren(el("p", { class: "empty" }, "이 경기는 요인 분해가 없습니다."));
@@ -565,7 +601,7 @@ function renderFactors() {
   }
   barChart(body, rows, { color: TEAMS[g.home.code]?.color ?? "teal", negativeColor: TEAMS[g.away.code]?.color ?? "pink", format: sign, label: `${matchLabel(g)} 승률을 가른 요인 (%p)` });
   const hasBias = rows.some((r) => r.label === "기본 홈 어드밴티지");
-  foot.textContent = `기여가 큰 5개만 보여 줍니다.${hasBias ? "" : " 기본 홈 어드밴티지는 이 경기에서 5위 밖입니다."}`;
+  foot.textContent = hasBias ? "" : "기본 홈 어드밴티지는 이 경기에서 5위 밖입니다.";
 }
 
 // ---------- ② 모델은 얼마나 맞나 ----------
@@ -600,19 +636,15 @@ function monthBars(index) {
 }
 
 function liveRecord() {
-  if (!state.history) return el("p", { class: "acc__live" }, "라이브 기록(history.csv)을 불러오지 못했습니다.");
+  if (!state.history) return el("p", { class: "live live--err" }, "라이브 기록(history.csv)을 불러오지 못했습니다.");
   const decided = state.history.filter((h) => h.status === "FINAL" && (h.correct === 0 || h.correct === 1));
-  const n = decided.length;
-  // 모델 버전이 바뀌면 따로 센다(성적표 ⑥과 같은 규칙): "v0.2 모델 12경기 중 7경기 적중 (58%) · v0.3 모델 …"
-  const versions = [...new Set(decided.map((h) => h.model_version ?? "—"))];
-  const parts = versions.map((v) => {
-    const mine = decided.filter((h) => (h.model_version ?? "—") === v);
-    const c = mine.reduce((s, h) => s + h.correct, 0);
-    return `${v} 모델 ${mine.length}경기 중 ${c}경기 적중 (${fmtPct(c / mine.length)})`;
-  });
-  return el("p", { class: "acc__live" }, [
-    el("b", {}, "라이브 "), n ? parts.join(" · ") : "아직 결과가 난 경기가 없습니다",
-    n < 10 ? ". 라이브 기록은 2026 포스트시즌부터 쌓여 아직 표본이 적습니다." : ".",
+  const c = decided.reduce((a, h) => a + h.correct, 0);
+  if (!decided.length) return el("p", { class: "live" }, [el("b", {}, "라이브"), " 아직 결과가 난 경기가 없습니다"]);
+  // 경기 하나 = 칸 하나(적중은 채움, 미적중은 빈 칸), 오른쪽에 "적중 / 경기"
+  return el("div", { class: "live", role: "img", "aria-label": `라이브 예측 ${decided.length}경기 중 ${c}경기 적중` }, [
+    el("b", {}, "라이브"),
+    el("span", { class: "live__pips" }, decided.slice(-20).map((h, i) => el("i", { class: h.correct ? "is-hit" : null, style: { "--i": String(i) }, title: `${h.date} ${h.correct ? "적중" : "미적중"}` }))),
+    el("span", { class: "live__n" }, `${c} / ${decided.length}`),
   ]);
 }
 
@@ -626,22 +658,26 @@ function renderAccuracy() {
   const t = r.models?.[r.selected]?.test ?? r.models?.lr?.test ?? {};
   const b = r.baselines?.test ?? {};
   const seasons = r.train_seasons ?? [];
-  const period = seasons.length ? `학습 ${seasons[0]}–${seasons.at(-1)} · 검증 ${r.val_season} · 시험 ${r.test_season}` : "";
-  const base = (label, v) => el("li", {}, [el("span", {}, label), el("b", { class: "num" }, fmtPct(v, 1))]);
+  const rows = [["이 모델", t.accuracy, true], ["선발 ERA 낮은 팀", b.lower_starter_era], ["시즌 승률 높은 팀", b.better_win_pct], ["항상 홈팀", b.home_always]]
+    .filter(([, v]) => fin(v));
+  const top = Math.max(...rows.map(([, v]) => Number(v)));
+  const kpi = el("span", {}, fmtPct(t.accuracy, 1));
+  countUp(kpi, Number(t.accuracy) * 100, { from: 50, dur: 1100, fmt: (v) => `${v.toFixed(1)}%` });
+  const p = r.significance?.mcnemar_p;
   body.replaceChildren(
-    el("p", { class: "card__lead" }, `${r.test_season ?? "시험"} 시즌 ${t.n ?? "—"}경기를 경기 전 정보로만 예측`),
-    el("div", { class: "acc__top" }, [
-      el("p", { class: "kpi" }, [fmtPct(t.accuracy, 1), el("small", {}, `${r.model_version ?? "성적표"} 모델 적중률 · log loss ${num(t.log_loss, 3)}`)]),
-      monthBars(state.index),
-    ]),
-    el("div", { class: "inset" }, [
-      el("p", { class: "acc__cap" }, "같은 경기를 단순한 규칙으로 고르면"),
-      el("ul", { class: "acc__rows" }, [
-        base("항상 홈팀", b.home_always), base("시즌 승률이 높은 팀", b.better_win_pct), base("선발 ERA가 낮은 팀", b.lower_starter_era),
-      ]),
-    ]),
+    el("p", { class: "kpi" }, [kpi, el("small", {}, `${r.test_season ?? "시험"} 정규시즌 ${t.n ?? "—"}경기 적중률 (학습에 안 쓴 시즌)`)]),
+    el("div", { class: "rank" }, rows.map(([label, v, me], i) => el("div", { class: `rank__row${me ? " is-me" : ""}` }, [
+      el("span", { class: "rank__label" }, label),
+      el("span", { class: "rank__track" }, el("i", { style: { width: `${((Number(v) / top) * 100).toFixed(1)}%`, "--i": String(i) } })),
+      el("span", { class: "rank__n" }, fmtPct(v, 1)),
+    ]))),
     liveRecord(),
-    el("p", { class: "card__foot" }, [period, period ? " · " : "", el("a", { href: "report.html" }, "모델 성적표 보기")]),
+    el("details", { class: "more" }, [
+      el("summary", {}, "이 숫자를 믿어도 되나"),
+      el("p", {}, `가장 강한 규칙보다 높지만 ${t.n ?? ""}경기로는 우연과 구분할 만큼의 차이가 아닙니다${fin(p) ? ` (p = ${Number(p).toFixed(3)})` : ""}. `
+        + (seasons.length ? `학습 ${seasons[0]}–${seasons.at(-1)}, 검증 ${r.val_season}, 시험 ${r.test_season}.` : "")),
+      el("a", { href: "report.html" }, "모델 성적표에서 자세히"),
+    ]),
   );
 }
 
@@ -657,18 +693,18 @@ function starterBlock(g, side) {
   const team = teamName(g[side].code);
   const role = side === "home" ? "홈" : "원정";
   if (!s) {
-    return el("div", { class: "inset starter" }, [
-      el("div", { class: "starter__top" }, [el("b", {}, `선발 미정 · ${team}`), el("span", { class: "pill pill--sm pill--muted" }, role)]),
-      el("p", { class: "starter__note" }, "선발이 발표되면 다음 갱신 때 채워집니다. 그때까지는 선발 기록 없이 예측합니다."),
+    return el("div", { class: "starter", style: { "--c": teamSideColors(g[side].code)[0] } }, [
+      el("div", { class: "starter__top" }, [el("b", {}, "선발 미정"), el("span", { class: "starter__team" }, `${team} ${role}`)]),
     ]);
   }
+  const stat = (k, v) => el("span", { class: "starter__stat" }, [el("small", {}, k), el("b", {}, v)]);
   const stats = fin(s.ip) || fin(s.era)
-    ? `ERA ${num(s.era)} · K/9 ${num(s.k9)} · BB/9 ${num(s.bb9)} · ${fmtInnings(s.ip)}이닝 · ${fin(s.starts) ? s.starts : "—"}경기 선발`
-    : "올해 등판 기록이 없습니다.";
+    ? el("div", { class: "starter__stats" }, [stat("ERA", num(s.era)), stat("K/9", num(s.k9)), stat("BB/9", num(s.bb9)), stat("이닝", fmtInnings(s.ip)), stat("선발", fin(s.starts) ? String(s.starts) : "—")])
+    : el("p", { class: "starter__note" }, "올해 등판 기록이 없습니다.");
   const blurb = blurbFor(s.type);
-  return el("div", { class: "inset starter" }, [
-    el("div", { class: "starter__top" }, [el("b", {}, [starterName(s), el("span", { class: "starter__team" }, ` · ${team} ${role}`)]), typePill(s.type, false)]),
-    el("p", { class: "starter__stats num" }, stats),
+  return el("div", { class: "starter", style: { "--c": teamSideColors(g[side].code)[0] } }, [
+    el("div", { class: "starter__top" }, [el("b", {}, starterName(s)), el("span", { class: "starter__team" }, `${team} ${role}`), typePill(s.type, false)]),
+    stats,
     // 유형 설명은 players.json을 읽은 뒤에 채운다 — 자리를 미리 잡아 두어 화면이 밀리지 않게
     s.type && (blurb || !state.players) ? el("p", { class: "starter__note starter__blurb" }, blurb ?? "") : null,
     !s.type ? el("p", { class: "starter__note" }, "직전 시즌 등판이 적어 유형을 붙이지 않았습니다.") : null,
@@ -683,7 +719,14 @@ function renderStarters() {
     body.replaceChildren(el("p", { class: "empty" }, "이날은 선발이 나선 경기가 없습니다."));
     return;
   }
-  $("starters-lead").textContent = `${matchLabel(g)} · 선수 유형 모델이 직전 시즌 기록으로 붙인 유형${state.mode === "rewind" ? " (실제 선발)" : ""}`;
+  $("starters-lead").textContent = `직전 시즌 기록으로 붙인 투수 유형${state.mode === "rewind" ? ", 실제 선발" : ""}`;
+  if (!g.away.starter && !g.home.starter) {
+    body.replaceChildren(el("div", { class: "starter starter--none" }, [
+      ballSVG({ cls: "starter__ball" }),
+      el("div", {}, [el("b", {}, "양 팀 선발 발표 전"), el("p", { class: "starter__note" }, "발표되면 다음 갱신 때 선발 기록을 넣어 다시 계산합니다.")]),
+    ]));
+    return;
+  }
   body.replaceChildren(starterBlock(g, "away"), starterBlock(g, "home"));
 }
 
@@ -715,30 +758,30 @@ function outlookSeries(o, title, body) {
   title.textContent = `${o.name} 전망`;
   const need = Math.floor(o.best_of / 2) + 1;
   const [t0, t1] = o.teams;
-  const head = (o.head_start ?? []).some((h) => h > 0)
-    ? ` (${o.teams.filter((_, i) => o.head_start[i] > 0).map(teamName).join(", ")} 1승 안고 시작)` : "";
-  const chart = el("div");
+  const lead = Number(o.win_prob[0]) >= Number(o.win_prob[1]) ? 0 : 1;
   const [w0, w1] = (o.most_common_result ?? "").split("-").map(Number);
   const last = o.best_of - (o.head_start ?? [0, 0]).reduce((a, b) => a + b, 0);
-  const sourceNote = o.today_game_prob_source?.startsWith("win_model")
-    ? "오늘 경기는 선발까지 넣은 승패 모델 확률, 남은 경기는 팀 모델 확률을 썼습니다."
-    : "모든 경기에 팀 모델 확률을 썼습니다.";
+  const big = el("span", {}, prob(o.win_prob[lead]));
+  countUp(big, Number(o.win_prob[lead]) * 100, { from: 50, dur: 1100, fmt: (v) => `${Math.round(v)}%` });
+  // 승수 칸: 우승에 필요한 승수만큼 칸, 이긴 만큼 팀 색으로 채운다 (와일드카드 1승 어드밴티지도 칸 하나)
+  const pips = (i) => el("div", { class: "pips__row" }, [
+    el("span", { class: "pips__team" }, teamName(o.teams[i])),
+    el("span", { class: "pips__dots", role: "img", "aria-label": `${teamName(o.teams[i])} ${o.wins[i]}승 (${need}승이면 시리즈 승리)` },
+      Array.from({ length: need }, (_, k) => el("i", { class: k < o.wins[i] ? "is-on" : null, style: { background: k < o.wins[i] ? teamSideColors(o.teams[i])[0] : null } }))),
+    el("span", { class: "pips__n" }, `${o.wins[i]}승`),
+  ]);
   body.replaceChildren(
-    el("p", { class: "card__lead" }, `${o.best_of}전 ${need}선승 · 지금 ${teamName(t0)} ${o.wins[0]}승, ${teamName(t1)} ${o.wins[1]}승${head}`),
-    el("div", { class: "inset" }, [
-      el("p", { class: "acc__cap" }, "시리즈를 이길 확률"),
-      chart,
-      el("ul", { class: "acc__rows" }, [
-        Number.isFinite(w0) ? el("li", {}, [el("span", {}, "가장 흔한 결말"),
-          el("b", {}, w0 > w1 ? `${teamName(t0)} ${w0}승 ${w1}패` : `${teamName(t1)} ${w1}승 ${w0}패`)]) : null,
-        el("li", {}, [el("span", {}, `${last}차전까지 갈 확률`), el("b", { class: "num" }, fmtPct(o.goes_distance_prob))]),
-      ]),
+    el("p", { class: "card__lead" }, `${o.best_of}전 ${need}선승, 남은 경기 1만 번 시뮬레이션`),
+    el("div", { class: "pips" }, [pips(0), pips(1)]),
+    el("p", { class: "kpi" }, [big, el("small", {}, `${teamName(o.teams[lead])} 시리즈 승리 확률`)]),
+    el("div", { class: "split", role: "img", "aria-label": `${teamName(t0)} ${prob(o.win_prob[0])}, ${teamName(t1)} ${prob(o.win_prob[1])}` }, [0, 1].map((i) =>
+      el("i", { style: { flexGrow: String(Math.max(0.02, Number(o.win_prob[i]))), background: teamSideColors(o.teams[i])[0] } }))),
+    el("div", { class: "split__cap" }, [0, 1].map((i) => el("span", {}, `${teamName(o.teams[i])} ${prob(o.win_prob[i])}`))),
+    el("dl", { class: "facts" }, [
+      Number.isFinite(w0) ? el("div", {}, [el("dt", {}, "가장 많이 나온 결과"), el("dd", {}, w0 > w1 ? `${teamName(t0)} ${w0}승 ${w1}패` : `${teamName(t1)} ${w1}승 ${w0}패`)]) : null,
+      el("div", {}, [el("dt", {}, `${last}차전까지 갈 확률`), el("dd", {}, fmtPct(o.goes_distance_prob))]),
     ]),
-    el("p", { class: "card__foot" }, `${fmtDate(o.as_of)} 기준, 남은 경기를 1만 번 시뮬레이션했습니다. ${sourceNote}`),
   );
-  barChart(chart, [0, 1].map((i) => ({ label: teamName(o.teams[i]), value: o.win_prob[i], code: o.teams[i] })), {
-    color: (r) => TEAMS[r.code]?.color ?? "ink", max: 1, format: prob, label: `${o.name} 시리즈 승리 확률`,
-  });
 }
 
 function outlookRace(o, title, body) {
@@ -775,49 +818,35 @@ function outlookRace(o, title, body) {
 
 function renderRecent() {
   const body = $("recent-body");
-  const head = (cols) => el("thead", {}, el("tr", {}, cols.map(([t, cls]) => el("th", { scope: "col", class: cls ?? null }, t))));
+  const item = (date, match, sub, tag) => el("li", {}, [el("span", { class: "log__d" }, date), el("span", { class: "log__m" }, [el("b", {}, match), el("small", {}, sub)]), tag]);
+  const pickText = (p, home, away) => (fin(p) ? (p >= 0.5 ? `${teamName(home)} ${fmtPct(p)}` : `${teamName(away)} ${fmtPct(1 - p)}`) : "—");
   if (state.mode === "rewind" && state.day) {
     $("recent-title").textContent = "이날의 결과";
-    $("recent-lead").textContent = `${fmtDate(state.day.date)} 경기, 예측과 실제 결과`;
-    const rows = ordered(state.day).map((g) => {
+    $("recent-lead").textContent = "예측과 실제 결과";
+    body.replaceChildren(el("ul", { class: "log" }, ordered(state.day).map((g) => {
       const r = g.result;
-      return el("tr", {}, [
-        el("td", {}, matchLabel(g)),
-        el("td", { class: "num" }, fmtPct(g.home_win_prob)),
-        el("td", { class: "num" }, r ? `${r.away_score} : ${r.home_score}` : "취소"),
-        el("td", { class: "hide-sm" }, r ? winnerText({ winner: r.winner, home: g.home.code, away: g.away.code, status: "FINAL" })
-          : NOTES[g.status_note] ?? "취소"),
-        el("td", { class: "r" }, r ? verdictPill(r) : "—"),
-      ]);
-    });
-    body.replaceChildren(el("div", { class: "table-scroll" }, el("table", { class: "table recent" }, [
-      el("caption", { class: "sr-only" }, "이날 경기 예측과 결과"),
-      head([["대진"], ["홈 승률", "num"], ["점수", "num"], ["결과", "hide-sm"], ["적중", "r"]]), el("tbody", {}, rows),
-    ])));
+      return item(r ? `${r.away_score}:${r.home_score}` : "—", matchLabel(g),
+        r ? `예측 ${pickText(g.home_win_prob, g.home.code, g.away.code)}, ${winnerText({ winner: r.winner, home: g.home.code, away: g.away.code, status: "FINAL" })}` : NOTES[g.status_note] ?? "취소",
+        r ? verdictPill(r) : verdictPill({ status: "CANCELED" }));
+    })));
     return;
   }
   $("recent-title").textContent = "최근 예측";
-  $("recent-lead").textContent = "경기 전 마지막 예측과 실제 결과 (라이브 기록)";
+  $("recent-lead").textContent = "경기 전 마지막 예측";
   if (!state.history) {
     showError(body, state.errors.history, async () => { await loadHistory(); renderRecent(); renderAccuracy(); });
     return;
   }
   const rows = state.history.slice(-8).reverse();
   if (!rows.length) {
-    body.replaceChildren(el("p", { class: "empty" }, "아직 라이브 예측 기록이 없습니다. 첫 예측은 경기 날 아침에 올라옵니다."));
+    body.replaceChildren(el("p", { class: "empty" }, "아직 라이브 예측 기록이 없습니다."));
     return;
   }
-  body.replaceChildren(el("div", { class: "table-scroll" }, el("table", { class: "table recent" }, [
-    el("caption", { class: "sr-only" }, "최근 라이브 예측 8경기"),
-    head([["날짜"], ["대진"], ["홈 승률", "num"], ["결과", "hide-sm"], ["적중", "r"]]),
-    el("tbody", {}, rows.map((h) => el("tr", {}, [
-      el("td", { class: "nowrap" }, fmtDate(h.date).replace(/ \(.\)$/, "")), // 요일은 빼서 좁은 화면에 맞춘다
-      el("td", {}, `${teamName(h.away)} vs ${teamName(h.home)}`),
-      el("td", { class: "num" }, fmtPct(h.home_win_prob)),
-      el("td", { class: "hide-sm" }, winnerText(h)),
-      el("td", { class: "r" }, verdictPill(h)),
-    ]))),
-  ])));
+  body.replaceChildren(el("ul", { class: "log" }, rows.map((h) => {
+    const res = winnerText(h);
+    const pick = pickText(h.home_win_prob, h.home, h.away);
+    return item(h.date.slice(5).replace("-", "."), `${teamName(h.away)} vs ${teamName(h.home)}`, res === "경기 전" ? `예측 ${pick}` : `예측 ${pick}, ${res}`, verdictPill(h));
+  })));
 }
 
 // ---------- ⑤ 선수 유형 지도 (players.json 1.77 MB — 나머지를 다 그린 뒤에 읽는다) ----------
@@ -875,7 +904,7 @@ function renderTypeMap() {
   const season = Math.max(...all.map((p) => p.season));
   const bat = all.filter((p) => p.season === season);
   const types = state.players.types?.batter ?? [];
-  $("typemap-lead").textContent = `${season} 타자 ${bat.length}명을 기록이 비슷할수록 가깝게 놓은 지도`;
+  $("typemap-lead").textContent = `${season} 타자 ${bat.length}명, 기록이 비슷할수록 가깝게`;
   const counts = el("ul", { class: "typemap__counts" }, types.map((t) => el("li", { class: "pill pill--white" }, [
     el("span", { class: "dot", style: { background: `var(--${TYPE_COLORS.batter[t.id]})` }, "aria-hidden": "true" }),
     t.name, el("b", { class: "num" }, String(bat.filter((p) => p.type?.id === t.id).length)),

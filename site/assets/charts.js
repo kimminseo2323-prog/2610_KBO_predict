@@ -107,6 +107,18 @@ export function enableTips(root) {
   root.addEventListener("pointerdown", (e) => { const m = target(e); if (m && e.pointerType !== "mouse") { e.preventDefault(); showTip(m.dataset.tip, e.clientX, e.clientY); } });
 }
 
+/** 등장 모션: 차트가 화면에 들어오면 .is-in(app.css가 막대·선·점을 키운다), 1.6초 뒤 .is-done(다시 그려도 재생 안 함).
+ *  움직임 줄이기 설정이거나 IntersectionObserver가 없으면 바로 둘 다. 한 요소에 한 번만. */
+const REDUCED = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+function armEntrance(el) {
+  if (el._entrance) return;
+  el._entrance = true;
+  const done = () => { el.classList.add("is-in"); setTimeout(() => el.classList.add("is-done"), 1600); };
+  if (REDUCED || typeof IntersectionObserver === "undefined") { el.classList.add("is-in", "is-done"); return; }
+  const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { io.disconnect(); done(); } }, { threshold: 0.15 });
+  io.observe(el);
+}
+
 function mount(el, draw) {
   el.classList.add("chart");
   el._chartRO?.disconnect();
@@ -120,6 +132,7 @@ function mount(el, draw) {
     el.querySelectorAll("svg").forEach(enableTips);
   };
   render();
+  armEntrance(el);
   if (typeof ResizeObserver !== "undefined") {
     el._chartRO = new ResizeObserver(render);
     el._chartRO.observe(el);
@@ -168,7 +181,7 @@ export function barChart(el, rows, { valueKey = "value", labelKey = "label", col
       const tip = `${r[labelKey] ?? ""}
 ${fmt(v)}`;
       svg.append(svgEl("rect", { class: "c-hit", x: 0, y: i * rowH, width: W, height: rowH, fill: "transparent", "data-tip": tip }));
-      if (v !== null) svg.append(svgEl("rect", { x, y: top, width: Math.max(len, 1), height: barH, rx: 4, style: `fill:${cv(fill(r, v))}`, "data-tip": tip }));
+      if (v !== null) svg.append(svgEl("rect", { class: `c-bar${v < 0 ? " c-bar--neg" : ""}`, x, y: top, width: Math.max(len, 1), height: barH, style: `fill:${cv(fill(r, v))}; --i:${i}`, "data-tip": tip }));
       svg.append(svgEl("text", { class: v === null ? "c-axis" : "c-value", x: v !== null && v < 0 ? x - 6 : x + len + 6,
         y: top + barH / 2 + 4, "text-anchor": v !== null && v < 0 ? "end" : "start" }, fmt(v)));
     });
@@ -210,13 +223,15 @@ export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, l
       svg.append(svgEl("text", { class: "c-axis", x: X(i), y: H - 6, "text-anchor": k === 0 ? "start" : k === ticks - 1 ? "end" : "middle" }, String(xs[i])));
     }
     if (drawRef) svg.append(svgEl("line", { class: "c-ref", x1: L, x2: W - R, y1: Y(refY), y2: Y(refY) }));
+    const lines = svgEl("g", { class: "c-lines" });
+    svg.append(lines);
     series.forEach((s) => {
       let d = "";
       s.points.forEach((p, i) => {
         if (!fin(p.y)) { d += " "; return; }
         d += `${d === "" || d.endsWith(" ") ? "M" : "L"}${X(i).toFixed(1)},${Y(Number(p.y)).toFixed(1)}`;
       });
-      svg.append(svgEl("path", { d: d.trim(), fill: "none", style: `stroke:${cv(s.color ?? color)}`, "stroke-width": 2.5, "stroke-linejoin": "round", "stroke-linecap": "round",
+      lines.append(svgEl("path", { d: d.trim(), fill: "none", style: `stroke:${cv(s.color ?? color)}`, "stroke-width": 2.5, "stroke-linejoin": "round", "stroke-linecap": "round",
         "stroke-dasharray": s.dash ? (typeof s.dash === "string" ? s.dash : "6 4") : null }));
     });
     // 툴팁: x 위치마다 세로 히트 띠. 여러 줄이면 그 x의 모든 줄 값을 큰 값부터, 한 줄이면 그 값 하나.
@@ -338,7 +353,7 @@ export function scatter(el, points, { colorKey = "color", onSelect, selectedId, 
       }
       const on = p.id === current;
       const c = svgEl("circle", { class: `c-point${on ? " is-selected" : ""}`, cx: X(+p.x).toFixed(1), cy: Y(+p.y).toFixed(1), r: on ? 9 : 6,
-        style: `fill:${cv(colorOf(p))}`, "fill-opacity": 0.9, "data-tip": (() => { const l = String(p.label ?? p.id), ty = typeOf(p); return l.endsWith(ty) ? l : `${l}
+        style: `fill:${cv(colorOf(p))}; --i:${Math.min(200, nodes.size)}`, "fill-opacity": 0.9, "data-tip": (() => { const l = String(p.label ?? p.id), ty = typeOf(p); return l.endsWith(ty) ? l : `${l}
 ${ty}`; })() });
       if (onSelect) {
         Object.entries({ role: "button", tabindex: p === first ? 0 : -1, "aria-label": p.label ?? String(p.id), "aria-pressed": on })
@@ -386,7 +401,7 @@ export function stackedBar(el, rows, { keys, colors, labels = {}, labelKey = "la
         if (w <= 0) return;
         const tok = colors[k];
         const text = format(val(r, k));
-        svg.append(svgEl("rect", { x: x.toFixed(1), y: top, width: Math.max(w - 1.5, 0.5).toFixed(1), height: barH, style: `fill:${cv(tok)}`,
+        svg.append(svgEl("rect", { class: "c-bar", x: x.toFixed(1), y: top, width: Math.max(w - 1.5, 0.5).toFixed(1), height: barH, style: `fill:${cv(tok)}; --i:${i}`,
           "data-tip": `${r[labelKey] ?? ""} · ${labels[k] ?? k}
 ${text}` }));
         const fits = fin(minShare) ? val(r, k) / total >= minShare && w >= String(text).length * 8.5 + 6 : w > 38;
@@ -423,7 +438,7 @@ export function calibrationChart(el, bins, { color = "ink", label = "신뢰도 �
     let counts = 0; // 막대 위에 경기 수를 실제로 쓴 막대 수 (좁은 화면에서는 막대가 좁아 0일 수 있다)
     all.filter(has).forEach((b) => {
       const x = X(b.lo) + 2, w = X(b.hi) - X(b.lo) - 4;
-      svg.append(svgEl("rect", { x, y: Y(b.actual_rate), width: Math.max(w, 1), height: Y(0) - Y(b.actual_rate), rx: 3, style: `fill:${cv(color)}`, "fill-opacity": 0.82,
+      svg.append(svgEl("rect", { class: "c-col", x, y: Y(b.actual_rate), width: Math.max(w, 1), height: Y(0) - Y(b.actual_rate), style: `fill:${cv(color)}; --i:${Math.round(b.lo * 10)}`, "fill-opacity": 0.9,
         "data-tip": `예측 ${pct(b.lo)}–${pct(b.hi)} 구간 · ${b.n}경기
 실제 홈 승률 ${pct(b.actual_rate)} · 예측 평균 ${pct(b.pred_mean)}` }));
       if (w > 22) {

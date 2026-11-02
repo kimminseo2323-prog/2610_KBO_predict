@@ -1,6 +1,6 @@
 """5단계 사이트(site/)의 공통 레이어·데이터 계약·검증 도구 테스트. 네트워크 없음, 커밋된 data/public/만 읽는다.
 
-- tokens.css가 DESIGN_clay.md의 색·라운드·타입 스케일을 그대로 옮겼는지
+- tokens.css가 DESIGN_broadcast.md의 색·라운드·타입 스케일을 그대로 옮겼는지
 - app.js의 TEAMS / FACTOR_LABELS / TYPE_COLORS가 파이썬 원본(teams.py, features.py, cluster_labels.yaml)과 같은지
 - scripts/check_site.py가 저장소에서 --strict로 통과하고, 금지된 외부 스크립트·CSS·JS 주소를 잡는지
 - assets JS가 replaceChildren/append에 `조건 ? 노드 : null`을 넘기지 않는지(null이 "null" 글자로 찍힘), fresh 읽기 규칙
@@ -26,7 +26,7 @@ SITE = ROOT / "site"
 ASSETS = SITE / "assets"
 DATA = ROOT / "data" / "public"
 FIX = ROOT / "tests" / "fixtures" / "site"
-DESIGN = ROOT / "DESIGN_clay.md"
+DESIGN = ROOT / "DESIGN_broadcast.md"
 
 
 def _py_literal(path: Path, name: str):
@@ -47,7 +47,7 @@ def _run_check(*args) -> subprocess.CompletedProcess:
 # ---------- 디자인 토큰 ----------
 
 def test_tokens_match_design_md():
-    """DESIGN_clay.md의 6색 카드·캔버스·서피스·라운드 값과 타입 스케일 최대 크기가 tokens.css에 그대로 있다."""
+    """DESIGN_broadcast.md의 바탕·글자·계열색·구단색·모서리 값과 타입 스케일이 tokens.css에 그대로 있다."""
     design = DESIGN.read_text(encoding="utf-8")
     front = yaml.safe_load(design.split("---")[1])
     css = (ASSETS / "tokens.css").read_text(encoding="utf-8").lower()
@@ -58,24 +58,19 @@ def test_tokens_match_design_md():
         assert m, f"--{name} missing in tokens.css"
         return m.group(1).strip()
 
-    expected = {
-        "canvas": colors["canvas"], "surface-soft": colors["surface-soft"], "surface-card": colors["surface-card"],
-        "ink": colors["ink"], "body": colors["body"], "muted": colors["muted"], "hairline": colors["hairline"],
-        "pink": colors["brand-pink"], "teal": colors["brand-teal"], "lavender": colors["brand-lavender"],
-        "peach": colors["brand-peach"], "ochre": colors["brand-ochre"], "cream": colors["surface-card"],
-        "mint": colors["brand-mint"], "coral": colors["brand-coral"],
-    }
+    expected = {k: colors[k] for k in ("canvas", "surface-soft", "surface-card", "surface-strong", "ink", "body", "muted", "hairline")}
+    expected.update({k: colors[f"series-{k}"] for k in ("pink", "teal", "lavender", "peach", "ochre", "mint", "coral")})
+    expected.update({k: v for k, v in colors.items() if k.startswith("team-")})
     for name, hexv in expected.items():
         assert var(name) == hexv.lower(), name
     for name, key in {"r-md": "md", "r-lg": "lg", "r-xl": "xl"}.items():
         assert var(name) == rounded[key], name
+    assert var("rule") == front["rule"]
     for px in (4, 8, 12, 16, 24, 32, 48, 96):
         assert var(f"sp-{px}") == f"{px}px"
-    assert '"inter", "pretendard"' in var("font-display") and '"inter", "pretendard"' in var("font-body")
+    assert "pretendard" in var("font-body") and '"barlow condensed"' in var("font-num")
     # 타입 스케일: 클래스마다 DESIGN 값(최대 크기·굵기·줄간격·자간)이 그대로 들어 있다 (모바일은 clamp 최소값만 작다)
     for cls, spec in front["typography"].items():
-        if cls in ("display-xl", "caption-uppercase", "button", "nav-link"):
-            continue
         m = re.search(rf"\.{cls}\s*\{{([^}}]+)\}}", css)
         assert m, f".{cls} missing"
         rule = m.group(1)
@@ -86,32 +81,37 @@ def test_tokens_match_design_md():
         assert f"letter-spacing: {ls if ls != 0 else 0}" in rule, (cls, "letter-spacing")
 
 
-def test_card_colors_and_text_contrast_rules():
-    """app.css: 카드 6색 변형, 틸만 흰 글자(핑크 위 작은 글자·알약은 잉크), 포커스 링, reduced-motion, wrap 1280px."""
+def test_broadcast_visual_rules():
+    """app.css: 섹션(.card)은 굵은 선으로 시작하고 면·둥근 모서리·그림자가 없다, 파스텔 카드 색 변형이 없다,
+    포커스 링·움직임 줄이기·등장 모션 규칙이 있다. home: 매치업 면은 팀 색 변수, 글자색은 JS가 밝기로 정한다."""
     css = (ASSETS / "app.css").read_text(encoding="utf-8")
-    for c in ("pink", "teal", "lavender", "peach", "ochre", "cream"):
-        assert f".card--{c}" in css
-    assert re.search(r"\.card--teal\s*\{[^}]*color:\s*var\(--on-dark\)", css)
-    # 핑크 위 흰 글자는 3.1:1 — 핑크 카드·핑크 알약의 기본 글자색은 잉크, 큰 표시용 글자만 페이지 CSS가 흰색으로 되돌린다
-    assert re.search(r"\.card--pink\s*\{[^}]*color:\s*var\(--ink\)", css)
-    assert re.search(r"\.card--pink\s*\{[^}]*--muted:\s*var\(--ink\)", css)
-    assert re.search(r"\.pill--pink\s*\{[^}]*color:\s*var\(--ink\)", css)
-    assert not re.search(r"\.pill--pink\s*\{[^}]*--on-dark", css)
-    home_css = (ASSETS / "home.css").read_text(encoding="utf-8")
-    # 매치업 면은 팀 색(--c-away/--c-home)이고 글자색은 JS가 밝기로 정한 --t-away/--t-home (기본값: 원정 잉크, 홈 흰색)
-    assert re.search(r"\.side--away\s*\{[^}]*background:\s*var\(--c-away,\s*var\(--pink\)\)[^}]*color:\s*var\(--t-away,\s*var\(--ink\)\)", home_css)
-    home_js = (ASSETS / "home.js").read_text(encoding="utf-8")
-    assert "function teamSideColors" in home_js and "lum > 0.3" in home_js
+    card = re.search(r"\n\.card \{([^}]*)\}", css).group(1)
+    assert "border-top: var(--rule) solid var(--ink)" in card and "background: none" in card
+    assert "border-radius" not in card
+    assert not re.search(r"\.card--(?:pink|teal|lavender|peach|ochre|cream)\b", css)  # 파스텔 카드 면 없음
+    assert "box-shadow" not in css  # 그림자 없음
     assert ":focus-visible" in css and "prefers-reduced-motion" in css
-    assert "max-width: 1280px" in css
-    assert "box-shadow" not in css  # 그림자 없음 (DESIGN)
-    # 포커스 링·선택 점은 문맥 색 --focus, 보조 글자는 카드별 단색 --muted (글자에 투명도 쓰지 않음)
     assert re.search(r":focus-visible\s*\{[^}]*var\(--focus\)", css)
-    assert re.search(r"\.card--teal\s*\{\s*--focus:\s*var\(--on-dark\)", css)
-    assert re.search(r"\.inset\s*\{[^}]*--focus:\s*var\(--ink\)", css)
+    assert "max-width: 1200px" in css
+    # 등장 모션: 막대·열·선·점 (charts.js가 붙이는 클래스) + 움직임 줄이기에서 해제
+    for sel in (".c-bar", ".c-col", ".c-lines", ".c-point"):
+        assert f".chart.is-in:not(.is-done) {sel}" in css, sel
+    charts = (ASSETS / "charts.js").read_text(encoding="utf-8")
+    assert "armEntrance(el)" in charts and 'class: "c-lines"' in charts
     for sel in (".card__lead", ".card__foot", ".kpi small", ".chart .c-axis"):
         rule = re.search(re.escape(sel) + r"\s*\{([^}]*)\}", css).group(1)
         assert "opacity" not in rule and "var(--muted)" in rule, sel
+    home_css = (ASSETS / "home.css").read_text(encoding="utf-8")
+    assert re.search(r"\.side--away\s*\{[^}]*background:\s*var\(--c-away,\s*var\(--pink\)\)[^}]*color:\s*var\(--t-away,\s*var\(--ink\)\)", home_css)
+    home_js = (ASSETS / "home.js").read_text(encoding="utf-8")
+    assert "function teamSideColors" in home_js and "lum > 0.3" in home_js
+    assert "countUp(" in home_js and "ballSVG(" in home_js and "function tape(" in home_js
+    # 머리: 검정 스코어 버그 + 메뉴, 푸터: 다이아몬드 그림 (4페이지 공통)
+    for page in ("index.html", "teams.html", "players.html", "report.html"):
+        html = (SITE / page).read_text(encoding="utf-8")
+        assert 'class="bugbar"' in html and 'class="menubar"' in html and 'id="bug-slot"' in html, page
+        assert 'class="footer__field"' in html and "Barlow+Condensed" in html, page
+        assert not re.search(r'class="card card--', html), page
 
 
 # ---------- app.js 상수가 파이썬과 같다 ----------
@@ -436,14 +436,12 @@ def _home_soup():
 
 
 def test_home_markup_has_sections():
-    """벤토 6장(크림·라벤더·피치·오커·틸·크림 순), 매치업 컨테이너, 되감기 슬라이더 컨테이너, 푸터 #evidence가 정적으로 있다."""
+    """근거 섹션 6개(문서 순서 고정, 모두 굵은 선 섹션 .card), 매치업 컨테이너, 되감기 슬라이더 컨테이너, 푸터 #evidence가 정적으로 있다."""
     soup = _home_soup()
     cards = soup.select(".home-bento > section")
     assert [c["id"] for c in cards] == HOME_SECTIONS
-    colors = [next(k for k in c["class"] if k.startswith("card--")) for c in cards]
-    assert colors == ["card--cream", "card--lavender", "card--peach", "card--ochre", "card--teal", "card--cream"]
-    for a, b in zip(colors, colors[1:]):
-        assert a != b  # 같은 색 연속 금지
+    for c in cards:
+        assert "card" in c["class"] and not any(k.startswith("card--") for k in c["class"])
     for c in cards:
         assert c.find(["h2"]) and c.get("aria-labelledby")
     assert soup.find(id="matchups") is not None
@@ -490,16 +488,14 @@ def _report_soup():
 
 
 def test_report_markup():
-    """배지 컨테이너(#model-badges)가 벤토보다 앞, 카드 6장(크림·라벤더·피치·오커·틸·크림 순, 같은 색 연속 없음), #evidence, report.js 모듈 하나."""
+    """배지 컨테이너(#model-badges)가 섹션보다 앞, 섹션 6개(순서 고정, 굵은 선 섹션), #evidence, report.js 모듈 하나."""
     soup = _report_soup()
     badges = soup.find(id="model-badges")
     assert badges is not None and badges.get("aria-label")
     cards = soup.select(".report-bento > section")
     assert [c["id"] for c in cards] == REPORT_SECTIONS
-    colors = [next(k for k in c["class"] if k.startswith("card--")) for c in cards]
-    assert colors == ["card--cream", "card--lavender", "card--peach", "card--ochre", "card--teal", "card--cream"]
-    for a, b in zip(colors, colors[1:]):
-        assert a != b
+    for c in cards:
+        assert "card" in c["class"] and not any(k.startswith("card--") for k in c["class"])
     for c in cards:
         h2 = c.find("h2")
         assert h2 is not None and c.get("aria-labelledby") == h2.get("id")
@@ -532,7 +528,7 @@ def test_report_js_uses_shared_constants_and_data():
 
 # ---------- 선수 탐색 (players.html) ----------
 
-PLAYERS_SECTIONS = ["type-map", "player-card", "similar", "type-model"]  # 순서 고정: 크림 → 핑크 → 라벤더 → 틸
+PLAYERS_SECTIONS = ["type-map", "player-card", "similar", "type-model"]  # 순서 고정
 
 
 def _players_soup():
@@ -555,9 +551,8 @@ def test_players_markup():
         assert soup.find("label", attrs={"for": cid}) is not None, cid
     cards = soup.select("main section.card")  # 지도·선수 카드는 .stage 래퍼 안에 있어도 문서 순서로 센다
     assert [c["id"] for c in cards] == PLAYERS_SECTIONS
-    colors = [next(k for k in c["class"] if k.startswith("card--")) for c in cards]
-    assert colors == ["card--cream", "card--pink", "card--lavender", "card--teal"]
-    # 넓은 화면에서는 지도(크림)·선수 카드(핑크)가 한 줄, 그 아래 비슷한 선수가 오므로 크림이 세로로 겹치지 않게 라벤더
+    for c in cards:
+        assert "card" in c["class"] and not any(k.startswith("card--") for k in c["class"])
     for c in cards:
         h2 = c.find("h2")
         assert h2 is not None and c.get("aria-labelledby") == h2.get("id")
@@ -601,7 +596,7 @@ def test_team_name_for_old_names():
 
 # ---------- 팀 (teams.html) ----------
 
-TEAMS_SECTIONS = ["standings", "roster-types", "head-to-head", "playoff-rewind"]  # 순서 고정: 크림 → 라벤더 → 피치 → 오커
+TEAMS_SECTIONS = ["standings", "roster-types", "head-to-head", "playoff-rewind"]  # 순서 고정
 
 
 def _teams_soup():
@@ -618,8 +613,8 @@ def test_teams_markup():
     assert soup.find("label", attrs={"for": "season-select"}) is not None
     cards = soup.select("main section.card")  # 순위표는 무대(.stage) 안, 나머지는 .teams-stack 안 — 문서 순서로 센다
     assert [c["id"] for c in cards] == TEAMS_SECTIONS
-    colors = [next(k for k in c["class"] if k.startswith("card--")) for c in cards]
-    assert colors == ["card--cream", "card--lavender", "card--peach", "card--ochre"]
+    for c in cards:
+        assert "card" in c["class"] and not any(k.startswith("card--") for k in c["class"])
     for c in cards:
         h2 = c.find("h2")
         assert h2 is not None and c.get("aria-labelledby") == h2.get("id")
@@ -712,7 +707,7 @@ def test_import_site_strips_beacon(tmp_path, capsys):
     for page in ("index.html", "report.html"):
         html = (site / page).read_text(encoding="utf-8")
         assert "cloudflareinsights" not in html and "data-cf-beacon" not in html, page
-        assert "https://fonts.googleapis.com/css2?family=Inter" in html, page
+        assert "https://fonts.googleapis.com/css2?family=" in html, page
         assert "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@" in html, page
     assert 'href="assets/home.css"' in (site / "index.html").read_text(encoding="utf-8")
     assert "file:" not in (site / "index.html").read_text(encoding="utf-8")

@@ -425,18 +425,18 @@ function renderHoldout() {
   const order = [sel, ...Object.keys(r.models ?? {}).filter((k) => k !== sel)];
 
   body.replaceChildren(
-    el("p", { class: "holdout__pointer" }, `선택 모델과 규칙의 차이·유의성은 위 판결 무대에 크게 있고, 아래 표는 같은 값을 log loss·Brier까지 함께 적은 것입니다. 비교 대상 규칙(${baseName(sig.vs)})은 ${sig.selected_on === "val" ? `${r.val_season} 검증에서` : "미리"} 가장 강했던 규칙으로 정했습니다.`),
+    el("p", { class: "holdout__pointer" }, `비교 대상 규칙(${baseName(sig.vs)})은 ${sig.selected_on === "val" ? `${r.val_season} 검증에서` : "미리"} 가장 강했던 규칙`),
     el("div", { class: "inset" }, table(
       `${r.test_season} 시험 성적: 모델 ${order.length}개와 규칙 3개`,
       [["모델 / 규칙"], ["정확도", "num"], ["log loss", "num"], ["Brier", "num"], ["p값", "num"]],
       [...order.map(modelRow), ...BASELINES.map(baseRow)],
       "holdout-table",
     )),
-    el("ul", { class: "notes" }, [
+    el("details", { class: "more" }, [el("summary", {}, "표 읽는 법과 주의할 점"), el("ul", {}, [
       el("li", {}, `log loss와 Brier는 낮을수록 좋습니다. 알고리즘은 ${r.val_season} 검증 log loss가 낮은 ${eul(algoName(sel))} 골랐습니다. p값은 선택 모델과 각 규칙의 경기별 적중을 견준 McNemar 검정입니다.`),
       el("li", {}, `${r.test_season} 시즌은 어떤 학습·선택에도 쓰지 않았지만, 개발 중에 ${r.test_season} 지표를 한 번 확인했고 그 뒤 캘리브레이션 선택 절차를 바꿨습니다. 검증 시즌 안에서 보정기를 맞추고 같은 시즌으로 고르면 isotonic이 유리하게 편향되기 때문입니다.`),
       el("li", {}, `백테스트의 선발 피처는 ${starterText(r.starter_source?.train_test)}로 만들었습니다. 라이브는 ${starterText(r.starter_source?.live)}을 쓰므로, 예고와 실제가 다르면 라이브 성적은 이보다 낮을 수 있습니다.`),
-    ]),
+    ])]),
   );
 }
 
@@ -593,10 +593,10 @@ function renderClusters() {
   const sil = ["batter", "pitcher"].map((g) => cq[g]?.k_table?.find((row) => row.k === cq[g]?.k)?.silhouette);
   body.replaceChildren(
     el("div", { class: "clusters" }, ["batter", "pitcher"].filter((g) => cq[g]).map((g) => clusterGroup(g, cq[g]))),
-    el("ul", { class: "notes notes--on-dark" }, [
+    el("details", { class: "more" }, [el("summary", {}, "숫자 읽는 법"), el("ul", {}, [
       el("li", {}, `실루엣이 타자 ${fmtRate3(sil[0], 2)}, 투수 ${fmtRate3(sil[1], 2)}로 낮습니다. 선수 분포는 연속적이고, 유형은 그 분포를 부드럽게 나눈 구분입니다. 유지율은 연속 두 시즌 모두 자격인 선수의 유형이 그대로인 비율입니다.`),
       cq.membership_note ? el("li", {}, cq.membership_note) : null,
-    ]),
+    ])]),
   );
 }
 

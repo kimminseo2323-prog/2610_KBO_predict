@@ -142,10 +142,7 @@ function renderLead() {
   const d = state.data;
   const nB = typesOf("batter").length, nP = typesOf("pitcher").length;
   $("players-lead").textContent =
-    `${fmtRange(state.seasons)} 시즌 선수-시즌 ${fmtInt(state.index.size)}개를 스탯만으로 타자 ${nB}유형·투수 ${nP}유형으로 나눴습니다. ` +
-    "지도는 여러 스탯을 PCA로 두 축에 눌러 담은 것이라, 가까운 점일수록 기록이 비슷합니다." +
-    (d.fit_seasons?.length && d.fit_seasons.at(-1) < state.seasons.at(-1)
-      ? ` 유형은 ${fmtRange(d.fit_seasons)} 기록으로 정했고 ${state.seasons.at(-1)} 선수는 가장 가까운 유형에 넣었습니다.` : "");
+    `${fmtRange(state.seasons)} 선수-시즌 ${fmtInt(state.index.size)}개를 스탯만으로 타자 ${nB}유형, 투수 ${nP}유형으로 나눴습니다. 가까운 점일수록 기록이 비슷합니다.`;
 }
 
 // ---------- 컨트롤 ----------
@@ -385,8 +382,7 @@ function renderMap() {
   const types = typesOf(g);
   const team = state.team;
   $("map-lead").textContent = `${state.season} ${GROUP[g]} ${fmtInt(all.length)}명` +
-    (team ? ` 중 ${teamNameFor(team, state.season)} ${fmtInt(pool.length)}명을 진하게 표시했습니다.` : "을 기록이 비슷할수록 가깝게 놓았습니다.") +
-    " 점을 누르면 선수 카드가 바뀝니다.";
+    (team ? `, ${teamNameFor(team, state.season)} ${fmtInt(pool.length)}명 진하게` : "") + ". 점을 누르면 선수 카드가 바뀝니다";
   $("map-legend").replaceChildren(...types.map((t) => el("li", { class: "type-legend__item" }, [
     el("span", { class: "dot", style: { background: colorVar(typeColor(g, t.id)) }, "aria-hidden": "true" }),
     t.name,
@@ -421,6 +417,7 @@ function renderMap() {
 function renderCard() {
   const body = $("card-body");
   body.setAttribute("aria-busy", "false");
+  if (state.sel?.team && TEAMS[state.sel.team]) $("player-card").style.setProperty("--c", `var(--${TEAMS[state.sel.team].color})`);
   const p = state.sel;
   if (!p) {
     body.replaceChildren(el("div", { class: "inset" }, el("p", { class: "empty" },
@@ -480,7 +477,7 @@ function renderSimilar() {
     return;
   }
   $("similar-lead").textContent =
-    `기준: ${nameOf(p)}(${p.season}). 스탯이 가장 가까운 ${GROUP[p.group]} 선수-시즌 ${(p.similar ?? []).length}개입니다. 행을 누르면 그 선수로 옮겨 갑니다.`;
+    `${nameOf(p)}(${p.season})와 스탯이 가장 가까운 ${GROUP[p.group]} ${(p.similar ?? []).length}명`;
   const rows = (p.similar ?? []).map((s) => {
     const e = state.index.get(keyOf(p.group, s.season, s.player_id));
     if (!e) {
@@ -548,11 +545,11 @@ function renderModel() {
   };
   body.replaceChildren(
     el("div", { class: "model__groups" }, ["batter", "pitcher"].map(block)),
-    el("ul", { class: "model__notes" }, [
+    el("details", { class: "more model__notes" }, [el("summary", {}, "숫자 읽는 법"), el("ul", {}, [
       el("li", {}, "실루엣은 유형끼리 얼마나 또렷이 갈리는지(1에 가까울수록 또렷), 유지율은 연속 두 시즌 모두 자격인 선수의 유형이 그대로인 비율입니다." +
         (low ? " 실루엣이 낮아 유형은 연속적인 분포를 부드럽게 나눈 구분으로 보는 것이 맞습니다." : "")),
       cq.membership_note ? el("li", {}, cq.membership_note) : null,
-    ]),
+    ])]),
   );
   renderModelMeta();
 }
@@ -564,8 +561,7 @@ function renderModelMeta() {
   const version = d?.model_version ?? cq?.version;
   const fit = d?.fit_seasons ?? cq?.fit_seasons;
   if (!version && !fit) return;
-  $("model-lead").textContent = `${version ?? "유형 모델"}: ${fmtRange(fit)} 시즌 선수-시즌 기록으로 맞춘 K-means` +
-    (d?.generated_at ? ` · 선수 파일 ${String(d.generated_at).slice(0, 10)} 생성` : "");
+  $("model-lead").textContent = `${version ?? "유형 모델"}, ${fmtRange(fit)} 기록으로 맞춘 K-means`;
 }
 
 init();

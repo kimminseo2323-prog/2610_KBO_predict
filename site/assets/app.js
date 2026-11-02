@@ -266,7 +266,12 @@ export function el(tag, attrs = {}, children = []) {
     if (v === null || v === undefined || v === false) continue;
     if (k === "class") node.className = v;
     else if (k === "text") node.textContent = v;
-    else if (k === "style" && typeof v === "object") Object.assign(node.style, v);
+    else if (k === "style" && typeof v === "object") {
+      for (const [sk, sv] of Object.entries(v)) {
+        if (sv === null || sv === undefined) continue;
+        if (sk.startsWith("--")) node.style.setProperty(sk, String(sv)); else node.style[sk] = sv;
+      }
+    }
     else if (k === "dataset") Object.assign(node.dataset, v);
     else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2).toLowerCase(), v);
     else node.setAttribute(k, v === true ? "" : String(v));
@@ -311,11 +316,14 @@ export function winnerText({ winner, home, away, status } = {}) {
 export function renderNav(active) {
   let header = document.querySelector("header.topnav");
   if (!header) {
-    header = el("header", { class: "topnav" }, el("div", { class: "topnav__inner wrap" }, [
-      el("a", { class: "brand", href: "index.html" }, [el("i", { class: "brand__mark", "aria-hidden": "true" }), "KBO Predict"]),
-      el("nav", { "aria-label": "주 메뉴" }, el("ul", {}, NAV.map(([href, label]) => el("li", {}, el("a", { href }, label))))),
-      el("a", { class: "btn", href: REPO_URL }, "GitHub에서 보기"),
-    ]));
+    header = el("header", { class: "topnav" }, [
+      el("div", { class: "bugbar" }, el("div", { class: "bugbar__inner wrap" }, [
+        el("a", { class: "brand", href: "index.html" }, [ballSVG({ cls: "brand__ball" }), "KBO PREDICT"]),
+        el("div", { class: "bug-slot", id: "bug-slot" }),
+        el("a", { class: "btn btn--bug", href: REPO_URL }, "GitHub에서 보기"),
+      ])),
+      el("nav", { class: "menubar", "aria-label": "주 메뉴" }, el("ul", { class: "wrap" }, NAV.map(([href, label]) => el("li", {}, el("a", { href }, label))))),
+    ]);
     document.body.prepend(header);
   }
   header.querySelectorAll("nav a").forEach((a) => {
@@ -323,6 +331,62 @@ export function renderNav(active) {
     else a.removeAttribute("aria-current");
   });
   return header;
+}
+
+// ---------- 그림·움직임 ----------
+
+const SVGNS = "http://www.w3.org/2000/svg";
+const svgNode = (tag, attrs = {}) => {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
+  return n;
+};
+
+/** 야구공 그림(흰 공 + 빨간 실밥). spin이면 천천히 돈다(움직임 줄이기 설정이면 멈춤). 장식이라 aria-hidden. */
+export function ballSVG({ cls = "", spin = false } = {}) {
+  const svg = svgNode("svg", { viewBox: "0 0 24 24", class: `ball ${cls}${spin ? " ball--spin" : ""}`.trim(), "aria-hidden": "true", focusable: "false" });
+  const seam = "M6.6 3.6c2.6 2.6 2.6 14.2 0 16.8M17.4 3.6c-2.6 2.6-2.6 14.2 0 16.8";
+  svg.append(
+    svgNode("circle", { cx: 12, cy: 12, r: 10.5, fill: "#fff", stroke: "rgba(0,0,0,.12)", "stroke-width": 0.6 }),
+    svgNode("path", { d: seam, fill: "none", stroke: "#d8232a", "stroke-width": 1.3 }),
+    svgNode("path", { d: seam, fill: "none", stroke: "#d8232a", "stroke-width": 3, "stroke-dasharray": "0.9 1.6" }),
+  );
+  return svg;
+}
+
+export const REDUCED_MOTION = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+/** node가 화면에 들어오면 fn을 한 번 부른다(IntersectionObserver가 없으면 바로). */
+export function whenVisible(node, fn) {
+  if (!node || typeof IntersectionObserver === "undefined") { fn(); return; }
+  const io = new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) { io.disconnect(); fn(); }
+  }, { threshold: 0.2 });
+  io.observe(node);
+}
+
+/**
+ * 숫자 세어 올리기: node의 글자를 from → to로 dur ms 동안 바꾼다(끝값은 정확히 fmt(to)). 화면에 들어올 때 시작.
+ * 움직임 줄이기 설정이면 바로 끝값. 같은 node에 다시 부르면 이전 것은 멈춘다.
+ */
+export function countUp(node, to, { from = 0, dur = 900, fmt = (v) => String(Math.round(v)) } = {}) {
+  if (!node || !fin(to)) return;
+  const end = Number(to);
+  node._countToken = (node._countToken ?? 0) + 1;
+  const token = node._countToken;
+  if (REDUCED_MOTION) { node.textContent = fmt(end); return; }
+  node.textContent = fmt(from);
+  whenVisible(node, () => {
+    const t0 = performance.now();
+    const step = (t) => {
+      if (node._countToken !== token) return;
+      const k = Math.min(1, (t - t0) / dur);
+      const e = 1 - (1 - k) ** 3;
+      node.textContent = fmt(k < 1 ? from + (end - from) * e : end);
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
 }
 
 function runId(url) {
