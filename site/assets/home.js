@@ -372,6 +372,16 @@ function teamSideColors(code) {
   return out;
 }
 
+/** 팀 색 칩: 바탕은 구단 대표색, 글자색은 밝기로 자동(흰색 또는 잉크). 확률이 더 높은 팀을 그 팀 색으로 보여 줄 때 쓴다. */
+function teamChip(code, text, cls = "") {
+  const [bg, fg] = teamSideColors(code);
+  return el("span", { class: `tchip ${cls}`.trim(), style: { background: bg, color: fg } }, text);
+}
+/** P(홈 승) → [더 높은 팀 코드, 그 팀 확률]. 정확히 반반이면 홈. */
+function favored(p, home, away) {
+  return Number(p) >= 0.5 ? [home, Number(p)] : [away, 1 - Number(p)];
+}
+
 function sideBlock(g, side, prob, large, animate = false) {
   const t = g[side];
   const s = t.starter;
@@ -385,7 +395,8 @@ function sideBlock(g, side, prob, large, animate = false) {
   if (animate && prob !== "—") countUp(n, prob, { from: 50, dur: 1100 });
   const probEl = el("p", { class: "side__prob" }, [
     el("span", { class: "side__num" }, prob === "—" ? "—" : [n, el("small", {}, "%")]),
-    el("span", { class: "side__who" }, `${teamName(t.code)} 승리`),
+    el("span", { class: "side__who" }, [fin(g.home_win_prob) && (side === "home" ? g.home_win_prob > 0.5 : g.home_win_prob < 0.5)
+      ? el("b", { class: "side__fav" }, "우세 ") : null, `${teamName(t.code)} 승리`]),
   ]);
   const stats = !s ? null
     : fin(s.era) || fin(s.k9) || fin(s.bb9) ? `ERA ${num(s.era)} · K/9 ${num(s.k9)} · BB/9 ${num(s.bb9)}` : "선발 올해 등판 기록 없음";
@@ -394,7 +405,10 @@ function sideBlock(g, side, prob, large, animate = false) {
       : el("p", { class: "chip__row" }, el("b", {}, "선발 미정")),
     large && stats ? el("p", { class: "chip__stats num" }, stats) : null,
   ]);
-  return el("div", { class: `side side--${side}` }, [head, probEl, el("div", { class: "side__details" }, chip)]);
+  // 확률이 더 높은 쪽은 is-fav(우세), 낮은 쪽은 is-under(숫자를 흐리게). 정확히 반반이면 둘 다 표시 없음
+  const mine = fin(g.home_win_prob) ? (side === "home" ? Number(g.home_win_prob) : 1 - Number(g.home_win_prob)) : null;
+  const favCls = mine === null || Math.abs(mine - 0.5) < 1e-9 ? "" : mine > 0.5 ? " is-fav" : " is-under";
+  return el("div", { class: `side side--${side}${favCls}` }, [head, probEl, el("div", { class: "side__details" }, chip)]);
 }
 
 /** 모델이 어느 쪽으로 얼마나 기우는지 한 마디 (잡지 표지의 헤드라인 칸). 확률이 없으면 null. */
@@ -437,7 +451,11 @@ function metaPills(g, large) {
       `${o.name} ${teamName(o.teams[0])} ${o.wins[0]}승 · ${teamName(o.teams[1])} ${o.wins[1]}승`));
   }
   const say = large ? lean(g) : null;
-  if (say) left.push(el("span", { class: "pill pill--white pill--lean" }, `모델 전망 · ${say}`));
+  if (say) {
+    const [fav] = favored(g.home_win_prob, g.home.code, g.away.code);
+    left.push(say === "사실상 반반" ? el("span", { class: "pill pill--white pill--lean" }, `모델 전망 · ${say}`)
+      : teamChip(fav, `모델 전망 · ${say}`, "pill pill--lean"));
+  }
   const right = [];
   const r = g.result;
   if (r) {
@@ -773,10 +791,11 @@ function outlookSeries(o, title, body) {
   body.replaceChildren(
     el("p", { class: "card__lead" }, `${o.best_of}전 ${need}선승, 남은 경기 1만 번 시뮬레이션`),
     el("div", { class: "pips" }, [pips(0), pips(1)]),
-    el("p", { class: "kpi" }, [big, el("small", {}, `${teamName(o.teams[lead])} 시리즈 승리 확률`)]),
+    el("p", { class: "kpi kpi--team" }, [teamChip(o.teams[lead], big, "tchip--kpi"), el("small", {}, `${teamName(o.teams[lead])} 시리즈 승리 확률`)]),
     el("div", { class: "split", role: "img", "aria-label": `${teamName(t0)} ${prob(o.win_prob[0])}, ${teamName(t1)} ${prob(o.win_prob[1])}` }, [0, 1].map((i) =>
       el("i", { style: { flexGrow: String(Math.max(0.02, Number(o.win_prob[i]))), background: teamSideColors(o.teams[i])[0] } }))),
-    el("div", { class: "split__cap" }, [0, 1].map((i) => el("span", {}, `${teamName(o.teams[i])} ${prob(o.win_prob[i])}`))),
+    el("div", { class: "split__cap" }, [0, 1].map((i) => (i === lead ? teamChip(o.teams[i], `${teamName(o.teams[i])} ${prob(o.win_prob[i])}`)
+      : el("span", {}, `${teamName(o.teams[i])} ${prob(o.win_prob[i])}`)))),
     el("dl", { class: "facts" }, [
       Number.isFinite(w0) ? el("div", {}, [el("dt", {}, "가장 많이 나온 결과"), el("dd", {}, w0 > w1 ? `${teamName(t0)} ${w0}승 ${w1}패` : `${teamName(t1)} ${w1}승 ${w0}패`)]) : null,
       el("div", {}, [el("dt", {}, `${last}차전까지 갈 확률`), el("dd", {}, fmtPct(o.goes_distance_prob))]),
@@ -788,11 +807,13 @@ function outlookRace(o, title, body) {
   title.textContent = "가을야구 진출 확률";
   const g = selectedGame();
   const teams = Object.entries(o.teams ?? {}).sort((a, b) => b[1].playoff_prob - a[1].playoff_prob);
+  const pa = Number(o.teams?.[g?.away.code]?.playoff_prob), ph = Number(o.teams?.[g?.home.code]?.playoff_prob);
+  const top = g && Number.isFinite(pa) && Number.isFinite(ph) && pa !== ph ? (pa > ph ? g.away.code : g.home.code) : null;
   const big = g ? ["away", "home"].map((side) => {
     const code = g[side].code;
     const t = o.teams?.[code];
     return el("div", { class: "race__team" }, [
-      el("p", { class: "race__num num" }, prob(t?.playoff_prob)),
+      el("p", { class: "race__num num" }, code === top ? teamChip(code, prob(t?.playoff_prob), "tchip--kpi") : prob(t?.playoff_prob)),
       el("p", { class: "race__name" }, teamName(code)),
       el("p", { class: "race__sub num" }, t ? `현재 ${t.rank_now}위 · ${t.wins}승 ${t.losses}패` : "—"),
     ]);
@@ -819,14 +840,18 @@ function outlookRace(o, title, body) {
 function renderRecent() {
   const body = $("recent-body");
   const item = (date, match, sub, tag) => el("li", {}, [el("span", { class: "log__d" }, date), el("span", { class: "log__m" }, [el("b", {}, match), el("small", {}, sub)]), tag]);
-  const pickText = (p, home, away) => (fin(p) ? (p >= 0.5 ? `${teamName(home)} ${fmtPct(p)}` : `${teamName(away)} ${fmtPct(1 - p)}`) : "—");
+  const pickChip = (p, home, away) => {
+    if (!fin(p)) return "—";
+    const [code, q] = favored(p, home, away);
+    return teamChip(code, `${teamName(code)} ${fmtPct(q)}`, "tchip--sm");
+  };
   if (state.mode === "rewind" && state.day) {
     $("recent-title").textContent = "이날의 결과";
     $("recent-lead").textContent = "예측과 실제 결과";
     body.replaceChildren(el("ul", { class: "log" }, ordered(state.day).map((g) => {
       const r = g.result;
       return item(r ? `${r.away_score}:${r.home_score}` : "—", matchLabel(g),
-        r ? `예측 ${pickText(g.home_win_prob, g.home.code, g.away.code)}, ${winnerText({ winner: r.winner, home: g.home.code, away: g.away.code, status: "FINAL" })}` : NOTES[g.status_note] ?? "취소",
+        r ? ["예측 ", pickChip(g.home_win_prob, g.home.code, g.away.code), ` ${winnerText({ winner: r.winner, home: g.home.code, away: g.away.code, status: "FINAL" })}`] : NOTES[g.status_note] ?? "취소",
         r ? verdictPill(r) : verdictPill({ status: "CANCELED" }));
     })));
     return;
@@ -844,8 +869,8 @@ function renderRecent() {
   }
   body.replaceChildren(el("ul", { class: "log" }, rows.map((h) => {
     const res = winnerText(h);
-    const pick = pickText(h.home_win_prob, h.home, h.away);
-    return item(h.date.slice(5).replace("-", "."), `${teamName(h.away)} vs ${teamName(h.home)}`, res === "경기 전" ? `예측 ${pick}` : `예측 ${pick}, ${res}`, verdictPill(h));
+    const pick = pickChip(h.home_win_prob, h.home, h.away);
+    return item(h.date.slice(5).replace("-", "."), `${teamName(h.away)} vs ${teamName(h.home)}`, res === "경기 전" ? ["예측 ", pick] : ["예측 ", pick, ` ${res}`], verdictPill(h));
   })));
 }
 

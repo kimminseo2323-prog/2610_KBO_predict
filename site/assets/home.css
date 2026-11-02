@@ -145,6 +145,17 @@
 @keyframes cut-in { from { --cut: 50%; } }
 @keyframes rise { from { opacity: 0; translate: 0 18px; } }
 
+/* ---------- 우세 팀 강조: 확률이 더 높은 팀은 그 팀 색 칩, 매치업에서는 열세 쪽 숫자를 흐리게 ---------- */
+.tchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-weight: 800; line-height: 1.35; white-space: nowrap; }
+.tchip--sm { padding: 1px 6px; font-size: 12px; }
+.tchip--kpi { padding: 2px 12px 4px 8px; line-height: 0.95; }
+.stage__top .tchip { outline: 2px solid var(--canvas); outline-offset: -2px; font-size: 12px; padding: 4px 9px; }
+.side.is-under .side__num { opacity: 0.5; }
+.side.is-under .side__who { opacity: 0.7; }
+.side__fav { font-weight: 900; }
+.side.is-fav .side__who { background: var(--ink); color: var(--on-dark); }
+.log__m small .tchip { vertical-align: 1px; }
+
 /* ---------- 두 팀 비교 띠 ---------- */
 .tape { margin-top: 0; border-bottom: 1px solid var(--hairline); }
 .tape__row { display: grid; grid-template-columns: minmax(0, 1fr) 104px minmax(0, 1fr); align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--hairline); }
