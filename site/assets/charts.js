@@ -69,6 +69,44 @@ function empty(el) {
 }
 
 /** el을 차트 상자로 만들고 draw(width) → [노드…]를 그린다. 너비가 8px 넘게 바뀌면 다시 그린다. */
+/* ---------- 툴팁: data-tip 속성이 있는 표시(막대·점·칸)에 마우스를 올리거나(모바일) 탭하면 값을 보여 준다 ----------
+   페이지에 하나뿐인 <div class="chart-tip">을 body에 두고, 차트 svg마다 포인터 이벤트를 위임해 쓴다.
+   표시 글은 "
+"으로 줄을 나눈다. 화면 낭독기에는 sr-only 표가 있으므로 툴팁은 aria-hidden. */
+let _tip = null;
+function tipEl() {
+  if (_tip && _tip.isConnected) return _tip;
+  _tip = document.createElement("div");
+  _tip.className = "chart-tip";
+  _tip.setAttribute("aria-hidden", "true");
+  _tip.hidden = true;
+  document.body.append(_tip);
+  document.addEventListener("pointerdown", (e) => { if (!e.target.closest?.("[data-tip]")) hideTip(); }, true);
+  window.addEventListener("scroll", hideTip, { passive: true });
+  return _tip;
+}
+function showTip(text, x, y) {
+  const t = tipEl();
+  t.textContent = text;
+  t.hidden = false;
+  const pad = 12, w = t.offsetWidth, h = t.offsetHeight;
+  let left = x + pad, top = y - h - pad;
+  if (left + w > window.innerWidth - 8) left = Math.max(8, x - w - pad);
+  if (top < 8) top = y + pad;
+  t.style.left = `${Math.round(left)}px`;
+  t.style.top = `${Math.round(top)}px`;
+}
+function hideTip() { if (_tip) _tip.hidden = true; }
+/** svg(또는 아무 요소) 안의 [data-tip] 표시에 툴팁을 단다. 같은 요소에 두 번 달지 않는다. */
+export function enableTips(root) {
+  if (!root || root._tipsOn) return;
+  root._tipsOn = true;
+  const target = (e) => e.target.closest?.("[data-tip]");
+  root.addEventListener("pointermove", (e) => { const m = target(e); if (m) showTip(m.dataset.tip, e.clientX, e.clientY); else hideTip(); });
+  root.addEventListener("pointerleave", hideTip);
+  root.addEventListener("pointerdown", (e) => { const m = target(e); if (m && e.pointerType !== "mouse") { e.preventDefault(); showTip(m.dataset.tip, e.clientX, e.clientY); } });
+}
+
 function mount(el, draw) {
   el.classList.add("chart");
   el._chartRO?.disconnect();
@@ -77,7 +115,9 @@ function mount(el, draw) {
     const w = Math.max(MIN_W, Math.round(el.clientWidth || 600));
     if (Math.abs(w - last) < 8) return;
     last = w;
+    hideTip();
     el.replaceChildren(...draw(w));
+    el.querySelectorAll("svg").forEach(enableTips);
   };
   render();
   if (typeof ResizeObserver !== "undefined") {
@@ -125,7 +165,10 @@ export function barChart(el, rows, { valueKey = "value", labelKey = "label", col
       const x = v !== null && v < 0 ? zero - len : zero;
       svg.append(svgEl("text", { class: "c-label", x: narrow ? 0 : labelW - 12, y: narrow ? top - 6 : top + barH / 2 + 4,
         "text-anchor": narrow ? "start" : "end" }, String(r[labelKey] ?? "")));
-      if (v !== null) svg.append(svgEl("rect", { x, y: top, width: Math.max(len, 1), height: barH, rx: 4, style: `fill:${cv(fill(r, v))}` }));
+      const tip = `${r[labelKey] ?? ""}
+${fmt(v)}`;
+      svg.append(svgEl("rect", { class: "c-hit", x: 0, y: i * rowH, width: W, height: rowH, fill: "transparent", "data-tip": tip }));
+      if (v !== null) svg.append(svgEl("rect", { x, y: top, width: Math.max(len, 1), height: barH, rx: 4, style: `fill:${cv(fill(r, v))}`, "data-tip": tip }));
       svg.append(svgEl("text", { class: v === null ? "c-axis" : "c-value", x: v !== null && v < 0 ? x - 6 : x + len + 6,
         y: top + barH / 2 + 4, "text-anchor": v !== null && v < 0 ? "end" : "start" }, fmt(v)));
     });
@@ -175,6 +218,16 @@ export function lineChart(el, points, { color = "ink", yFormat = pct, yDomain, l
       });
       svg.append(svgEl("path", { d: d.trim(), fill: "none", style: `stroke:${cv(s.color ?? color)}`, "stroke-width": 2.5, "stroke-linejoin": "round", "stroke-linecap": "round",
         "stroke-dasharray": s.dash ? (typeof s.dash === "string" ? s.dash : "6 4") : null }));
+    });
+    // 툴팁: x 위치마다 세로 히트 띠. 여러 줄이면 그 x의 모든 줄 값을 큰 값부터, 한 줄이면 그 값 하나.
+    xs.forEach((x, i) => {
+      const vals = series.map((s) => [s.legend ?? s.name, s.points[i]?.y]).filter(([, y]) => fin(y)).sort((a, b) => Number(b[1]) - Number(a[1]));
+      if (!vals.length) return;
+      const body = multi ? vals.map(([n, y]) => `${String(n).replace(/\s[\d.]+%$/, "")} ${yFormat(Number(y))}`).join("\n") : yFormat(Number(vals[0][1]));
+      const half = xs.length > 1 ? (W - L - R) / (xs.length - 1) / 2 : (W - L - R) / 2;
+      svg.append(svgEl("rect", { class: "c-hit", x: (X(i) - half).toFixed(1), y: T, width: (half * 2).toFixed(1), height: H - T - B, fill: "transparent", "data-tip": `${x}
+${body}` }));
+      if (!multi) svg.append(svgEl("circle", { class: "c-dot", cx: X(i), cy: Y(Number(vals[0][1])), r: 3, style: `fill:${cv(series[0].color ?? color)}`, "pointer-events": "none" }));
     });
     if (multi && endLabels) {
       // 마지막 유한값 위치 → 이름표 y. 위에서부터 최소 간격(GAP)을 지키며 아래로 밀고, 그림 밖으로 나가면 아래에서부터 다시 위로 민다.
@@ -285,7 +338,8 @@ export function scatter(el, points, { colorKey = "color", onSelect, selectedId, 
       }
       const on = p.id === current;
       const c = svgEl("circle", { class: `c-point${on ? " is-selected" : ""}`, cx: X(+p.x).toFixed(1), cy: Y(+p.y).toFixed(1), r: on ? 9 : 6,
-        style: `fill:${cv(colorOf(p))}`, "fill-opacity": 0.9 }, svgEl("title", {}, p.label ?? String(p.id)));
+        style: `fill:${cv(colorOf(p))}`, "fill-opacity": 0.9, "data-tip": (() => { const l = String(p.label ?? p.id), ty = typeOf(p); return l.endsWith(ty) ? l : `${l}
+${ty}`; })() });
       if (onSelect) {
         Object.entries({ role: "button", tabindex: p === first ? 0 : -1, "aria-label": p.label ?? String(p.id), "aria-pressed": on })
           .forEach(([k, v]) => c.setAttribute(k, v));
@@ -331,8 +385,10 @@ export function stackedBar(el, rows, { keys, colors, labels = {}, labelKey = "la
         const w = (val(r, k) / total) * barW;
         if (w <= 0) return;
         const tok = colors[k];
-        svg.append(svgEl("rect", { x: x.toFixed(1), y: top, width: Math.max(w - 1.5, 0.5).toFixed(1), height: barH, style: `fill:${cv(tok)}` }));
         const text = format(val(r, k));
+        svg.append(svgEl("rect", { x: x.toFixed(1), y: top, width: Math.max(w - 1.5, 0.5).toFixed(1), height: barH, style: `fill:${cv(tok)}`,
+          "data-tip": `${r[labelKey] ?? ""} · ${labels[k] ?? k}
+${text}` }));
         const fits = fin(minShare) ? val(r, k) / total >= minShare && w >= String(text).length * 8.5 + 6 : w > 38;
         if (fits) svg.append(svgEl("text", { class: "c-value", x: (x + w / 2).toFixed(1), y: top + barH / 2 + 4, "text-anchor": "middle", style: `fill:${textOn(tok)}` }, text));
         x += w;
@@ -367,7 +423,9 @@ export function calibrationChart(el, bins, { color = "ink", label = "신뢰도 �
     let counts = 0; // 막대 위에 경기 수를 실제로 쓴 막대 수 (좁은 화면에서는 막대가 좁아 0일 수 있다)
     all.filter(has).forEach((b) => {
       const x = X(b.lo) + 2, w = X(b.hi) - X(b.lo) - 4;
-      svg.append(svgEl("rect", { x, y: Y(b.actual_rate), width: Math.max(w, 1), height: Y(0) - Y(b.actual_rate), rx: 3, style: `fill:${cv(color)}`, "fill-opacity": 0.82 }));
+      svg.append(svgEl("rect", { x, y: Y(b.actual_rate), width: Math.max(w, 1), height: Y(0) - Y(b.actual_rate), rx: 3, style: `fill:${cv(color)}`, "fill-opacity": 0.82,
+        "data-tip": `예측 ${pct(b.lo)}–${pct(b.hi)} 구간 · ${b.n}경기
+실제 홈 승률 ${pct(b.actual_rate)} · 예측 평균 ${pct(b.pred_mean)}` }));
       if (w > 22) {
         svg.append(svgEl("text", { class: "c-axis", x: x + w / 2, y: Y(b.actual_rate) - 5, "text-anchor": "middle" }, String(b.n)));
         counts += 1;

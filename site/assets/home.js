@@ -341,6 +341,27 @@ function typePill(type, onCard) {
  * 한쪽 진영(원정 = 왼쪽 핑크, 홈 = 오른쪽 틸). 이름은 크게(한 줄 정식 이름은 그 아래 작게), 숫자는 가장 크게.
  * 선발·기록은 전부 하나의 크림 칩(하단 자막)에 담는다 — 핑크·틸 위 작은 글자의 대비 문제를 없애고 두 진영을 같은 모양으로.
  */
+/** 팀 면의 바탕색(구단 대표색 토큰)과 글자색. 글자색은 실제 색의 상대 휘도로 정한다: 0.3보다 밝으면(SSG 노랑·한화 주황) 잉크, 아니면 흰색.
+ *  토큰 값은 tokens.css에서 읽는다(없으면 원정 핑크·홈 틸 기본값과 그에 맞는 글자색). */
+const _sideColorCache = new Map();
+function teamSideColors(code) {
+  const token = TEAMS[code]?.color;
+  if (!token) return ["var(--pink)", "var(--ink)"];
+  if (_sideColorCache.has(token)) return _sideColorCache.get(token);
+  const hex = getComputedStyle(document.documentElement).getPropertyValue(`--${token}`).trim();
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  let text = "var(--on-dark)";
+  if (m) {
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    text = lum > 0.3 ? "var(--ink)" : "var(--on-dark)";
+  }
+  const out = [`var(--${token})`, text];
+  _sideColorCache.set(token, out);
+  return out;
+}
+
 function sideBlock(g, side, prob, large) {
   const t = g[side];
   const s = t.starter;
@@ -435,9 +456,11 @@ function matchupCard(g, large, settled = false) {
   const share = fin(p) ? (1 - Number(p)) * 100 : 50;
   const cut = large ? Math.min(62, Math.max(38, share)) : 50;
   const meta = metaPills(g, large);
+  const [cAway, tAway] = teamSideColors(g.away.code);
+  const [cHome, tHome] = teamSideColors(g.home.code);
   return el("article", {
     class: `matchup ${large ? "matchup--lg" : "matchup--sm"}${settled ? " is-settled" : ""}`,
-    style: `--cut-to: ${cut.toFixed(1)}%`, "aria-label": label,
+    style: `--cut-to: ${cut.toFixed(1)}%; --c-away: ${cAway}; --t-away: ${tAway}; --c-home: ${cHome}; --t-home: ${tHome}`, "aria-label": label,
   }, [
     meta.some(Boolean) ? el("div", { class: "stage__top" }, meta) : null,
     sideBlock(g, "away", away, large),
@@ -540,7 +563,7 @@ function renderFactors() {
     foot.textContent = "";
     return;
   }
-  barChart(body, rows, { color: "teal", negativeColor: "pink", format: sign, label: `${matchLabel(g)} 승률을 가른 요인 (%p)` });
+  barChart(body, rows, { color: TEAMS[g.home.code]?.color ?? "teal", negativeColor: TEAMS[g.away.code]?.color ?? "pink", format: sign, label: `${matchLabel(g)} 승률을 가른 요인 (%p)` });
   const hasBias = rows.some((r) => r.label === "기본 홈 어드밴티지");
   foot.textContent = `기여가 큰 5개만 보여 줍니다.${hasBias ? "" : " 기본 홈 어드밴티지는 이 경기에서 5위 밖입니다."}`;
 }

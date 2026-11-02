@@ -98,7 +98,10 @@ def test_card_colors_and_text_contrast_rules():
     assert re.search(r"\.pill--pink\s*\{[^}]*color:\s*var\(--ink\)", css)
     assert not re.search(r"\.pill--pink\s*\{[^}]*--on-dark", css)
     home_css = (ASSETS / "home.css").read_text(encoding="utf-8")
-    assert re.search(r"\.side--away\s*\{[^}]*color:\s*var\(--ink\)", home_css)
+    # 매치업 면은 팀 색(--c-away/--c-home)이고 글자색은 JS가 밝기로 정한 --t-away/--t-home (기본값: 원정 잉크, 홈 흰색)
+    assert re.search(r"\.side--away\s*\{[^}]*background:\s*var\(--c-away,\s*var\(--pink\)\)[^}]*color:\s*var\(--t-away,\s*var\(--ink\)\)", home_css)
+    home_js = (ASSETS / "home.js").read_text(encoding="utf-8")
+    assert "function teamSideColors" in home_js and "lum > 0.3" in home_js
     assert ":focus-visible" in css and "prefers-reduced-motion" in css
     assert "max-width: 1280px" in css
     assert "box-shadow" not in css  # 그림자 없음 (DESIGN)

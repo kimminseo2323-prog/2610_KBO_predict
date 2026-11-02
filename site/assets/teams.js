@@ -12,7 +12,7 @@
 import {
   TEAMS, el, fetchJSON, settle, fin, fmtPct, fmtRate3, fmtDate, teamNameFor, typeColor, renderNav, renderFooter, showError,
 } from "./app.js";
-import { lineChart, stackedBar } from "./charts.js";
+import { lineChart, stackedBar, enableTips } from "./charts.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -193,7 +193,12 @@ function rulerRow(r, dom) {
   }
   if (has(r.win_pct)) kids.push(svg("circle", { class: "ruler__act", cx: pctPos(r.win_pct, dom), cy: mid, r: 7 }));
   const say = [`실제 ${fmtRate3(r.win_pct)}`, `피타고리안 ${fmtRate3(r.pyth_pct)}`, has(r.model_expected) ? `모델 기대 ${fmtRate3(r.model_expected)}` : null].filter(Boolean).join(", ");
-  return svg("svg", { class: "ruler__row", width: "100%", height: 40, role: "img", "aria-label": `${shortName(r.code, state.season)} ${say}`, focusable: "false" }, kids);
+  // 툴팁: 행 전체를 덮는 투명 칸 (마우스·탭) — 값 세 개를 줄 단위로
+  kids.push(svg("rect", { x: 0, y: 0, width: "100%", height: 40, fill: "transparent", "data-tip": `${shortName(r.code, state.season)}
+${say.replaceAll(", ", "\n")}` }));
+  const node = svg("svg", { class: "ruler__row", width: "100%", height: 40, role: "img", "aria-label": `${shortName(r.code, state.season)} ${say}`, focusable: "false" }, kids);
+  enableTips(node);
+  return node;
 }
 
 /** pp 표기: +4.1%p / −2.3%p */
@@ -337,6 +342,8 @@ function renderH2H(rows) {
       return el("td", {
         class: `h2h__cell num${dark ? " is-dark" : ""}`,
         style: { background: `rgba(10, 10, 10, ${a.toFixed(2)})` },
+        "data-tip": `${shortName(r.code, season)} → ${shortName(c, season)} 상대
+승률 ${fmtRate3(v)}`,
       }, fmtRate3(v));
     }),
   ]));
@@ -373,6 +380,7 @@ function renderH2H(rows) {
   ]);
   body.setAttribute("aria-busy", "false");
   body.replaceChildren(el("div", { class: "h2h-layout" }, [grid, aside]));
+  enableTips(grid);
 }
 
 // ---------- ④ 가을야구 확률 되감기 (2026만) ----------

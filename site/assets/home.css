@@ -47,38 +47,38 @@
   background: var(--surface-strong); color: var(--body-strong); font-size: 13px;
 }
 
-/* ---------- 무대: 원정(왼쪽·핑크) | 홈(오른쪽·틸). 모바일 우선 = 위아래로 쌓기 ---------- */
+/* ---------- 무대: 원정(왼쪽) | 홈(오른쪽), 각 면은 그 팀의 구단 대표색(--c-away / --c-home, tokens.css --team-*).
+   글자색은 면 색의 밝기에 따라 JS가 --t-away / --t-home로 정한다(어두운 색 위 흰색, 노랑·주황 위 잉크). 모바일 우선 = 위아래로 쌓기 ---------- */
 .matchups { margin-bottom: var(--sp-32); }
 .matchup-skeleton { height: 420px; border-radius: var(--r-xl); }
 
 .matchup:not(.matchup--canceled) {
   --muted: var(--on-dark);
   position: relative; display: flex; flex-direction: column; overflow: hidden;
-  border-radius: var(--r-xl); color: var(--on-dark); background: var(--teal);
+  border-radius: var(--r-xl); color: var(--t-home, var(--on-dark)); background: var(--c-home, var(--teal));
 }
 
 /* 모바일의 경계선 대신 쓰는 가로 막대: 길이 = 승률 (맨 위, 핑크 | 틸) */
 .stage__meter { order: -1; display: flex; height: 12px; background: var(--canvas); }
-.meter__away { background: var(--pink); }
-.meter__home { background: var(--teal); }
+.meter__away { background: var(--c-away, var(--pink)); }
+.meter__home { background: var(--c-home, var(--teal)); }
 
 .stage__top {
   order: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-8) var(--sp-16);
-  padding: var(--sp-16) var(--sp-24) 0; background: var(--pink); color: var(--ink);
+  padding: var(--sp-16) var(--sp-24) 0; background: var(--c-away, var(--pink)); color: var(--t-away, var(--ink));
 }
 .stage__top .pills { min-width: 0; }
 
 .side { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head prob" "details details"; gap: 0 var(--sp-16); min-width: 0; padding: var(--sp-16) var(--sp-24) var(--sp-24); }
-.side--away { background: var(--pink); color: var(--ink); --muted: var(--ink); }
-.side--home { padding-top: var(--sp-24); }
+.side--away { background: var(--c-away, var(--pink)); color: var(--t-away, var(--ink)); --muted: var(--t-away, var(--ink)); }
+.side--home { padding-top: var(--sp-24); color: var(--t-home, var(--on-dark)); --muted: var(--t-home, var(--on-dark)); }
 .side__head { grid-area: head; min-width: 0; }
 .side__prob { grid-area: prob; display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
 .side__details { grid-area: details; margin-top: var(--sp-16); min-width: 0; }
 
 .side__role { font-size: 13px; font-weight: 500; }
-/* 대비: 핑크 위에서는 24px 이상의 큰 글자(팀 이름·큰 숫자)만 흰색. 작은 글자는 잉크, 선발·기록은 크림 칩 안에. */
+/* 대비: 팀 색이 밝으면(노랑·주황) 면 전체가 잉크 글자, 어두우면 흰 글자. 선발·기록 같은 작은 글자는 색과 무관하게 크림 칩 안에. */
 .side__team { font-family: var(--font-display); font-size: clamp(28px, 18px + 2.6vw, 48px); font-weight: 500; line-height: 1.05; letter-spacing: -1px; overflow-wrap: anywhere; }
-.side--away .side__team, .side--away .side__num { color: var(--on-dark); }
 .side__full { margin-top: 4px; font-size: 14px; }
 .side__num {
   display: block; font-family: var(--font-display);
@@ -140,7 +140,7 @@
     /* 열 폭도 경계를 따라간다 — 숫자가 경계 쪽에 붙어 있으므로 열이 50:50이면 경계가 당겨질 때 숫자가 반대 색으로 넘어간다 */
     display: grid; grid-template-columns: calc(var(--cut) - 3px) minmax(0, 1fr); grid-template-rows: auto 1fr auto;
     /* 경계: 크림색 6px 선이 핑크와 틸을 가른다 */
-    background: linear-gradient(90deg, var(--pink) calc(var(--cut) - 3px), var(--canvas) calc(var(--cut) - 3px) calc(var(--cut) + 3px), var(--teal) calc(var(--cut) + 3px));
+    background: linear-gradient(90deg, var(--c-away, var(--pink)) calc(var(--cut) - 3px), var(--canvas) calc(var(--cut) - 3px) calc(var(--cut) + 3px), var(--c-home, var(--teal)) calc(var(--cut) + 3px));
   }
   .matchup--lg:not(.matchup--canceled):not(.is-settled) { animation: cut-in 1100ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
   .matchup--lg:not(.matchup--canceled):not(.is-settled) .side__num { animation: rise 700ms 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }

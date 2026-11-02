@@ -12,7 +12,7 @@ import {
   FACTOR_LABELS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInt, fmtRange, fmtDate, fmtKST,
   teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError,
 } from "./app.js";
-import { barChart, calibrationChart } from "./charts.js";
+import { barChart, calibrationChart, enableTips } from "./charts.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -229,6 +229,9 @@ function accuracyRuler(host, items, ci, label) {
       const cy = y + 38;
       const tag = it.kind === "primary" ? (W >= 420 ? " · 비교 대상" : " *") : "";
       svg.append(
+        s("rect", { x: 0, y, width: W, height: rowH, fill: "transparent", "data-tip": `${it.label}
+정확도 ${f(it.acc)}${it.kind === "model" ? `
+95% 신뢰구간 ${f(ci.lo)}~${f(ci.hi)}` : ""}` }),
         s("text", { class: "c-label", x: x0, y: y + 18, style: it.kind === "model" ? "font-weight:600" : null }, `${it.label}${tag}`),
         s("text", { class: "c-value", x: x1, y: y + 18, "text-anchor": "end" }, f(it.acc)),
         s("line", { x1: x0, x2: x1, y1: cy, y2: cy, stroke: "currentColor", "stroke-opacity": 0.22, "stroke-width": 2 }),
@@ -251,6 +254,7 @@ function accuracyRuler(host, items, ci, label) {
     const tb = t.createTBody();
     items.forEach((it) => { const tr = tb.insertRow(); tr.insertCell().textContent = it.label; tr.insertCell().textContent = f(it.acc); });
     host.replaceChildren(svg, t);
+    enableTips(svg);
   };
   draw();
   if (typeof ResizeObserver !== "undefined") {

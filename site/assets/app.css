@@ -209,7 +209,7 @@ button.pill { cursor: pointer; min-height: 32px; }
 /* ---------- 차트 (charts.js가 그리는 인라인 SVG) ---------- */
 .chart { position: relative; width: 100%; min-width: 0; }
 .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
-.chart text { font-family: var(--font-body); font-size: 12px; fill: currentColor; }
+.chart text { font-family: var(--font-body); font-size: 12px; fill: currentColor; pointer-events: none; }  /* 글자가 막대·점의 툴팁 히트를 가리지 않게 */
 .chart .c-axis { fill: var(--muted); }
 .chart .c-label { font-size: 13px; }
 .chart .c-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -219,6 +219,14 @@ button.pill { cursor: pointer; min-height: 32px; }
 .chart .c-end { font-size: 12px; font-weight: 600; }               /* lineChart endLabels: 줄 끝 이름표 */
 .chart .c-leader { stroke: currentColor; opacity: 0.35; stroke-width: 1; }
 .chart .c-point { stroke: var(--canvas); stroke-width: 1.5; }  /* 같은 색 카드 위에서도 점이 보이게 */
+.chart .c-hit { cursor: default; }
+.chart .c-hit:hover { fill: currentColor; fill-opacity: 0.06; }
+/* 차트 툴팁: 마우스를 올리거나(모바일) 탭한 표시의 값. body에 하나, charts.js가 위치를 잡는다 */
+.chart-tip {
+  position: fixed; z-index: 50; max-width: 280px; padding: 8px 12px; pointer-events: none;
+  background: var(--ink); color: var(--on-dark); border-radius: var(--r-md);
+  font-size: 13px; line-height: 1.45; font-variant-numeric: tabular-nums; white-space: pre-line; word-break: keep-all;
+}
 .chart [role="button"].c-point { cursor: pointer; }
 .chart .c-point:focus { outline: none; }
 .chart .c-point:focus-visible, .chart .c-point.is-selected { stroke: var(--focus); stroke-width: 3; }
