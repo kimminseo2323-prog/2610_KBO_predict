@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-11-02T14:54:35+09:00",
+  "generated_at": "2026-11-03T03:14:07+09:00",
   "date": "2026-11-03",
   "mode": "live",
   "model_version": "v0.2",
-  "commit_sha": "274a5ada1ac962036a34218df7d6e28a04ff05d7",
-  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/41396697814",
+  "commit_sha": "455c688a645168cdee2e01cb1512cbd304afb043",
+  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/41498522956",
   "games": [
     {
       "game_id": 14056,
@@ -16,7 +16,16 @@
       "home": {
         "code": "KT",
         "name": "KT",
-        "starter": null,
+        "starter": {
+          "player_id": 3102,
+          "name": "Davis Daniel",
+          "era": 2.13,
+          "k9": 11.29,
+          "bb9": 2.95,
+          "ip": 55.0,
+          "starts": 10,
+          "type": null
+        },
         "win_pct_season": 0.647,
         "last10": 1.0,
         "run_diff": 1.22
@@ -24,35 +33,47 @@
       "away": {
         "code": "SS",
         "name": "삼성",
-        "starter": null,
+        "starter": {
+          "player_id": 1096,
+          "name": "Choi Won-tae",
+          "era": 4.75,
+          "k9": 8.57,
+          "bb9": 3.24,
+          "ip": 125.0,
+          "starts": 24,
+          "type": {
+            "id": 0,
+            "name": "선발형"
+          }
+        },
         "win_pct_season": 0.589,
         "last10": 0.4,
         "run_diff": 0.96
       },
-      "home_win_prob": 0.5289,
+      "home_win_prob": 0.557,
       "factors": [
+        {
+          "name": "선발 9이닝당 삼진 차이",
+          "contribution_pp": 4.0
+        },
+        {
+          "name": "선발 누적 이닝 차이",
+          "contribution_pp": -3.4
+        },
+        {
+          "name": "선발 FIP 차이",
+          "contribution_pp": 3.1
+        },
         {
           "name": "기본 홈 어드밴티지",
           "contribution_pp": 2.4
         },
         {
-          "name": "선발투수 기록 유무",
-          "contribution_pp": 1.7
-        },
-        {
           "name": "팀 승률 차이",
           "contribution_pp": 0.8
-        },
-        {
-          "name": "홈팀의 홈 경기 승률",
-          "contribution_pp": -0.8
-        },
-        {
-          "name": "타선 삼진 비율 차이",
-          "contribution_pp": -0.7
         }
       ],
-      "starter_known": false,
+      "starter_known": true,
       "status_note": null
     }
   ],
@@ -74,11 +95,11 @@
       0
     ],
     "win_prob": [
-      0.4778,
-      0.5222
+      0.4855,
+      0.5145
     ],
     "most_common_result": "2-4",
-    "goes_distance_prob": 0.3093,
+    "goes_distance_prob": 0.3107,
     "games_remaining_max": 7,
     "today_game_prob_source": "win_model (starter-inclusive)",
     "next_game_date": "2026-11-03"
