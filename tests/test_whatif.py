@@ -50,9 +50,16 @@ def test_announced_starter_is_first_and_matches_public_prob(real):
             assert len(b["candidates"][side]) <= whatif.MAX_CANDIDATES
         h, a = b["candidates"]["home"][0], b["candidates"]["away"][0]
         p = whatif.prob(real["params"], b["base"], h["line"], a["line"])
-        assert p == pytest.approx(raw_prob(real["bundle"], g, real["state"], starter_ids(real["boxes"].get(g["game_id"]))), abs=1e-12)
+        # 내보내는 숫자는 유효숫자 10자리(whatif.SIG)라 1e-10 수준 차이만 허용
+        assert p == pytest.approx(raw_prob(real["bundle"], g, real["state"], starter_ids(real["boxes"].get(g["game_id"]))), abs=1e-9)
     day_file = json.loads((ROOT / "data" / "public" / "rewind" / "2026" / f"{DAY}.json").read_text(encoding="utf-8"))
     assert [w["game_id"] for w in day_file["whatif"]] == [b["game_id"] for b in sorted(real["blocks"], key=lambda b: b["game_id"])]
+    # 커밋된 되감기 파일만으로(브라우저가 하는 그대로) 계산해도 그날 공개 확률(소수 4자리)과 같다
+    index = json.loads((ROOT / "data" / "public" / "rewind" / "2026" / "index.json").read_text(encoding="utf-8"))
+    public = {g["game_id"]: g["home_win_prob"] for g in day_file["games"] if g.get("home_win_prob") is not None}
+    for w in day_file["whatif"]:
+        h, a = w["candidates"]["home"][0], w["candidates"]["away"][0]
+        assert round(whatif.prob(index["whatif_model"], w["base"], h["line"], a["line"]), 4) == public[w["game_id"]]
 
 
 def test_no_starter_line_turns_off_starter_features(real):

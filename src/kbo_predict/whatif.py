@@ -28,6 +28,15 @@ from .seasons import is_regular
 from datetime import date as _date
 
 MAX_CANDIDATES = 8
+SIG = 10  # 내보내는 실수의 유효숫자 — OS·BLAS마다 다른 마지막 자리(1e-16)를 없애 parity가 플랫폼과 무관하게 같게.
+          # 확률 오차는 1e-10 수준이라 공개 확률(소수 4자리)과 비교에 영향이 없다.
+
+
+def _f(v):
+    """유효숫자 SIG자리로 반올림한 float (None·NaN은 None)."""
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return None
+    return float(f"{float(v):.{SIG}g}")
 LINE_KEYS = ("era", "fip", "k9", "bb9", "ip", "last3_runs")   # 선발 차이 피처를 만드는 기록 (starter_<key>_diff)
 STARTER_SET = set(STARTER_FEATURES)
 
@@ -40,19 +49,19 @@ def model_params(bundle: dict) -> dict | None:
     cal = bundle.get("calibration", "none")
     c = bundle.get("calibrator")
     if cal == "platt":
-        calibration = {"method": "platt", "a": float(c.coef_[0][0]), "b": float(c.intercept_[0])}
+        calibration = {"method": "platt", "a": _f(c.coef_[0][0]), "b": _f(c.intercept_[0])}
     elif cal == "isotonic":
-        calibration = {"method": "isotonic", "x": [float(v) for v in c.X_thresholds_], "y": [float(v) for v in c.y_thresholds_]}
+        calibration = {"method": "isotonic", "x": [_f(v) for v in c.X_thresholds_], "y": [_f(v) for v in c.y_thresholds_]}
     else:
         calibration = {"method": "none"}
     return {
         "version": bundle.get("version"),
         "features": list(bundle["features"]),
-        "median": [float(v) for v in steps["imputer"].statistics_],
-        "mean": [float(v) for v in steps["scaler"].mean_],
-        "scale": [float(v) for v in steps["scaler"].scale_],
-        "coef": [float(v) for v in steps["clf"].coef_[0]],
-        "intercept": float(steps["clf"].intercept_[0]),
+        "median": [_f(v) for v in steps["imputer"].statistics_],
+        "mean": [_f(v) for v in steps["scaler"].mean_],
+        "scale": [_f(v) for v in steps["scaler"].scale_],
+        "coef": [_f(v) for v in steps["clf"].coef_[0]],
+        "intercept": _f(steps["clf"].intercept_[0]),
         "calibration": calibration,
     }
 
@@ -61,8 +70,7 @@ def _line(state, player_id) -> dict | None:
     line = state.pitcher_line(player_id) if player_id is not None else None
     if line is None:
         return None
-    return {k: (None if line.get(k) is None or (isinstance(line.get(k), float) and math.isnan(line[k])) else float(line[k]))
-            for k in LINE_KEYS}
+    return {k: _f(line.get(k)) for k in LINE_KEYS}
 
 
 def starter_features(home: dict | None, away: dict | None) -> dict:
@@ -119,8 +127,7 @@ def game_block(game: dict, state, announced: dict | None, games: list[dict], box
                *, regular_only: bool) -> dict:
     """경기 하나의 what-if 블록: 선발과 상관없는 피처 값(base), 예고(또는 실제) 선발, 팀별 후보 선발과 그 기록."""
     f = game_features(game, state, None)
-    base = {n: (None if isinstance(f[n], float) and math.isnan(f[n]) else float(f[n]))
-            for n in MODEL_FEATURES if n not in STARTER_SET}
+    base = {n: _f(f[n]) for n in MODEL_FEATURES if n not in STARTER_SET}
     announced = announced or {}
     out = {"game_id": game["game_id"], "base": base, "announced": {}, "candidates": {}}
     for side in ("home", "away"):
