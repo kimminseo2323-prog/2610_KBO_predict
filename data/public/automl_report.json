@@ -1,0 +1,188 @@
+{
+ "generated_at": "2026-11-03T09:37:58+09:00",
+ "protocol": {
+  "tool": "FLAML AutoML",
+  "estimators": [
+   "lgbm",
+   "xgboost",
+   "rf",
+   "extra_tree",
+   "lrl1",
+   "lrl2",
+   "kneighbor"
+  ],
+  "metric": "log_loss",
+  "train_seasons": [
+   2015,
+   2016,
+   2017,
+   2018,
+   2019,
+   2020,
+   2021,
+   2022,
+   2023,
+   2024
+  ],
+  "val_season": 2025,
+  "test_season": 2026,
+  "imputation": "train median (all candidates)",
+  "seed": 42,
+  "test_used_for_selection": false
+ },
+ "search": {
+  "best_estimator": "lrl1",
+  "best_val_logloss_raw": 0.6720441516875985,
+  "best_config": {
+   "C": 0.03125
+  },
+  "best_loss_per_estimator": {
+   "lgbm": 0.673272648474219,
+   "xgboost": 0.6749957295780168,
+   "rf": 0.6730445370525039,
+   "extra_tree": 0.6753741841415352,
+   "lrl1": 0.6720441516875985,
+   "lrl2": 0.6742408530593444,
+   "kneighbor": 0.6885963984313243
+  },
+  "best_config_per_estimator": {
+   "lgbm": {
+    "n_estimators": 72,
+    "num_leaves": 6,
+    "min_child_samples": 20,
+    "learning_rate": 0.07717473888064363,
+    "log_max_bin": 5,
+    "colsample_bytree": 0.8589841939581051,
+    "reg_alpha": 0.046189167366082765,
+    "reg_lambda": 0.02756413652464255
+   },
+   "xgboost": {
+    "n_estimators": 25,
+    "max_leaves": 5,
+    "min_child_weight": 7.928585239307673,
+    "learning_rate": 0.13812261529121903,
+    "subsample": 0.9241762468521748,
+    "colsample_bylevel": 0.6972922526722259,
+    "colsample_bytree": 0.9713008468075068,
+    "reg_alpha": 0.17229506105014775,
+    "reg_lambda": 0.16989339820613025
+   },
+   "rf": {
+    "n_estimators": 4,
+    "max_features": 0.4928822564424007,
+    "max_leaves": 12,
+    "criterion": "entropy"
+   },
+   "extra_tree": {
+    "n_estimators": 7,
+    "max_features": 0.1944481950457214,
+    "max_leaves": 101,
+    "criterion": "entropy"
+   },
+   "lrl1": {
+    "C": 0.03125
+   },
+   "lrl2": {
+    "C": 1.5547690573536725
+   },
+   "kneighbor": {
+    "n_neighbors": 224
+   }
+  },
+  "time_budget_sec": 1200
+ },
+ "automl_final": {
+  "model": {
+   "class": "sklearn.linear_model._logistic.LogisticRegression",
+   "params": {
+    "C": 0.03125,
+    "class_weight": null,
+    "dual": false,
+    "fit_intercept": true,
+    "intercept_scaling": 1,
+    "l1_ratio": null,
+    "max_iter": 100,
+    "multi_class": "deprecated",
+    "n_jobs": 1,
+    "penalty": "l1",
+    "random_state": 42,
+    "solver": "saga",
+    "tol": 0.0001,
+    "verbose": 0,
+    "warm_start": false
+   }
+  },
+  "calibration": "none",
+  "calibration_val_logloss": {
+   "none": 0.6720370167470797,
+   "platt": 0.6724081678641602,
+   "isotonic": 0.67220487860635
+  },
+  "val": {
+   "n": 698,
+   "accuracy": 0.5773638968481375,
+   "log_loss": 0.6720370167470797,
+   "brier": 0.23961819008505064
+  },
+  "test": {
+   "n": 702,
+   "accuracy": 0.6011396011396012,
+   "log_loss": 0.6690996895530148,
+   "brier": 0.23815885004393705
+  },
+  "mcnemar_p_vs_current": 0.7068822614919528
+ },
+ "current": {
+  "family": "logreg",
+  "params": {
+   "C": 1.0,
+   "penalty": "l2"
+  },
+  "calibration": "platt",
+  "calibration_val_logloss": {
+   "none": 0.6772330991329577,
+   "platt": 0.6771062292097383,
+   "isotonic": 0.6781675607220424
+  },
+  "val": {
+   "n": 698,
+   "accuracy": 0.5730659025787965,
+   "log_loss": 0.6771062292097383,
+   "brier": 0.24208719725726602
+  },
+  "test": {
+   "n": 702,
+   "accuracy": 0.594017094017094,
+   "log_loss": 0.6712265100209293,
+   "brier": 0.23927358428788292
+  }
+ },
+ "tuning_recommended": {
+  "family": "random_forest",
+  "params": {
+   "n_estimators": 300,
+   "max_depth": 6,
+   "min_samples_leaf": 20,
+   "max_features": 0.3
+  },
+  "calibration": "isotonic",
+  "val": {
+   "n": 698,
+   "accuracy": 0.5759312320916905,
+   "log_loss": 0.6743616185052524,
+   "brier": 0.24096153902093348
+  },
+  "test": {
+   "n": 702,
+   "accuracy": 0.594017094017094,
+   "log_loss": 0.6668489025385903,
+   "brier": 0.23704475485364537
+  },
+  "mcnemar_p_vs_automl": 0.7043793154248914
+ },
+ "verdict": {
+  "automl_beats_tuning_on_val": true,
+  "best_val_logloss": 0.6720370167470797
+ },
+ "elapsed_sec": 1213.7
+}
