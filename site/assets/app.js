@@ -313,7 +313,7 @@ export const SHOW_LOGOS = true;
 const LOGO_FILES = new Set(["OB", "LT", "KT", "WO", "SS", "HH", "HT", "LG", "NC"]); // SSG는 SVG가 없어 글자 배지
 
 /**
- * 구단 로고 배지(흰 바탕 정사각형 안의 로고). 로고 파일이 없거나(SSG), 옛 구단명 시즌(SK 와이번스·넥센 등)이거나,
+ * 구단 로고(배경 없는 SVG). 로고 파일이 없거나(SSG), 옛 구단명 시즌(SK 와이번스·넥센 등)이거나,
  * SHOW_LOGOS가 꺼져 있으면 구단색 글자 배지. 장식이므로 alt는 비우고(이름은 옆 글자가 말한다) title만 단다.
  */
 export function teamLogo(code, { season, size = "md" } = {}) {
