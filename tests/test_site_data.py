@@ -80,7 +80,7 @@ def test_players_payload_shape(synthetic_obj, labels):
     p = players_payload(synthetic_obj, labels, meta=META)
     assert set(p) == {"generated_at", "commit_sha", "model_version", "fit_seasons", "note", "types", "players"}
     assert "player_id" in p["note"] and "같은 group" in p["note"]
-    assert p["model_version"] == "clusters-2026" and p["fit_seasons"] == cluster.FIT_SEASONS
+    assert p["model_version"] == "clusters-2026b" and p["fit_seasons"] == cluster.FIT_SEASONS
     assert p["types"]["batter"][0] == {"id": 0, "name": "유형 0", "blurb": ""} and len(p["types"]["pitcher"]) == 4
     first = p["players"][0]
     assert set(first) == PLAYER_KEYS

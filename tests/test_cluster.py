@@ -136,20 +136,15 @@ def _fake_by_k(table):
     return fake
 
 
-def test_k_selection_score_not_silhouette_alone(synthetic, monkeypatch):
-    # 실루엣만 보면 K=5(0.35)지만 실루엣+유지율은 K=4(0.30+0.60 > 0.35+0.50)
-    monkeypatch.setattr(cluster, "silhouette_score", _fake_by_k({4: 0.30, 5: 0.35, 6: 0.10, 7: 0.10}))
-    monkeypatch.setattr(cluster, "retention", _fake_by_k({4: 0.60, 5: 0.50, 6: 0.50, 7: 0.50}))
+def test_k_is_fixed_and_score_table_is_reference_only(synthetic, monkeypatch):
+    """clusters-2026b: K는 K_FIXED(4)로 정한다 — "실루엣 + 유지율" 점수는 K가 커질수록 내려가는 성질(유지율이 작은 K를
+    편듦)이 있어 K 선택 근거가 못 된다. 점수가 K=5에서 가장 커도 K=4, 점수 표는 K_RANGE(2~7) 전부를 참고로 남긴다."""
+    monkeypatch.setattr(cluster, "silhouette_score", _fake_by_k({2: 0.1, 3: 0.1, 4: 0.30, 5: 0.35, 6: 0.10, 7: 0.10}))
+    monkeypatch.setattr(cluster, "retention", _fake_by_k({2: 0.5, 3: 0.5, 4: 0.60, 5: 0.90, 6: 0.50, 7: 0.50}))
     b = fit_group(synthetic, "batter")
-    assert b["k"] == 4 and [r["score"] for r in b["k_table"]] == pytest.approx([0.90, 0.85, 0.60, 0.60])
-
-
-def test_k_selection_exact_tie_picks_smaller_k(synthetic, monkeypatch):
-    # 2진수로 정확한 값: K=5와 K=6이 0.75로 정확히 동률 -> 작은 K=5
-    monkeypatch.setattr(cluster, "silhouette_score", _fake_by_k({4: 0.0, 5: 0.5, 6: 0.25, 7: 0.0}))
-    monkeypatch.setattr(cluster, "retention", _fake_by_k({4: 0.5, 5: 0.25, 6: 0.5, 7: 0.0}))
-    b = fit_group(synthetic, "batter")
-    assert [r["score"] for r in b["k_table"]] == [0.5, 0.75, 0.75, 0.0] and b["k"] == 5
+    assert cluster.K_FIXED == 4 and b["k"] == 4
+    assert [r["k"] for r in b["k_table"]] == list(cluster.K_RANGE) == [2, 3, 4, 5, 6, 7]
+    assert [r["score"] for r in b["k_table"]] == pytest.approx([0.6, 0.6, 0.90, 1.25, 0.60, 0.60])
 
 
 def test_retention_exact():
@@ -161,17 +156,18 @@ def test_retention_exact():
     assert np.isnan(retention(a[a.player_id == 1]))                  # 연속 시즌 쌍이 없으면 NaN
 
 
-def test_k_selection_uses_score_and_relabels(synthetic, synthetic_pit):
+def test_batter_features_and_relabel_by_iso(synthetic, synthetic_pit):
+    """타자 피처: HR%(ISO와 상관 0.96 — 장타 이중 계산)를 빼고, 도루율은 log1p(10×도루율). 유형 번호는 ISO 중심 내림차순."""
+    assert cluster.BATTER_FEATURES == ["k_pct", "bb_pct", "iso", "babip", "sb_log"]
     b = fit_group(synthetic, "batter")
-    assert b["k"] == 4
-    assert [r["k"] for r in b["k_table"]] == list(cluster.K_RANGE)
-    best = max(b["k_table"], key=lambda r: (r["score"], -r["k"]))
-    assert best["k"] == b["k"]
+    assert b["k"] == 4 and b["features"] == cluster.BATTER_FEATURES
     for r in b["k_table"]:
         assert r["score"] == pytest.approx(r["silhouette"] + r["retention"])
-    hr = b["centers_z"]["hr_pct"].to_numpy()
-    assert (np.diff(hr) < 0).all()                                    # 유형 0의 hr_pct 중심이 가장 큼 (내림차순)
-    assert b["centers"].loc[0, "hr_pct"] > 0.05                       # 원 단위 중심 = 거포 원형
+    iso = b["centers_z"]["iso"].to_numpy()
+    assert (np.diff(iso) < 0).all()                                   # 유형 0의 ISO 중심이 가장 큼 (내림차순)
+    r = cluster.rates(synthetic.head(3), "batter")
+    assert np.allclose(r["sb_log"], np.log1p(10 * r["sb_rate"]))
+    assert len(b["pca_explained"]) == 2 and 0 < sum(b["pca_explained"]) <= 1 and 0 <= b["map_agreement"] <= 1
     p = fit_group(synthetic_pit, "pitcher")
     c = p["centers"]
     assert p["k"] == 4 and (c.start_share[:2] > 0.9).all() and (c.start_share[2:] < 0.1).all()
@@ -387,7 +383,7 @@ def test_cli_writes_bundle_csv_and_manifest(tmp_path, monkeypatch, obj):
     assert csv.columns.tolist() == ["season", "player_id", "group", "type", "prob", "x", "y"]
     assert csv.equals(csv.sort_values(["group", "season", "player_id"]).reset_index(drop=True))
     m = json.loads(manifest.read_text(encoding="utf-8"))["models"]
-    assert m["live"] == {"path": "x"} and m["clusters"]["version"] == "clusters-2026"
+    assert m["live"] == {"path": "x"} and m["clusters"]["version"] == "clusters-2026b"
     assert set(m["clusters"]) == {"path", "sha256", "version", "fit_seasons", "seasons", "types_sha256"}
     assert m["clusters"]["seasons"] == list(range(2015, 2027))
     first = m["clusters"]["types_sha256"]

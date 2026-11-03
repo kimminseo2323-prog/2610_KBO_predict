@@ -746,6 +746,9 @@ function renderClusters() {
       el("li", {}, `경계 뚜렷함(실루엣)이 타자 ${fmtRate3(sil[0], 2)}, 투수 ${ro(fmtRate3(sil[1], 2))} 낮습니다. 선수 기록은 뚝뚝 끊기지 않고 이어져 있어서, 유형은 비슷한 선수끼리 대략 나눈 구분입니다. 유지율은 두 시즌 연속 기록이 충분한 선수가 다음 해에도 같은 유형인 비율입니다.`),
       // 얼린 membership_note(개발자 문장)는 title로 남기고 화면에는 쉬운 말
       cq.membership_note ? el("li", { title: cq.membership_note }, membershipText(cq.batter?.membership_method, cq.membership_note)) : null,
+      // 2D 지도(PCA 두 축)가 담는 정보와, 지도 위에서 유형이 그대로 구분되는 비율 — 지도가 겹쳐 보이는 이유
+      fin(cq.batter?.map_agreement) ? el("li", {}, `선수 지도는 여러 기록을 두 축으로 줄인 그림이라 정보의 일부만 담습니다(타자 ${fmtPct(sum(cq.batter.pca_explained), 0)}, 투수 ${fmtPct(sum(cq.pitcher?.pca_explained), 0)}). 지도 위에서 유형이 그대로 구분되는 선수는 타자 ${fmtPct(cq.batter.map_agreement, 0)}, 투수 ${fmtPct(cq.pitcher?.map_agreement, 0)}이고, 나머지는 다른 유형 쪽에 겹쳐 보입니다. 유형은 지도가 아니라 모든 기록으로 정합니다.`) : null,
+      cq.version === "clusters-2026b" ? el("li", {}, "2026년 11월에 타자 유형을 다시 만들었습니다. 홈런 비율은 순수 장타력(ISO)과 거의 같은 정보라 장타가 두 번 세어지지 않게 뺐고, 도루는 소수 선수에게 몰린 값이라 로그로 펴서 썼습니다. 투수 유형은 그대로입니다.") : null,
     ])]),
   );
 }

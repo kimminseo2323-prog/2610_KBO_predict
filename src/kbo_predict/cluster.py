@@ -1,10 +1,19 @@
 """선수 유형 군집: 시즌 성적을 비율 지표로 바꿔 타자·투수를 '유형'으로 묶는다.
 
 흐름 (타자·투수 그룹마다 따로):
-    rates        누적 기록 -> 비율 지표 (K%, BB%, HR%, ISO, BABIP, 도루율 / 선발 비중)
+    rates        누적 기록 -> 비율 지표 (K%, BB%, HR%, ISO, BABIP, 도루율(+로그) / 선발 비중)
     qualify      규정급 행만 남긴다 (타자 200타석, 투수 50이닝 또는 구원 30경기) + 지표에 NaN 있는 행 제외
-    fit_group    맞춤 시즌(2015~2025) 행으로 표준화 -> K=4..7 K-means -> 점수(실루엣 + 유지율)로 K 선택
-                 -> 유형 번호를 뜻이 있게 다시 매김 -> 소속 확률 방식 선택(아래) -> PCA 2D 좌표
+    fit_group    맞춤 시즌(2015~2025) 행으로 표준화 -> K-means(K=4, 정한 값) -> 유형 번호를 뜻이 있게 다시 매김
+                 -> 소속 확률 방식 선택(아래) -> PCA 2D 좌표. K=2..7의 실루엣·유지율 표는 참고로 함께 남긴다.
+
+clusters-2026b (2026-11 다시 맞춤, clusters-2026 대비 바뀐 점):
+    - 타자 피처에서 HR%를 뺐다: ISO와 상관 0.96이라 거리 계산에서 장타력이 두 번 세어졌다(장타 = ISO 하나).
+    - 타자 도루율은 log1p(10 × 도루율)로 바꿔 쓴다: 대부분 0 근처이고 소수만 커서(왜도 1.9) 극단값 몇 명이 유형을 끌었다.
+    - K: 예전에는 "실루엣 + 유지율 점수가 가장 큰 K(4~7)"라고 했지만, 그 점수는 K가 커질수록 계속 내려가(유지율이 작은 K를
+      편듦) 범위 맨 앞 4가 뽑힌 것이었다. 이제 K=4를 "구분해 읽을 수 있는 가장 작은 유형 수"로 명시해 정하고, 점수 표는
+      K=2..7로 넓혀 참고로만 남긴다.
+    - 투수는 피처·K가 그대로라 유형도 그대로다(같은 입력·같은 시드).
+    - cluster_quality에 PCA 두 축이 담는 분산 비율(pca_explained)과 2D 지도 위 유형 구분 일치율(map_agreement)을 적는다.
     assign       자격 행 전부(2026 포함)에 유형·소속 확률·2D 좌표를 붙인다
     similar_players  표준화 공간 코사인 유사도로 '비슷한 선수' 상위 5명 (같은 선수의 다른 시즌은 제외,
                      다른 선수는 가장 비슷한 시즌 하나만)
@@ -24,7 +33,7 @@
        가장 가까운 중심이 가장 큰 확률이므로 최댓값 성분 == 유형이 구조적으로 항상 성립한다.
     화면의 유형과 '가장 높은 소속 확률'이 어긋나면 안 되므로 기준을 0.95로 높게 둔다 (실데이터는 두 그룹 모두 2)).
     GMM 후보 세 개는 그래도 맞춰서 일치도(gmm_candidates, gmm_agreement = 최고 후보)를 'GMM vs K-means 비교'로 남긴다.
-유형 번호: 타자는 표준화 HR% 중심이 큰 순서(0 = 가장 장타형), 투수는 선발 비중 큰 순서, 같으면 K% 큰 순서.
+유형 번호: 타자는 표준화 ISO 중심이 큰 순서(0 = 가장 장타형), 투수는 선발 비중 큰 순서, 같으면 K% 큰 순서.
 
 재현성: seed 42 고정, KMeans n_init=10, PCA svd_solver="full", 계산은 1스레드(_single_thread).
 같은 입력이면 두 번 맞춰도 중심·라벨·확률·좌표가 비트 단위로 같다.
@@ -70,17 +79,18 @@ from .player_stats import batting_seasons, korean_names, pitching_seasons
 from .train_win import _commit_sha, _sha256, load_bundle, save_bundle, update_manifest
 
 SEED = 42
-K_RANGE = range(4, 8)
+K_RANGE = range(2, 8)                       # 참고용 점수 표의 K 범위 (선택에 쓰지 않음)
+K_FIXED = 4                                 # 유형 수: 구분해 읽을 수 있는 가장 작은 수로 정한 값 (모듈 설명 참조)
 FIT_SEASONS = list(range(2015, 2026))
 ALL_SEASONS = list(FROZEN_SEASONS)          # CLI가 집계·배정하는 시즌 2015~2026 (2026은 배정만) = 얼린 시즌
 MIN_PA = 200
 MIN_IP_OUTS = 150                           # 50이닝
 MIN_RELIEF_APPS = 30                        # 구원 등판 = games - starts
-BATTER_FEATURES = ["k_pct", "bb_pct", "hr_pct", "iso", "babip", "sb_rate"]
+BATTER_FEATURES = ["k_pct", "bb_pct", "iso", "babip", "sb_log"]   # HR%는 ISO와 중복이라 뺌, 도루율은 로그
 PITCHER_FEATURES = ["k_pct", "bb_pct", "hr_pct", "babip", "start_share"]
 FEATURES = {"batter": BATTER_FEATURES, "pitcher": PITCHER_FEATURES}
 GROUPS = ("batter", "pitcher")
-CLUSTER_VERSION = "clusters-2026"
+CLUSTER_VERSION = "clusters-2026b"
 GMM_COVARIANCES = ("tied", "diag", "full")   # 소속 확률 GMM 후보 (일치도 동률이면 이 순서)
 AGREEMENT_FLOOR = 0.95                      # GMM 최고 일치도가 이보다 낮으면 kmeans_softmax로 대체
 EXAMPLE_SEASON = 2025                       # 유형 예시 선수를 고르는 시즌 (없으면 그 유형의 최근 시즌)
@@ -119,7 +129,8 @@ def _div(num: pd.Series, den: pd.Series) -> pd.Series:
 def rates(df: pd.DataFrame, group: str) -> pd.DataFrame:
     """비율 지표 열을 더한 사본을 돌려준다.
     타자: K% = 삼진/타석, BB% = 볼넷/타석, HR% = 홈런/타석, ISO = (2루타 + 2·3루타 + 3·홈런)/타수,
-          BABIP = (안타-홈런)/(타수-삼진-홈런), 도루율 = 도루/(단타+볼넷+사구) — 1루에 나간 기회당 도루.
+          BABIP = (안타-홈런)/(타수-삼진-홈런), 도루율 = 도루/(단타+볼넷+사구) — 1루에 나간 기회당 도루,
+          sb_log = log1p(10 × 도루율) — 군집에 쓰는 도루 지표(HR%와 도루율 원값은 표시용으로 남긴다).
     투수: K% = 삼진/상대 타자, BB% = (볼넷+사구)/상대 타자, HR% = 피홈런/상대 타자,
           BABIP = (피안타-피홈런)/(상대 타자-삼진-볼넷-사구-피홈런), 선발 비중 = 선발/등판."""
     out = df.copy()
@@ -131,6 +142,7 @@ def rates(df: pd.DataFrame, group: str) -> pd.DataFrame:
         out["iso"] = _div(out["doubles"] + 2 * out["triples"] + 3 * out["hr"], out["ab"])
         out["babip"] = _div(out["h"] - out["hr"], out["ab"] - out["so"] - out["hr"])
         out["sb_rate"] = _div(out["sb"], singles + out["bb"] + out["hbp"])
+        out["sb_log"] = np.log1p(10 * out["sb_rate"])   # 군집용: 치우친 도루율을 펴서 극단값 몇 명이 유형을 끌지 않게
     elif group == "pitcher":
         bf = out["bf"]
         out["k_pct"] = _div(out["so"], bf)
@@ -171,7 +183,7 @@ def _relabel_order(group: str, centers_z: np.ndarray, feats: list[str]) -> np.nd
     중심은 소수 6자리로 반올림해 비교한다 — 구원만 모인 군집들의 선발 비중(모두 0)이 부동소수 잡음으로 갈리지 않게."""
     centers_z = np.round(centers_z, 6)
     if group == "batter":
-        return np.argsort(-centers_z[:, feats.index("hr_pct")], kind="stable")
+        return np.argsort(-centers_z[:, feats.index("iso")], kind="stable")
     # np.lexsort는 마지막 키가 1순위
     return np.lexsort((-centers_z[:, feats.index("k_pct")], -centers_z[:, feats.index("start_share")]))
 
@@ -180,7 +192,7 @@ def _relabel_order(group: str, centers_z: np.ndarray, feats: list[str]) -> np.nd
 def fit_group(df: pd.DataFrame, group: str, *, fit_seasons=FIT_SEASONS, k: int | None = None,
               agreement_floor: float = AGREEMENT_FLOOR) -> dict:
     """한 그룹(타자 또는 투수)의 군집 번들을 만든다. 맞춤에는 fit_seasons 자격 행만 쓴다.
-    k를 주면 그 K로, 안 주면 K_RANGE에서 score(= 실루엣 + 유지율)가 가장 큰 K (동률이면 작은 K).
+    k를 주면 그 K로, 안 주면 K_FIXED(4). k_table에는 K_RANGE 각각의 실루엣·유지율·점수를 참고로 적는다(선택에 쓰지 않음).
     소속 확률은 GMM 후보 중 일치도 최고(agreement_floor 이상일 때) 또는 kmeans_softmax (모듈 설명 참조)."""
     feats = FEATURES[group]
     fit_seasons = [int(s) for s in fit_seasons]
@@ -197,8 +209,8 @@ def fit_group(df: pd.DataFrame, group: str, *, fit_seasons=FIT_SEASONS, k: int |
         k_table.append({"k": kk, "silhouette": sil, "retention": ret, "score": sil + ret})
         models[kk] = km
     if k is None:
-        k = max(k_table, key=lambda r: (r["score"], -r["k"]))["k"]
-    elif k not in models:
+        k = K_FIXED
+    if k not in models:
         models[k] = KMeans(n_clusters=k, n_init=10, random_state=SEED).fit(Z)
     km = models[k]
 
@@ -229,6 +241,10 @@ def fit_group(df: pd.DataFrame, group: str, *, fit_seasons=FIT_SEASONS, k: int |
         member_agreement = float(np.mean(
             _softmax_membership(Z, km.cluster_centers_, s2).argmax(axis=1) == km.labels_))
     pca = PCA(n_components=2, random_state=SEED, svd_solver="full").fit(Z)
+    # 2D 지도가 유형을 얼마나 그대로 보여 주나: 지도 좌표에서 가장 가까운 '유형별 지도 중심'이 실제 유형인 맞춤 행 비율
+    xy = pca.transform(Z)
+    c2 = np.array([xy[km.labels_ == t].mean(axis=0) for t in range(k)])
+    map_agreement = float(np.mean(_sq_dist(xy, c2).argmin(axis=1) == km.labels_))
     index = pd.RangeIndex(k, name="type")
     return {
         "group": group, "features": list(feats), "fit_seasons": fit_seasons, "k": int(k), "k_table": k_table,
@@ -236,6 +252,7 @@ def fit_group(df: pd.DataFrame, group: str, *, fit_seasons=FIT_SEASONS, k: int |
         # gmm_agreement = 최고 GMM 후보의 맞춤 행 일치도(비교용), membership_agreement = 선택된 방식의 일치도
         "membership_method": method, "membership_agreement": member_agreement, "gmm_agreement": best[1],
         "gmm_candidates": candidates, "softmax_s2": s2,
+        "pca_explained": [float(v) for v in pca.explained_variance_ratio_], "map_agreement": map_agreement,
         "centers": pd.DataFrame(scaler.inverse_transform(km.cluster_centers_), columns=feats, index=index),
         "centers_z": pd.DataFrame(km.cluster_centers_, columns=feats, index=index),
     }
@@ -408,6 +425,8 @@ def quality(bundles: dict, assigned: dict, names_cfg: dict) -> dict:
             "argmax_consistent": bool(agreement == 1.0), "gmm_agreement": _num(b["gmm_agreement"]),
             "gmm_candidates": {c: _num(v) for c, v in b["gmm_candidates"].items()},
             "retention": _num(retention(a)), "types": types,
+            # 2D 지도(PCA 두 축)가 담는 분산 비율과, 지도 위에서 유형이 그대로 구분되는 맞춤 행 비율
+            "pca_explained": [_num(v) for v in b["pca_explained"]], "map_agreement": _num(b["map_agreement"]),
         }
         if b["membership_method"] != "kmeans_softmax":
             out[g]["membership_agreement"] = _num(agreement)

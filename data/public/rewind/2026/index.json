@@ -1,8 +1,8 @@
 {
  "season": 2026,
  "model_version": "report-2026",
- "generated_at": "2026-11-03T10:21:07+09:00",
- "commit_sha": "b507b85716fb06a96de296ca2c112e2ea609b3a4",
+ "generated_at": "2026-11-03T13:25:16+09:00",
+ "commit_sha": "de1f6e7fe068aa6f6592370b8b679a7682828a23",
  "dates": [
   {
    "date": "2026-03-28",

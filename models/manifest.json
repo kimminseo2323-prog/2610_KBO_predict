@@ -1,6 +1,6 @@
 {
-  "commit_sha": "b507b85716fb06a96de296ca2c112e2ea609b3a4",
-  "generated_at": "2026-11-03T10:21:04+09:00",
+  "commit_sha": "de1f6e7fe068aa6f6592370b8b679a7682828a23",
+  "generated_at": "2026-11-03T13:25:08+09:00",
   "models": {
     "clusters": {
       "fit_seasons": [
@@ -31,9 +31,9 @@
         2025,
         2026
       ],
-      "sha256": "7d78bf0333db225b000d99a2f2cf86c2c705b2af06baad7e8ebd9aaf1e26c53f",
-      "types_sha256": "d44f1f371f312ded8f360a232df8cd1965ae1c4f02789a7471d9df7620860531",
-      "version": "clusters-2026"
+      "sha256": "602f20bdfa47fea9495bb6fe68ada83daa80777963ee5cb9387a185bf298e8c4",
+      "types_sha256": "05346bd11a84901146af7e3786f866b2201d8eb7d0681445d00c59a8fbfe0ea4",
+      "version": "clusters-2026b"
     },
     "live": {
       "features_fingerprint": "6761e086389c662af274a9b91c4e14761bb235d731a00394e96eaf1151361d4f",
@@ -45,10 +45,10 @@
     "report": {
       "features_fingerprint": "6761e086389c662af274a9b91c4e14761bb235d731a00394e96eaf1151361d4f",
       "features_sha256": "3fef6450719d9076cc87268b75c6a6b8fea358e4d209869485290e99a1ae640c",
-      "matchup_fingerprint": "3419c8c1d944f32b23a214b88d864c0782fd4bc25c031ec8e5b0c0581cd3475b",
-      "matchup_sha256": "c13c19b8bb2e965a8752a5946c8bf34088f0bbdfd8eebd536926263621aaeeb6",
+      "matchup_fingerprint": "4ec5ce71009590d2368e4ea7ba79acad82d1788d82409aad1ee5a9f822bd2daa",
+      "matchup_sha256": "b395aa8121f245714d16821c3820b85fe0a021ac202c298f10b5010228f7d409",
       "path": "models/report-2026.pkl",
-      "sha256": "c9430eb2aad4bc5f1fa8b4d4d7465dd007f4d7432822b8e8722a5a37a49f1f26",
+      "sha256": "65dc3ceeefb31cd75b95aae450b7944153c4bc9c06fcfab51a58b8ad706dc868",
       "version": "report-2026"
     },
     "team": {
