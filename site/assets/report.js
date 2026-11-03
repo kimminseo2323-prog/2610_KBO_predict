@@ -738,7 +738,7 @@ function renderClusters() {
     return;
   }
   $("clusters-lead").textContent =
-    `${fmtRange(cq.fit_seasons)} 시즌 기록으로 비슷한 선수끼리 묶었습니다(K-means, ${cq.version ?? "유형 모델"}). 유형 수는 '경계 뚜렷함 + 다음 해에도 같은 유형인 비율'의 합이 가장 큰 값으로 골랐습니다.`;
+    `${fmtRange(cq.fit_seasons)} 시즌 기록으로 비슷한 선수끼리 묶었습니다(K-means, ${cq.version ?? "유형 모델"}). 유형 수 4는 사람이 정한 값입니다. 아래 합산 점수는 유형 수가 적을수록 높게 나오는 성질이 있어(다음 해에도 같은 유형일 확률이 원래 높아짐) 유형 수를 고르는 근거가 되지 못합니다. 그래서 유형을 구분해 읽을 수 있는 가장 작은 수인 4로 정했고, 점수는 참고로만 보여 줍니다.`;
   const sil = ["batter", "pitcher"].map((g) => cq[g]?.k_table?.find((row) => row.k === cq[g]?.k)?.silhouette);
   body.replaceChildren(
     el("div", { class: "clusters" }, ["batter", "pitcher"].filter((g) => cq[g]).map((g) => clusterGroup(g, cq[g]))),
