@@ -43,12 +43,12 @@
 | `mode` | `"live"` \| `"rewind"` | `"live"` | 오늘부터 14일 안에 취소되지 않은 경기가 있으면 live, 없으면 rewind(비시즌) |
 | `next_game_date` | 문자열 \| null | `"2026-11-01"` | 다음 경기 날짜. 일정에 없으면 null |
 | `games_today` | 정수 | `1` | 오늘 예측한 경기 수(0 가능) |
-| `model_version` | 문자열 \| null | `"v0.2"` | 라이브 승패 모델 버전 |
+| `model_version` | 문자열 \| null | `"v0.3"` | 라이브 승패 모델 버전 |
 | `collect_errors` | 문자열 배열 | `[]` | 수집 실패 메시지. 비어 있으면 정상 |
 
 ### latest.json — 오늘(또는 가장 최근) 경기 예측
 
-만드는 곳: `kbo_predict.publish.write_latest` ← `predict.predict_game` / `predict.canceled_entry`, 전망은 `simulate.outlook_for`. 승패 모델 `v0.2`(2015~2026 학습, 라이브), 전망은 팀 모델 `team-2026` + 몬테카를로 1만 회.
+만드는 곳: `kbo_predict.publish.write_latest` ← `predict.predict_game` / `predict.canceled_entry`, 전망은 `simulate.outlook_for`. 승패 모델 `v0.3`(로지스틱 L1 + Elo, 2015~2026 학습, 라이브), 전망은 팀 모델 `team-2026` + 몬테카를로 1만 회.
 
 | 키 | 타입 | 예시 | null 규칙 |
 | --- | --- | --- | --- |
@@ -88,7 +88,7 @@
 | `game_id` | 정수 | `14050` | |
 | `home`, `away` | 팀 코드 | `HT`, `SS` | |
 | `home_win_prob` | 소수 | `0.4464` | 경기 전 마지막 예측 |
-| `model_version` | 문자열 | `v0.2` | 예측한 모델 버전 — 적중률은 버전별로 나눠 셈 |
+| `model_version` | 문자열 | `v0.3` | 예측한 모델 버전 — 적중률은 버전별로 나눠 셈 |
 | `predicted_at` | ISO 시각 | `2026-10-29T14:40:20+09:00` | |
 | `status` | 문자열 | `FINAL` \| `SCHEDULED` \| `CANCELED` | 예측 뒤 취소된 경기는 `CANCELED`(winner·correct 빈 칸) |
 | `winner` | `HOME` \| `AWAY` \| `DRAW` | `AWAY` | 정산 전이면 빈 칸(→ null) |
@@ -108,7 +108,7 @@
 | `dates[].games` | 정수 | `5` | 취소 포함 경기 수 |
 | `dates[].decided` | 정수 | `5` | 적중을 따질 수 있는 경기 수(취소·무승부 제외) |
 | `dates[].correct` | 정수 | `3` | |
-| `accuracy` | 소수 | `0.594` | = 417/702 = model_report 2026 시험 정확도 |
+| `accuracy` | 소수 | `0.6097` | = 428/702 = model_report 2026 시험 정확도 |
 | `n_decided` | 정수 | `702` | |
 | `note` | 문자열 | 적중 규칙 한 줄(영문) | |
 
@@ -174,13 +174,13 @@
 | `train_seasons[]`, `val_season`, `test_season` | 정수 | `[2015…2024]`, `2025`, `2026` | |
 | `n.train`, `n.val`, `n.test` | 정수 | `7065`, `698`, `702` | |
 | `selected` | 문자열 | `"lr"` | 검증 log loss로 고른 알고리즘 |
-| `models.{lr,lgbm}.{val,test}.{accuracy,log_loss,brier,n}` | 소수·정수 | `models.lr.test.accuracy` 0.594 | `models.lr`에는 `best_iteration` 없음 |
+| `models.{lr,lgbm}.{val,test}.{accuracy,log_loss,brier,n}` | 소수·정수 | `models.lr.test.accuracy` 0.6097 | `models.lr`에는 `best_iteration` 없음 |
 | `models.{lr,lgbm}.calibration` | 문자열 | `"platt"` | |
 | `baselines.{val,test}.{home_always,better_win_pct,lower_starter_era}` | 소수 | `0.514`, `0.554`, `0.567` | 기준선 3종 정확도 |
 | `significance.{vs,mcnemar_p,model_correct,baseline_correct,selected_on}` | | `"lower_starter_era"`, `0.215` | 가장 강한 기준선과의 McNemar 검정(2026) — 유의하지 않음 |
 | `significance.all.{기준선}.{mcnemar_p,model_correct,baseline_correct}` | | | 기준선별 |
 | `calibration_bins[]` | 배열 10개 | `{lo, hi, n, pred_mean, actual_rate}` | `n` 0인 구간은 `pred_mean`·`actual_rate` null |
-| `feature_importance[]` | 배열 26개 | `{name, label, importance}` | 큰 순서. `label`은 한글 |
+| `feature_importance[]` | 배열 27개 (Elo 포함) | `{name, label, importance}` | 큰 순서. `label`은 한글 |
 | `ablation.no_starter.{kind,n_features,val,test}` | | `n_features` 19 | 선발 피처 뺀 모델 |
 | `matchup_feature_ablation.{with,without}.{val,test}.{accuracy,log_loss,brier,n}` | | | 유형 상성 피처 넣기 전후 |
 | `matchup_feature_ablation.{adopt,mcnemar_p_test,validation_scope,note,features_added[]}` | | `adopt: false` | 문구 그대로 표시 |
