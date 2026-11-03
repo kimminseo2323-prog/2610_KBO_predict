@@ -119,7 +119,7 @@
 .player-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: var(--c, var(--on-dark)); transition: background 0.3s; }
 .player-card::after { content: none; } /* 정보 없는 마름모 장식은 뺐다 */
 .pcard__title { font-size: 13px; font-weight: 800; color: #b9bcc3; letter-spacing: 0.3px; }
-.player-card .inset { background: #1d1f23; color: var(--on-dark); --muted: #a7abb3; --focus: var(--on-dark); }
+.player-card .inset { background: #1b3229; color: var(--on-dark); --muted: #a7abb3; --focus: var(--on-dark); }
 #card-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--sp-12); margin-top: var(--sp-16); min-width: 0; }
 #card-body > .inset { margin-top: 0; }
 .pcard-skeleton--name { height: 72px; background: rgba(255, 255, 255, 0.12); }

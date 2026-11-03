@@ -48,7 +48,7 @@
   padding: var(--sp-16) var(--sp-16) 0; background: var(--c-away, var(--pink)); color: var(--t-away, var(--ink));
 }
 .stage__top .pill { background: var(--canvas); color: var(--ink); }
-.stage__top .pill--ink { background: var(--ink); color: var(--on-dark); }
+.stage__top .pill--ink { background: var(--brand); color: var(--on-dark); }
 .side { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head prob" "details details"; gap: 0 var(--sp-16); min-width: 0; padding: var(--sp-12) var(--sp-16) var(--sp-16); }
 .side--away { background: var(--c-away, var(--pink)); color: var(--t-away, var(--ink)); }
 .side--home { color: var(--t-home, var(--on-dark)); padding-top: 34px; }
@@ -73,7 +73,7 @@
 .stage__vs { display: none; }
 .stage__ticker { order: 9; display: flex; flex-wrap: wrap; background: var(--canvas); color: var(--ink); border-top: 3px solid var(--ink); }
 .ticker__item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 10px 14px; font-size: 14px; }
-.ticker__tag { background: var(--ink); color: var(--on-dark); font-size: 12px; font-weight: 800; padding: 4px 8px; }
+.ticker__tag { background: var(--brand); color: var(--on-dark); font-size: 12px; font-weight: 800; padding: 4px 8px; }
 .ticker__item b { font-weight: 800; }
 .ticker__item .num { font-family: var(--font-num); font-size: 18px; font-weight: 700; }
 .ticker__note { color: var(--muted); font-size: 13px; }
@@ -197,7 +197,7 @@
 /* ① 요인 */
 .factor-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--sp-12); }
 .factor-tabs .tab { background: var(--canvas); outline: 1.5px solid var(--ink); outline-offset: -1.5px; }
-.factor-tabs .tab.pill--ink { background: var(--ink); }
+.factor-tabs .tab.pill--ink { background: var(--brand); }
 #factors-body.inset { background: none; padding: 0; }
 
 /* ② 적중률 */

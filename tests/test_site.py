@@ -58,7 +58,8 @@ def test_tokens_match_design_md():
         assert m, f"--{name} missing in tokens.css"
         return m.group(1).strip()
 
-    expected = {k: colors[k] for k in ("canvas", "surface-soft", "surface-card", "surface-strong", "ink", "body", "muted", "hairline")}
+    expected = {k: colors[k] for k in ("canvas", "surface-soft", "surface-card", "surface-strong", "ink", "body", "muted", "hairline",
+                                       "brand", "brand-deep")}
     expected.update({k: colors[f"series-{k}"] for k in ("pink", "teal", "lavender", "peach", "ochre", "mint", "coral")})
     expected.update({k: v for k, v in colors.items() if k.startswith("team-")})
     for name, hexv in expected.items():
@@ -86,7 +87,7 @@ def test_broadcast_visual_rules():
     포커스 링·움직임 줄이기·등장 모션 규칙이 있다. home: 매치업 면은 팀 색 변수, 글자색은 JS가 밝기로 정한다."""
     css = (ASSETS / "app.css").read_text(encoding="utf-8")
     card = re.search(r"\n\.card \{([^}]*)\}", css).group(1)
-    assert "border-top: var(--rule) solid var(--ink)" in card and "background: none" in card
+    assert "border-top: var(--rule) solid var(--brand)" in card and "background: none" in card
     assert "border-radius" not in card
     assert not re.search(r"\.card--(?:pink|teal|lavender|peach|ochre|cream)\b", css)  # 파스텔 카드 면 없음
     assert "box-shadow" not in css  # 그림자 없음
