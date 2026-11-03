@@ -14,7 +14,7 @@
 
 import {
   TEAMS, el, fetchJSON, settle, fin, fmtPct, fmtRate3, fmtInt, fmtRange, fmtInnings, teamName, teamNameFor,
-  typeColor, colorVar, onColor, renderNav, renderFooter, showError,
+  typeColor, colorVar, onColor, renderNav, renderFooter, showError, teamColors,
 } from "./app.js";
 import { scatter } from "./charts.js";
 
@@ -492,7 +492,8 @@ function renderSimilar() {
         "aria-label": `${nameOf(e)} ${e.season} 시즌 보기` }, [
         nameOf(e), e.name_ko ? el("span", { class: "sim__roman", lang: "en" }, e.name) : null,
       ])),
-      el("td", {}, teamNameFor(e.team, e.season)),
+      // 팀 칸 앞에 구단 대표색 띠 (순위표 .team-dot과 같은 문법)
+      el("td", { class: "sim__team" }, [el("i", { class: "sim__bar", style: { background: teamColors(e.team).bg }, "aria-hidden": "true" }), teamNameFor(e.team, e.season)]),
       el("td", { class: "num" }, String(e.season)),
       el("td", {}, el("span", { class: "sim__type" }, [
         el("span", { class: "dot", style: { background: colorVar(typeColor(e.group, e.type?.id)) }, "aria-hidden": "true" }),

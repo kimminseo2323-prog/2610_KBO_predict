@@ -195,6 +195,13 @@ details.more li + li { margin-top: 4px; }
 .chart .c-zero { stroke: currentColor; opacity: 0.6; }
 .chart .c-ref { stroke: currentColor; opacity: 0.55; stroke-dasharray: 4 4; fill: none; }
 .chart .c-end { font-size: 12px; font-weight: 800; }
+.chart .c-side { font-size: 13px; font-weight: 800; }
+
+/* 팀 색: 칩(면)과 글자. 우세한 팀의 이름·숫자를 그 팀 색으로 (app.js teamChip / teamText) */
+.tchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-weight: 800; line-height: 1.35; white-space: nowrap; }
+.tchip--sm { padding: 1px 6px; font-size: 12px; }
+.tteam { font-weight: 800; }
+.pill--miss { background: var(--canvas); color: var(--ink); outline: 1.5px solid var(--ink); outline-offset: -1.5px; }
 .chart .c-leader { stroke: currentColor; opacity: 0.35; stroke-width: 1; }
 .chart .c-point { stroke: var(--canvas); stroke-width: 1.5; }
 .chart .c-hit { cursor: default; }

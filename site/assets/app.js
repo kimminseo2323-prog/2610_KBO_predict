@@ -41,6 +41,60 @@ export const TEAMS = {
   "NC": {"ko": "NC", "full": "NC 다이노스", "short": "NC", "color": "team-nc"}
 };
 
+// ---------- 팀 색 (DESIGN_broadcast.md "우세한 팀은 그 팀 색으로") ----------
+
+const _teamColorCache = new Map();
+/** sRGB "#rrggbb" → WCAG 상대 휘도. 형식이 다르면 null. */
+function relLum(hex) {
+  const m = /^#([0-9a-f]{6})$/i.exec(String(hex).trim());
+  if (!m) return null;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+/**
+ * 팀 색 세 가지: bg = 팀 면 바탕(대표색), fg = 그 면 위 글자색(흰색과 잉크 중 대비가 높은 쪽),
+ * ink = 흰 바탕 위 글자색(대표색, 밝은 팀은 --team-<코드>-ink), chipOnly = 글자색으로는 구분이 안 되는 팀(검정 KT).
+ * 토큰 값은 tokens.css에서 읽는다. 모르는 팀이면 잉크.
+ */
+export function teamColors(code) {
+  const token = TEAMS[code]?.color;
+  if (!token) return { bg: "var(--ink)", fg: "var(--on-dark)", ink: "var(--ink)", chipOnly: false };
+  if (_teamColorCache.has(token)) return _teamColorCache.get(token);
+  const css = getComputedStyle(document.documentElement);
+  const L = relLum(css.getPropertyValue(`--${token}`));
+  const inkL = relLum(css.getPropertyValue("--ink")) ?? 0.0042;
+  // 흰 글자 대비 1.05/(L+0.05), 잉크 글자 대비 (L+0.05)/(inkL+0.05) — 큰 쪽을 고른다 (한화 주황은 잉크 5.8:1 > 흰색 3.4:1)
+  const fg = L === null || 1.05 / (L + 0.05) >= (L + 0.05) / (inkL + 0.05) ? "var(--on-dark)" : "var(--ink)";
+  const hasInk = css.getPropertyValue(`--${token}-ink`).trim() !== "";
+  const out = { bg: `var(--${token})`, fg, ink: hasInk ? `var(--${token}-ink)` : `var(--${token})`, chipOnly: L !== null && L < 0.01 };
+  _teamColorCache.set(token, out);
+  return out;
+}
+
+/** 팀 색 칩(면): 대표 숫자·이름표. text는 글자나 노드. */
+export function teamChip(code, text, cls = "") {
+  const c = teamColors(code);
+  return el("span", { class: `tchip ${cls}`.trim(), style: { background: c.bg, color: c.fg } }, text);
+}
+
+/** 문장 속 팀 글자(이름·작은 숫자)를 그 팀 글자색으로. 검정 KT처럼 글자색으로 구분이 안 되면 작은 칩. */
+export function teamText(code, text, cls = "") {
+  const c = teamColors(code);
+  if (c.chipOnly) return teamChip(code, text, `tchip--sm ${cls}`.trim());
+  return el("span", { class: `tteam ${cls}`.trim(), style: { color: c.ink } }, text);
+}
+
+/**
+ * 우세 판정 하나로 통일: P(홈 승) → "home" | "away" | "tie"(반올림해 50 대 50) | null(확률 없음).
+ * 매치업 슬랩·상단 칩·최근 예측·요인 자막이 모두 이 함수만 쓴다 (같은 경기에서 말이 엇갈리지 않게).
+ */
+export function favState(p) {
+  if (!fin(p)) return null;
+  const pct = Math.round(Number(p) * 100);
+  return pct === 50 ? "tie" : pct > 50 ? "home" : "away";
+}
+
 // 승패 모델 피처 26개 + bias의 한글 이름 (src/kbo_predict/features.py FACTOR_LABELS와 같음 — 테스트로 고정).
 // model_report.json의 feature_importance[].name을 한글로 바꿀 때 쓴다.
 export const FACTOR_LABELS = {
@@ -294,7 +348,7 @@ export function verdictPill({ status, winner, correct } = {}) {
   if (status === "CANCELED") return pill("muted", "취소");
   if (winner === "DRAW") return pill("muted", "무승부");
   if (correct === true || correct === 1) return pill("ink", "적중");
-  if (correct === false || correct === 0) return pill("coral", "미적중");
+  if (correct === false || correct === 0) return pill("miss", "미적중"); // 무채색 테두리 칩 (KIA 빨강 같은 팀 칩과 섞이지 않게)
   return pill("muted", "결과 대기");
 }
 

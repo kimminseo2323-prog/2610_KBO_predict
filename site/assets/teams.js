@@ -11,6 +11,7 @@
 
 import {
   TEAMS, el, fetchJSON, settle, fin, fmtPct, fmtRate3, fmtDate, teamNameFor, typeColor, renderNav, renderFooter, showError,
+  teamColors, teamChip,
 } from "./app.js";
 import { lineChart, stackedBar, enableTips } from "./charts.js";
 
@@ -241,7 +242,7 @@ function renderStandings(rows) {
   const gaps = rows.filter((r) => fin(r.win_pct) && fin(r.pyth_pct)).map((r) => ({ r, d: Number(r.win_pct) - Number(r.pyth_pct) }));
   const up = gaps.reduce((b, g) => (!b || g.d > b.d ? g : b), null);
   const down = gaps.reduce((b, g) => (!b || g.d < b.d ? g : b), null);
-  const chip = (label, g) => g ? el("li", { class: "fact" }, [el("span", { class: "fact__label" }, label), el("b", {}, shortName(g.r.code, season)), el("span", { class: "fact__num num" }, pp(g.d))]) : null;
+  const chip = (label, g) => g ? el("li", { class: "fact" }, [el("span", { class: "fact__label" }, label), teamChip(g.r.code, shortName(g.r.code, season), "tchip--sm"), el("span", { class: "fact__num num" }, pp(g.d))]) : null;
   const legend = el("ul", { class: "ruler__legend", "aria-label": "눈금 보는 법" }, [
     el("li", {}, [el("i", { class: "mk mk--act", "aria-hidden": "true" }), "실제 승률"]),
     el("li", {}, [el("i", { class: "mk mk--pyth", "aria-hidden": "true" }), "피타고리안"]),
@@ -461,6 +462,7 @@ function drawRewind() {
       short: shortName(c, REWIND_SEASON),
       legend: `${shortName(c, REWIND_SEASON)} ${fmtPct(final(c))}`,
       color: TEAMS[c].color,
+      ink: teamColors(c).ink,                       // 오른쪽 끝 이름표 = 그 팀 글자색 (어느 선이 어느 팀인지 범례 없이)
       dash: LINE_DASH[c] ?? false,
       points: days.map((d) => ({ x: x(d), y: d.outlook?.teams?.[c]?.playoff_prob ?? null })),
     }));

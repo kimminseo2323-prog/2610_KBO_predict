@@ -15,6 +15,7 @@
 import {
   IS_LOCAL, TEAMS, TYPE_COLORS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInnings, fmtDate, fmtKST,
   teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError, ballSVG, countUp,
+  teamColors, teamChip, teamText, favState,
 } from "./app.js";
 import { barChart, scatter } from "./charts.js";
 
@@ -325,16 +326,24 @@ function renderHead() {
   renderBug();
 }
 
+/** 시리즈 두 팀을 그릴 순서(o.teams 인덱스). 오늘 경기에 두 팀이 있으면 [원정, 홈] — 매치업 슬랩과 색의 좌우를 맞춘다. */
+function seriesOrder(o) {
+  const g = (state.day?.games ?? []).find((x) => o.teams?.includes(x.home.code) && o.teams?.includes(x.away.code));
+  return g ? [o.teams.indexOf(g.away.code), o.teams.indexOf(g.home.code)] : [0, 1];
+}
+
 /** 맨 위 검정 띠(스코어 버그)에 진행 중인 시리즈 전적. 라이브 시리즈가 아니면 비운다. */
 function renderBug() {
   const slot = $("bug-slot");
   if (!slot) return;
   const o = state.day?.outlook;
   if (state.mode !== "live" || o?.type !== "series") { slot.replaceChildren(); return; }
-  slot.replaceChildren(el("span", { class: "bug__lbl" }, o.name), ...o.teams.map((c, i) => el("span", {
-    class: "bug__team", style: { background: teamSideColors(c)[0], color: teamSideColors(c)[1] },
-    "aria-label": `${teamName(c)} ${o.wins[i]}승`,
-  }, [teamName(c), el("b", {}, String(o.wins[i]))])));
+  slot.replaceChildren(el("span", { class: "bug__lbl" }, o.name), ...seriesOrder(o).map((i) => {
+    const c = o.teams[i];
+    const tc = teamColors(c);
+    return el("span", { class: "bug__team", style: { background: tc.bg, color: tc.fg }, "aria-label": `${teamName(c)} ${o.wins[i]}승` },
+      [teamName(c), el("b", {}, String(o.wins[i]))]);
+  }));
 }
 
 // ---------- 매치업 카드 ----------
@@ -351,35 +360,10 @@ function typePill(type, onCard) {
  * 한쪽 진영(원정 = 왼쪽 핑크, 홈 = 오른쪽 틸). 이름은 크게(한 줄 정식 이름은 그 아래 작게), 숫자는 가장 크게.
  * 선발·기록은 전부 하나의 크림 칩(하단 자막)에 담는다 — 핑크·틸 위 작은 글자의 대비 문제를 없애고 두 진영을 같은 모양으로.
  */
-/** 팀 면의 바탕색(구단 대표색 토큰)과 글자색. 글자색은 실제 색의 상대 휘도로 정한다: 0.3보다 밝으면(SSG 노랑·한화 주황) 잉크, 아니면 흰색.
- *  토큰 값은 tokens.css에서 읽는다(없으면 원정 핑크·홈 틸 기본값과 그에 맞는 글자색). */
-const _sideColorCache = new Map();
+/** 팀 면의 [바탕색, 글자색] (app.js teamColors — 글자색은 흰색과 잉크 중 대비가 높은 쪽). */
 function teamSideColors(code) {
-  const token = TEAMS[code]?.color;
-  if (!token) return ["var(--pink)", "var(--ink)"];
-  if (_sideColorCache.has(token)) return _sideColorCache.get(token);
-  const hex = getComputedStyle(document.documentElement).getPropertyValue(`--${token}`).trim();
-  const m = /^#([0-9a-f]{6})$/i.exec(hex);
-  let text = "var(--on-dark)";
-  if (m) {
-    const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255)
-      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    text = lum > 0.3 ? "var(--ink)" : "var(--on-dark)";
-  }
-  const out = [`var(--${token})`, text];
-  _sideColorCache.set(token, out);
-  return out;
-}
-
-/** 팀 색 칩: 바탕은 구단 대표색, 글자색은 밝기로 자동(흰색 또는 잉크). 확률이 더 높은 팀을 그 팀 색으로 보여 줄 때 쓴다. */
-function teamChip(code, text, cls = "") {
-  const [bg, fg] = teamSideColors(code);
-  return el("span", { class: `tchip ${cls}`.trim(), style: { background: bg, color: fg } }, text);
-}
-/** P(홈 승) → [더 높은 팀 코드, 그 팀 확률]. 정확히 반반이면 홈. */
-function favored(p, home, away) {
-  return Number(p) >= 0.5 ? [home, Number(p)] : [away, 1 - Number(p)];
+  const c = teamColors(code);
+  return [c.bg, c.fg];
 }
 
 function sideBlock(g, side, prob, large, animate = false) {
@@ -395,8 +379,8 @@ function sideBlock(g, side, prob, large, animate = false) {
   if (animate && prob !== "—") countUp(n, prob, { from: 50, dur: 1100 });
   const probEl = el("p", { class: "side__prob" }, [
     el("span", { class: "side__num" }, prob === "—" ? "—" : [n, el("small", {}, "%")]),
-    el("span", { class: "side__who" }, [fin(g.home_win_prob) && (side === "home" ? g.home_win_prob > 0.5 : g.home_win_prob < 0.5)
-      ? el("b", { class: "side__fav" }, "우세 ") : null, `${teamName(t.code)} 승리`]),
+    // 우세 쪽 이름표는 모델의 한 마디("KT 근소 우세"), 열세 쪽은 "삼성 승리" — 같은 판정(favState)만 쓴다
+    el("span", { class: "side__who" }, favState(g.home_win_prob) === side ? lean(g) : `${teamName(t.code)} 승리`),
   ]);
   const stats = !s ? null
     : fin(s.era) || fin(s.k9) || fin(s.bb9) ? `ERA ${num(s.era)} · K/9 ${num(s.k9)} · BB/9 ${num(s.bb9)}` : "선발 올해 등판 기록 없음";
@@ -405,20 +389,19 @@ function sideBlock(g, side, prob, large, animate = false) {
       : el("p", { class: "chip__row" }, el("b", {}, "선발 미정")),
     large && stats ? el("p", { class: "chip__stats num" }, stats) : null,
   ]);
-  // 확률이 더 높은 쪽은 is-fav(우세), 낮은 쪽은 is-under(숫자를 흐리게). 정확히 반반이면 둘 다 표시 없음
-  const mine = fin(g.home_win_prob) ? (side === "home" ? Number(g.home_win_prob) : 1 - Number(g.home_win_prob)) : null;
-  const favCls = mine === null || Math.abs(mine - 0.5) < 1e-9 ? "" : mine > 0.5 ? " is-fav" : " is-under";
+  // 확률이 더 높은 쪽은 is-fav(우세), 낮은 쪽은 is-under(속이 빈 숫자). 반올림해 50 대 50이면 둘 다 표시 없음
+  const fav = favState(g.home_win_prob);
+  const favCls = !fav || fav === "tie" ? "" : fav === side ? " is-fav" : " is-under";
   return el("div", { class: `side side--${side}${favCls}` }, [head, probEl, el("div", { class: "side__details" }, chip)]);
 }
 
-/** 모델이 어느 쪽으로 얼마나 기우는지 한 마디 (잡지 표지의 헤드라인 칸). 확률이 없으면 null. */
+/** 모델이 어느 쪽으로 얼마나 기우는지 한 마디. 확률이 없으면 null, 반올림해 50 대 50이면 "사실상 반반" (favState와 같은 기준). */
 function lean(g) {
-  if (!fin(g.home_win_prob)) return null;
-  const d = Number(g.home_win_prob) - 0.5;
-  const a = Math.abs(d);
-  if (a < 0.03) return "사실상 반반";
-  const who = teamName(g[d > 0 ? "home" : "away"].code);
-  return `${who} ${a < 0.1 ? "근소 우세" : a < 0.2 ? "우세" : "크게 우세"}`;
+  const fav = favState(g.home_win_prob);
+  if (!fav) return null;
+  if (fav === "tie") return "사실상 반반";
+  const a = Math.abs(Number(g.home_win_prob) - 0.5);
+  return `${teamName(g[fav].code)} ${a < 0.1 ? "근소 우세" : a < 0.2 ? "우세" : "크게 우세"}`;
 }
 
 /** 승률을 가장 크게 움직인 요인 한 줄 + 선발 피처 미사용 알림 (하단 자막 띠). */
@@ -428,10 +411,11 @@ function ticker(g) {
   const parts = [];
   if (f) {
     const v = Number(f.contribution_pp);
+    const toward = v > 0 ? g.home.code : v < 0 ? g.away.code : null; // + = 홈 승률을 올림, − = 원정 쪽으로 민 것
     parts.push(el("span", { class: "ticker__item" }, [
       el("span", { class: "ticker__tag" }, "가장 크게 움직인 요인"),
       el("b", {}, f.name),
-      el("span", { class: "num" }, `${sign(v)}${v > 0 ? " · 홈 쪽" : v < 0 ? " · 원정 쪽" : ""}`),
+      toward ? teamChip(toward, `${teamName(toward)} +${Math.abs(v).toFixed(1)}%p`, "tchip--sm num") : el("span", { class: "num" }, sign(v)),
     ]));
   }
   if (g.starter_known === false) {
@@ -447,19 +431,15 @@ function metaPills(g, large) {
   if (where) left.push(el("span", { class: "pill pill--white" }, where));
   const o = state.day.outlook;
   if (large && o?.type === "series" && o.teams?.includes(g.home.code) && o.teams?.includes(g.away.code)) {
+    const [i0, i1] = seriesOrder(o);
     left.push(el("span", { class: "pill pill--white" },
-      `${o.name} ${teamName(o.teams[0])} ${o.wins[0]}승 · ${teamName(o.teams[1])} ${o.wins[1]}승`));
+      `${o.name} ${teamName(o.teams[i0])} ${o.wins[i0]}승 · ${teamName(o.teams[i1])} ${o.wins[i1]}승`));
   }
-  const say = large ? lean(g) : null;
-  if (say) {
-    const [fav] = favored(g.home_win_prob, g.home.code, g.away.code);
-    left.push(say === "사실상 반반" ? el("span", { class: "pill pill--white pill--lean" }, `모델 전망 · ${say}`)
-      : teamChip(fav, `모델 전망 · ${say}`, "pill pill--lean"));
-  }
+  // 우세 쪽은 그 면의 이름표가 "KT 근소 우세"를 말하므로 상단 칩은 반반일 때만 (우세 칩이 상대 팀 면 위에 놓이지 않게)
+  if (large && favState(g.home_win_prob) === "tie") left.push(el("span", { class: "pill pill--white pill--lean" }, "사실상 반반"));
   const right = [];
   const r = g.result;
   if (r) {
-    if (large && r.pick) right.push(el("span", { class: "pill pill--white" }, `모델 선택 ${r.pick === "HOME" ? teamName(g.home.code) : r.pick === "AWAY" ? teamName(g.away.code) : "—"}`));
     right.push(el("span", { class: "pill pill--white num" }, `최종 ${r.away_score} : ${r.home_score}`));
     right.push(verdictPill(r));
   }
@@ -515,13 +495,14 @@ function tape(g) {
   ];
   const [cA] = teamSideColors(g.away.code);
   const [cH] = teamSideColors(g.home.code);
+  const ink = { away: teamColors(g.away.code).ink, home: teamColors(g.home.code).ink };
   return el("div", { class: "tape", role: "table", "aria-label": `${matchLabel(g)} 두 팀 비교` }, rows.map(([k, a, h, fmt], i) => {
     const lo = k === "경기당 득실" ? Math.min(0, Number(a) || 0, Number(h) || 0) - 0.5 : 0;
     const hi = Math.max(Number(a) || 0, Number(h) || 0);
     const share = (v) => (fin(v) ? Math.max(0.06, (Number(v) - lo) / (hi - lo || 1)) : 0);
     const win = fin(a) && fin(h) && Number(a) !== Number(h) ? (Number(a) > Number(h) ? "away" : "home") : null;
     const side = (who, v, c) => el("div", { class: `tape__v tape__v--${who}${win === who ? " is-win" : ""}`, role: "cell" }, [
-      el("span", { class: "tape__n" }, fmt(v, who)),
+      el("span", { class: "tape__n", style: win === who ? { color: ink[who] } : null }, fmt(v, who)), // 더 나은 값 = 그 팀 글자색
       el("span", { class: "tape__bar" }, el("i", { style: { width: `${(share(v) * 100).toFixed(1)}%`, background: c, "--i": String(i) } })),
     ]);
     return el("div", { class: "tape__row", role: "row" }, [side("away", a, cA), el("div", { class: "tape__k", role: "rowheader" }, k), side("home", h, cH)]);
@@ -610,14 +591,18 @@ function renderFactors() {
     foot.textContent = "";
     return;
   }
-  $("factors-lead").textContent = `50%에서 각 요인이 민 만큼. + ${teamName(g.home.code)} 쪽, − ${teamName(g.away.code)} 쪽 (%p)`;
+  $("factors-lead").textContent = "50%에서 각 요인이 승률을 민 만큼 (%p)";
   const rows = (g.factors ?? []).map((f) => ({ label: f.name, value: f.contribution_pp }));
   if (!rows.length) {
     body.replaceChildren(el("p", { class: "empty" }, "이 경기는 요인 분해가 없습니다."));
     foot.textContent = "";
     return;
   }
-  barChart(body, rows, { color: TEAMS[g.home.code]?.color ?? "teal", negativeColor: TEAMS[g.away.code]?.color ?? "pink", format: sign, label: `${matchLabel(g)} 승률을 가른 요인 (%p)` });
+  barChart(body, rows, {
+    color: TEAMS[g.home.code]?.color ?? "teal", negativeColor: TEAMS[g.away.code]?.color ?? "pink", format: sign,
+    label: `${matchLabel(g)} 승률을 가른 요인 (%p)`,
+    sides: { neg: { text: `← ${teamName(g.away.code)}`, ink: teamColors(g.away.code).ink }, pos: { text: `${teamName(g.home.code)} →`, ink: teamColors(g.home.code).ink } },
+  });
   const hasBias = rows.some((r) => r.label === "기본 홈 어드밴티지");
   foot.textContent = hasBias ? "" : "기본 홈 어드밴티지는 이 경기에서 5위 밖입니다.";
 }
@@ -777,27 +762,30 @@ function outlookSeries(o, title, body) {
   const need = Math.floor(o.best_of / 2) + 1;
   const [t0, t1] = o.teams;
   const lead = Number(o.win_prob[0]) >= Number(o.win_prob[1]) ? 0 : 1;
+  const order = seriesOrder(o);                     // 오늘 경기의 원정 → 홈 순서
+  const isLead = (i) => i === lead && Number(o.win_prob[0]) !== Number(o.win_prob[1]);
   const [w0, w1] = (o.most_common_result ?? "").split("-").map(Number);
   const last = o.best_of - (o.head_start ?? [0, 0]).reduce((a, b) => a + b, 0);
   const big = el("span", {}, prob(o.win_prob[lead]));
   countUp(big, Number(o.win_prob[lead]) * 100, { from: 50, dur: 1100, fmt: (v) => `${Math.round(v)}%` });
   // 승수 칸: 우승에 필요한 승수만큼 칸, 이긴 만큼 팀 색으로 채운다 (와일드카드 1승 어드밴티지도 칸 하나)
   const pips = (i) => el("div", { class: "pips__row" }, [
-    el("span", { class: "pips__team" }, teamName(o.teams[i])),
+    el("span", { class: "pips__team" }, isLead(i) ? teamText(o.teams[i], teamName(o.teams[i])) : teamName(o.teams[i])),
     el("span", { class: "pips__dots", role: "img", "aria-label": `${teamName(o.teams[i])} ${o.wins[i]}승 (${need}승이면 시리즈 승리)` },
       Array.from({ length: need }, (_, k) => el("i", { class: k < o.wins[i] ? "is-on" : null, style: { background: k < o.wins[i] ? teamSideColors(o.teams[i])[0] : null } }))),
-    el("span", { class: "pips__n" }, `${o.wins[i]}승`),
+    el("span", { class: "pips__n", style: isLead(i) && !teamColors(o.teams[i]).chipOnly ? { color: teamColors(o.teams[i]).ink } : null }, `${o.wins[i]}승`),
   ]);
   body.replaceChildren(
     el("p", { class: "card__lead" }, `${o.best_of}전 ${need}선승, 남은 경기 1만 번 시뮬레이션`),
-    el("div", { class: "pips" }, [pips(0), pips(1)]),
+    el("div", { class: "pips" }, order.map(pips)),
     el("p", { class: "kpi kpi--team" }, [teamChip(o.teams[lead], big, "tchip--kpi"), el("small", {}, `${teamName(o.teams[lead])} 시리즈 승리 확률`)]),
-    el("div", { class: "split", role: "img", "aria-label": `${teamName(t0)} ${prob(o.win_prob[0])}, ${teamName(t1)} ${prob(o.win_prob[1])}` }, [0, 1].map((i) =>
+    el("div", { class: "split", role: "img", "aria-label": `${teamName(t0)} ${prob(o.win_prob[0])}, ${teamName(t1)} ${prob(o.win_prob[1])}` }, order.map((i) =>
       el("i", { style: { flexGrow: String(Math.max(0.02, Number(o.win_prob[i]))), background: teamSideColors(o.teams[i])[0] } }))),
-    el("div", { class: "split__cap" }, [0, 1].map((i) => (i === lead ? teamChip(o.teams[i], `${teamName(o.teams[i])} ${prob(o.win_prob[i])}`)
+    el("div", { class: "split__cap" }, order.map((i) => (isLead(i) ? teamText(o.teams[i], `${teamName(o.teams[i])} ${prob(o.win_prob[i])}`)
       : el("span", {}, `${teamName(o.teams[i])} ${prob(o.win_prob[i])}`)))),
     el("dl", { class: "facts" }, [
-      Number.isFinite(w0) ? el("div", {}, [el("dt", {}, "가장 많이 나온 결과"), el("dd", {}, w0 > w1 ? `${teamName(t0)} ${w0}승 ${w1}패` : `${teamName(t1)} ${w1}승 ${w0}패`)]) : null,
+      Number.isFinite(w0) ? el("div", {}, [el("dt", {}, "가장 많이 나온 결과"), el("dd", {}, w0 > w1 ? teamChip(t0, `${teamName(t0)} ${w0}승 ${w1}패`, "tchip--sm")
+        : teamChip(t1, `${teamName(t1)} ${w1}승 ${w0}패`, "tchip--sm"))]) : null,
       el("div", {}, [el("dt", {}, `${last}차전까지 갈 확률`), el("dd", {}, fmtPct(o.goes_distance_prob))]),
     ]),
   );
@@ -814,7 +802,7 @@ function outlookRace(o, title, body) {
     const t = o.teams?.[code];
     return el("div", { class: "race__team" }, [
       el("p", { class: "race__num num" }, code === top ? teamChip(code, prob(t?.playoff_prob), "tchip--kpi") : prob(t?.playoff_prob)),
-      el("p", { class: "race__name" }, teamName(code)),
+      el("p", { class: "race__name" }, code === top ? teamText(code, teamName(code)) : teamName(code)),
       el("p", { class: "race__sub num" }, t ? `현재 ${t.rank_now}위 · ${t.wins}승 ${t.losses}패` : "—"),
     ]);
   }) : [];
@@ -841,9 +829,17 @@ function renderRecent() {
   const body = $("recent-body");
   const item = (date, match, sub, tag) => el("li", {}, [el("span", { class: "log__d" }, date), el("span", { class: "log__m" }, [el("b", {}, match), el("small", {}, sub)]), tag]);
   const pickChip = (p, home, away) => {
-    if (!fin(p)) return "—";
-    const [code, q] = favored(p, home, away);
-    return teamChip(code, `${teamName(code)} ${fmtPct(q)}`, "tchip--sm");
+    const fav = favState(p);
+    if (!fav) return "—";
+    if (fav === "tie") return el("span", { class: "pill pill--sm pill--muted" }, "반반 50%");
+    const code = fav === "home" ? home : away;
+    return teamChip(code, `${teamName(code)} ${fmtPct(fav === "home" ? p : 1 - p)}`, "tchip--sm");
+  };
+  // 결과 글자: "KT 승"이면 이긴 팀 글자색, 무승부·취소 등은 그대로
+  const result = (g) => {
+    const text = winnerText(g);
+    const code = g.winner === "HOME" ? g.home : g.winner === "AWAY" ? g.away : null;
+    return code ? teamText(code, text) : text;
   };
   if (state.mode === "rewind" && state.day) {
     $("recent-title").textContent = "이날의 결과";
@@ -851,7 +847,7 @@ function renderRecent() {
     body.replaceChildren(el("ul", { class: "log" }, ordered(state.day).map((g) => {
       const r = g.result;
       return item(r ? `${r.away_score}:${r.home_score}` : "—", matchLabel(g),
-        r ? ["예측 ", pickChip(g.home_win_prob, g.home.code, g.away.code), ` ${winnerText({ winner: r.winner, home: g.home.code, away: g.away.code, status: "FINAL" })}`] : NOTES[g.status_note] ?? "취소",
+        r ? ["예측 ", pickChip(g.home_win_prob, g.home.code, g.away.code), " → ", result({ winner: r.winner, home: g.home.code, away: g.away.code, status: "FINAL" })] : NOTES[g.status_note] ?? "취소",
         r ? verdictPill(r) : verdictPill({ status: "CANCELED" }));
     })));
     return;
@@ -870,7 +866,7 @@ function renderRecent() {
   body.replaceChildren(el("ul", { class: "log" }, rows.map((h) => {
     const res = winnerText(h);
     const pick = pickChip(h.home_win_prob, h.home, h.away);
-    return item(h.date.slice(5).replace("-", "."), `${teamName(h.away)} vs ${teamName(h.home)}`, res === "경기 전" ? ["예측 ", pick] : ["예측 ", pick, ` ${res}`], verdictPill(h));
+    return item(h.date.slice(5).replace("-", "."), `${teamName(h.away)} vs ${teamName(h.home)}`, res === "경기 전" ? ["예측 ", pick] : ["예측 ", pick, " → ", result(h)], verdictPill(h));
   })));
 }
 

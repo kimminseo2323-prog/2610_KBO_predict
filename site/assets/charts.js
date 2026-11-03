@@ -150,7 +150,9 @@ function svgRoot(w, h, label, role = "img") {
  *          format(v)=v, label(aria), max(눈금 최대 |값|). 좁은 화면(<480px)에서는 이름을 막대 위에 쓴다.
  */
 export function barChart(el, rows, { valueKey = "value", labelKey = "label", color = "teal", negativeColor = "pink",
-  format = (v) => String(v), label = "막대 그래프", max } = {}) {
+  format = (v) => String(v), label = "막대 그래프", max, sides } = {}) {
+  // sides = { neg: {text, ink}, pos: {text, ink} } (양방향 막대일 때만): 0선 양쪽 위에 어느 쪽이 어느 팀인지 머리글,
+  // 막대 끝 값도 그쪽 글자색(ink)으로 칠한다.
   const vals = (rows ?? []).map((r) => (fin(r[valueKey]) ? Number(r[valueKey]) : null));
   const finite = vals.filter((v) => v !== null);
   if (!finite.length) return empty(el);
@@ -167,12 +169,17 @@ export function barChart(el, rows, { valueKey = "value", labelKey = "label", col
     const x1 = W - valW;
     const zero = diverging ? (x0 + x1) / 2 : x0;
     const scale = (diverging ? (x1 - x0) / 2 : x1 - x0) / m;
-    const H = rows.length * rowH + 4;
+    const head = diverging && sides ? 26 : 0;
+    const H = rows.length * rowH + 4 + head;
     const svg = svgRoot(W, H, label);
-    if (diverging) svg.append(svgEl("line", { class: "c-zero", x1: zero, x2: zero, y1: 0, y2: H }));
+    if (head) {
+      svg.append(svgEl("text", { class: "c-side", x: zero - 8, y: 16, "text-anchor": "end", style: `fill:${sides.neg.ink}` }, sides.neg.text));
+      svg.append(svgEl("text", { class: "c-side", x: zero + 8, y: 16, "text-anchor": "start", style: `fill:${sides.pos.ink}` }, sides.pos.text));
+    }
+    if (diverging) svg.append(svgEl("line", { class: "c-zero", x1: zero, x2: zero, y1: head ? head - 4 : 0, y2: H }));
     rows.forEach((r, i) => {
       const v = vals[i];
-      const top = i * rowH + (narrow ? 20 : 6);
+      const top = head + i * rowH + (narrow ? 20 : 6);
       const barH = narrow ? 18 : 22;
       const len = v === null ? 0 : Math.min(Math.abs(v), m) * scale;
       const x = v !== null && v < 0 ? zero - len : zero;
@@ -180,10 +187,11 @@ export function barChart(el, rows, { valueKey = "value", labelKey = "label", col
         "text-anchor": narrow ? "start" : "end" }, String(r[labelKey] ?? "")));
       const tip = `${r[labelKey] ?? ""}
 ${fmt(v)}`;
-      svg.append(svgEl("rect", { class: "c-hit", x: 0, y: i * rowH, width: W, height: rowH, fill: "transparent", "data-tip": tip }));
+      svg.append(svgEl("rect", { class: "c-hit", x: 0, y: head + i * rowH, width: W, height: rowH, fill: "transparent", "data-tip": tip }));
       if (v !== null) svg.append(svgEl("rect", { class: `c-bar${v < 0 ? " c-bar--neg" : ""}`, x, y: top, width: Math.max(len, 1), height: barH, style: `fill:${cv(fill(r, v))}; --i:${i}`, "data-tip": tip }));
+      const ink = head && v !== null && v !== 0 ? (v < 0 ? sides.neg.ink : sides.pos.ink) : null;
       svg.append(svgEl("text", { class: v === null ? "c-axis" : "c-value", x: v !== null && v < 0 ? x - 6 : x + len + 6,
-        y: top + barH / 2 + 4, "text-anchor": v !== null && v < 0 ? "end" : "start" }, fmt(v)));
+        y: top + barH / 2 + 4, "text-anchor": v !== null && v < 0 ? "end" : "start", style: ink ? `fill:${ink}` : null }, fmt(v)));
     });
     const table = srTable(label, ["항목", "값"], rows.map((r, i) => [String(r[labelKey] ?? ""), fmt(vals[i])]));
     return [svg, table];
@@ -272,7 +280,7 @@ ${body}` }));
         if (group.length > 1) {
           svg.append(svgEl("path", { class: "c-leader", d: `M${(lx - 4).toFixed(1)},${(e0.ly - 4).toFixed(1)} V${(eN.ly + 4).toFixed(1)}`, fill: "none" }));
         }
-        group.forEach((e) => svg.append(svgEl("text", { class: "c-end", x: lx, y: e.ly + 4 }, String(e.s.short ?? e.s.name))));
+        group.forEach((e) => svg.append(svgEl("text", { class: "c-end", x: lx, y: e.ly + 4, style: e.s.ink ? `fill:${e.s.ink}` : null }, String(e.s.short ?? e.s.name))));
         g = h + 1;
       }
     }

@@ -146,13 +146,12 @@
 @keyframes rise { from { opacity: 0; translate: 0 18px; } }
 
 /* ---------- 우세 팀 강조: 확률이 더 높은 팀은 그 팀 색 칩, 매치업에서는 열세 쪽 숫자를 흐리게 ---------- */
-.tchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-weight: 800; line-height: 1.35; white-space: nowrap; }
-.tchip--sm { padding: 1px 6px; font-size: 12px; }
 .tchip--kpi { padding: 2px 12px 4px 8px; line-height: 0.95; }
-.stage__top .tchip { outline: 2px solid var(--canvas); outline-offset: -2px; font-size: 12px; padding: 4px 9px; }
-.side.is-under .side__num { opacity: 0.5; }
-.side.is-under .side__who { opacity: 0.7; }
-.side__fav { font-weight: 900; }
+/* 열세 쪽 큰 숫자는 흐리게 하지 않고 속이 빈 외곽선 숫자로 (외곽선 대비 = 원래 글자색 대비, 3:1 이상 유지) */
+.side--away.is-under .side__num { color: transparent; -webkit-text-stroke: 2.5px var(--t-away, var(--ink)); }
+.side--home.is-under .side__num { color: transparent; -webkit-text-stroke: 2.5px var(--t-home, var(--on-dark)); }
+.side.is-under .side__num small { -webkit-text-stroke-width: 1.5px; }
+.matchup--sm .side.is-under .side__num { -webkit-text-stroke-width: 2px; }
 .side.is-fav .side__who { background: var(--ink); color: var(--on-dark); }
 .log__m small .tchip { vertical-align: 1px; }
 
@@ -163,7 +162,7 @@
 .tape__k { text-align: center; font-size: 12px; font-weight: 800; color: var(--muted); }
 .tape__v { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .tape__v--home { flex-direction: row-reverse; }
-.tape__n { flex: none; min-width: 3.4ch; font-family: var(--font-num); font-size: 26px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: var(--muted); }
+.tape__n { flex: none; min-width: 3.4ch; font-family: var(--font-num); font-size: 26px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: var(--body); }
 .tape__v--home .tape__n { text-align: right; }
 .tape__v.is-win .tape__n { color: var(--ink); font-weight: 800; }
 .tape__bar { flex: 1; height: 8px; background: var(--surface-card); display: flex; }

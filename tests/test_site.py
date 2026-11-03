@@ -104,7 +104,10 @@ def test_broadcast_visual_rules():
     home_css = (ASSETS / "home.css").read_text(encoding="utf-8")
     assert re.search(r"\.side--away\s*\{[^}]*background:\s*var\(--c-away,\s*var\(--pink\)\)[^}]*color:\s*var\(--t-away,\s*var\(--ink\)\)", home_css)
     home_js = (ASSETS / "home.js").read_text(encoding="utf-8")
-    assert "function teamSideColors" in home_js and "lum > 0.3" in home_js
+    assert "function teamSideColors" in home_js and "teamColors(code)" in home_js
+    app_js = (ASSETS / "app.js").read_text(encoding="utf-8")
+    assert "export function teamColors" in app_js and "export function favState" in app_js
+    assert "1.05 / (L + 0.05) >= (L + 0.05) / (inkL + 0.05)" in app_js  # 흰색·잉크 중 대비가 높은 쪽
     assert "countUp(" in home_js and "ballSVG(" in home_js and "function tape(" in home_js
     # 머리: 검정 스코어 버그 + 메뉴, 푸터: 다이아몬드 그림 (4페이지 공통)
     for page in ("index.html", "teams.html", "players.html", "report.html"):
@@ -759,3 +762,31 @@ def test_import_site_skips_hidden_zip_entries(tmp_path, capsys):
             zf.writestr(bad, "x")
         assert import_site.main([str(evil), "--site", str(site), "--backup-root", str(tmp_path / "bk2")]) == 2, bad
         assert "받을 수 없음" in capsys.readouterr().out
+
+
+def _lum(hexv):
+    c = [int(hexv[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+
+def _contrast(a, b):
+    la, lb = sorted((_lum(a), _lum(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def test_team_colors_are_legible():
+    """팀 면 위 글자(흰색·잉크 중 대비 높은 쪽)와 흰 바탕 위 팀 글자색이 작은 글자 기준 4.5:1을 넘는다 (KT 검정은 칩으로만 쓰므로 면만).
+    한화 주황은 흰 글자(3.4:1)가 아니라 잉크(5.8:1)가 뽑혀야 한다."""
+    css = (ASSETS / "tokens.css").read_text(encoding="utf-8").lower()
+    var = lambda n: re.search(rf"--{n}\s*:\s*(#[0-9a-f]{{6}})", css).group(1)
+    ink, white = var("ink"), "#ffffff"
+    for code in ("lg", "ob", "ht", "ss", "lt", "sk", "kt", "nc", "hh", "wo"):
+        bg = var(f"team-{code}")
+        on = max(_contrast(bg, white), _contrast(bg, ink))
+        assert on >= 4.5 - 1e-9, (code, on)
+        m = re.search(rf"--team-{code}-ink\s*:\s*(#[0-9a-f]{{6}})", css)
+        text = m.group(1) if m else bg
+        if code != "kt":
+            assert _contrast(text, white) >= 4.5, (code, _contrast(text, white))
+    assert _contrast(var("team-hh"), ink) > _contrast(var("team-hh"), white)

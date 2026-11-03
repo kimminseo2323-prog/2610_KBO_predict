@@ -225,3 +225,8 @@
 @media (prefers-reduced-motion: reduce) {
   .pcard__type, .pcard__name { animation: none; }
 }
+
+/* 비슷한 선수 표: 팀 색 띠, 밑줄은 올렸을 때만 (이름·로마자 두 겹 밑줄이 링크 두 개처럼 보이지 않게) */
+.sim__bar { display: inline-block; width: 4px; height: 16px; margin-right: 8px; vertical-align: -3px; }
+.sim-table .linkbtn { text-decoration: none; }
+.sim-row:hover .linkbtn, .sim-table .linkbtn:focus-visible { text-decoration: underline; text-decoration-thickness: 2px; }
