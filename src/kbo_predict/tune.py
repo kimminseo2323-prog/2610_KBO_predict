@@ -17,10 +17,14 @@
 
 결정성: 모든 모델에 고정 시드, 트리 부스팅은 단일 스레드 → 같은 데이터면 .py와 노트북의 결과가 같다.
 실행: python -m kbo_predict.tune [--n-iter 40] [--out data/public/tuning_report.json]
+     python -m kbo_predict.tune --grid [--jobs 20] [--out data/public/tuning_grid_report.json]
+       → 그리드 서치: 탐색 범위의 "모든 조합"을 같은 교차검증으로 잰다(설정 약 3,600개, 프로세스 병렬).
+         병렬로 돌려도 각 설정의 점수는 같다(설정마다 고정 시드·단일 스레드).
 """
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import time
 from datetime import datetime
@@ -45,6 +49,7 @@ TRAIN_SEASONS = list(range(2015, 2025))
 VAL_SEASON, TEST_SEASON = 2025, 2026
 CV_SEASONS = [2021, 2022, 2023, 2024, 2025]   # 확장 창 교차검증: 이 시즌 각각을 "그 앞 시즌 전부"로 학습해 예측
 ADOPT_MARGIN = 0.002                          # 2025 검증 log loss가 이만큼 넘게 줄어야 "바꿀 만하다"
+RF_JOBS = -1                                  # 랜덤포레스트·엑스트라 트리 코어 수 (그리드 병렬 실행 때는 프로세스마다 1)
 FAMILIES = ("logreg", "random_forest", "extra_trees", "hist_gb", "lightgbm", "xgboost")
 FAMILY_KO = {"logreg": "로지스틱 회귀", "random_forest": "랜덤포레스트", "extra_trees": "엑스트라 트리",
              "hist_gb": "히스토그램 부스팅(sklearn)", "lightgbm": "LightGBM", "xgboost": "XGBoost"}
@@ -87,6 +92,13 @@ def sample_configs(family: str, n_iter: int, seed: int = SEED) -> list[dict]:
     return out
 
 
+def grid_configs(family: str) -> list[dict]:
+    """탐색 범위의 모든 조합(그리드). 순서 고정(값 목록 순서의 곱)."""
+    space = SPACE[family]
+    keys = list(space)
+    return [dict(zip(keys, combo)) for combo in itertools.product(*(space[k] for k in keys))]
+
+
 def make_estimator(family: str, params: dict):
     """설정 하나 → 학습 전 모델. 결측(NaN)은 선형·배깅 모델에서 학습 데이터 중앙값으로 채우고,
     부스팅(sklearn·LightGBM·XGBoost)은 결측을 스스로 처리하게 둔다."""
@@ -97,9 +109,9 @@ def make_estimator(family: str, params: dict):
                          ("clf", LogisticRegression(C=params["C"], penalty=params["penalty"], solver=solver,
                                                     random_state=SEED, max_iter=5000))])
     if family == "random_forest":
-        return Pipeline([("imputer", impute), ("clf", RandomForestClassifier(**params, random_state=SEED, n_jobs=-1))])
+        return Pipeline([("imputer", impute), ("clf", RandomForestClassifier(**params, random_state=SEED, n_jobs=RF_JOBS))])
     if family == "extra_trees":
-        return Pipeline([("imputer", impute), ("clf", ExtraTreesClassifier(**params, random_state=SEED, n_jobs=-1))])
+        return Pipeline([("imputer", impute), ("clf", ExtraTreesClassifier(**params, random_state=SEED, n_jobs=RF_JOBS))])
     if family == "hist_gb":
         return HistGradientBoostingClassifier(**params, random_state=SEED, early_stopping=False)
     if family == "lightgbm":
@@ -214,14 +226,76 @@ def run(df: pd.DataFrame, *, n_iter: int = 40, families=FAMILIES, log=print) -> 
     }
 
 
+def _cv_task(family: str, params: dict, df: pd.DataFrame) -> dict:
+    """그리드 병렬 작업 하나: 프로세스 안에서 랜덤포레스트 코어를 1개로 묶고 교차검증 점수를 낸다."""
+    global RF_JOBS
+    RF_JOBS = 1
+    return {"params": params, **cv_score(family, params, df)}
+
+
+def run_grid(df: pd.DataFrame, *, families=FAMILIES, jobs: int = 20, random_report: dict | None = None, log=print) -> dict:
+    """그리드 서치: 계열마다 모든 조합을 교차검증 → 계열별 1등 결승(final_round) → 추천.
+    random_report(랜덤 서치 결과)를 주면 계열별로 "그리드 1등이 랜덤 1등보다 나은가"를 함께 적는다."""
+    from joblib import Parallel, delayed
+    t0 = time.time()
+    search = {}
+    for fam in families:
+        cfgs = grid_configs(fam)
+        rows = Parallel(n_jobs=jobs, prefer="processes")(delayed(_cv_task)(fam, c, df) for c in cfgs)
+        rows.sort(key=lambda r: (r["log_loss"], json.dumps(r["params"], sort_keys=True, default=str)))
+        search[fam] = rows
+        log(f"[grid] {fam}: {len(rows)}개 조합, CV log loss 최고 {rows[0]['log_loss']:.5f}, 누적 {time.time() - t0:.0f}s")
+    current = final_round(*CURRENT, df)
+    finalists = [final_round(fam, search[fam][0]["params"], df) for fam in families]
+    for f in finalists + [current]:
+        f["mcnemar_p_vs_current"] = mcnemar_p(f["correct_test"], current["correct_test"])
+    best = min(finalists, key=lambda f: f["val"]["log_loss"])
+    gain = current["val"]["log_loss"] - best["val"]["log_loss"]
+    strip = lambda f: {k: v for k, v in f.items() if k != "correct_test"}
+    vs_random = None
+    if random_report:
+        vs_random = {}
+        for fam in families:
+            r_best = random_report["search"][fam][0]
+            vs_random[fam] = {"random_best_cv": r_best["log_loss"], "grid_best_cv": search[fam][0]["log_loss"],
+                              "random_params": r_best["params"], "grid_params": search[fam][0]["params"],
+                              "same_config": r_best["params"] == search[fam][0]["params"],
+                              "grid_rank_of_random_best": next((i + 1 for i, row in enumerate(search[fam])
+                                                                if row["params"] == r_best["params"]), None)}
+    return {
+        "generated_at": datetime.now(KST).isoformat(timespec="seconds"),
+        "protocol": {"method": "grid search (all combinations of search_space)", "cv_seasons": CV_SEASONS,
+                     "train_seasons": TRAIN_SEASONS, "val_season": VAL_SEASON, "test_season": TEST_SEASON,
+                     "adopt_margin": ADOPT_MARGIN, "seed": SEED, "test_used_for_selection": False},
+        "search_space": SPACE,
+        "n_configs": {fam: len(rows) for fam, rows in search.items()},
+        "search": {fam: rows[:10] for fam, rows in search.items()},
+        "current": strip(current),
+        "finalists": [strip(f) for f in sorted(finalists, key=lambda f: f["val"]["log_loss"])],
+        "recommended": {"family": best["family"], "params": best["params"], "calibration": best["calibration"],
+                        "val_logloss_gain_vs_current": float(gain), "adopt": bool(gain > ADOPT_MARGIN)},
+        "vs_random_search": vs_random,
+        "elapsed_sec": round(time.time() - t0, 1),
+    }
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="승패 모델 후보 6계열 랜덤 서치 튜닝")
     ap.add_argument("--features", default="data/processed/features.parquet")
     ap.add_argument("--n-iter", type=int, default=40)
-    ap.add_argument("--out", default="data/public/tuning_report.json")
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--grid", action="store_true", help="그리드 서치(모든 조합)")
+    ap.add_argument("--jobs", type=int, default=20, help="그리드 병렬 프로세스 수")
     args = ap.parse_args(argv)
     df = load_features(args.features)
-    report = run(df, n_iter=args.n_iter)
+    if args.grid:
+        out = args.out or "data/public/tuning_grid_report.json"
+        rnd = Path("data/public/tuning_report.json")
+        report = run_grid(df, jobs=args.jobs, random_report=json.loads(rnd.read_text(encoding="utf-8")) if rnd.exists() else None)
+        args.out = out
+    else:
+        args.out = args.out or "data/public/tuning_report.json"
+        report = run(df, n_iter=args.n_iter)
     Path(args.out).write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str) + "\n", encoding="utf-8")
     r = report["recommended"]
     print(f"[tune] 추천: {r['family']} {r['params']} ({r['calibration']}), 검증 log loss 개선 {r['val_logloss_gain_vs_current']:+.5f}, "

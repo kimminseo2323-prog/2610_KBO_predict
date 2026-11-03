@@ -89,3 +89,28 @@ def test_run_small_report_shape():
     assert vals == sorted(vals) and rep["recommended"]["family"] == rep["finalists"][0]["family"]
     assert rep["recommended"]["adopt"] == (rep["recommended"]["val_logloss_gain_vs_current"] > tune.ADOPT_MARGIN)
     json.dumps(rep, default=str)  # JSON으로 저장할 수 있다
+
+
+def test_grid_configs_cover_every_combination():
+    """그리드는 탐색 범위의 곱 전체, 중복 없음, 랜덤 서치 후보는 모두 그리드 안에 있다."""
+    for fam in tune.FAMILIES:
+        grid = tune.grid_configs(fam)
+        assert len(grid) == int(np.prod([len(v) for v in tune.SPACE[fam].values()])), fam
+        keys = {json.dumps(c, sort_keys=True, default=str) for c in grid}
+        assert len(keys) == len(grid), fam
+        assert all(json.dumps(c, sort_keys=True, default=str) in keys for c in tune.sample_configs(fam, 40)), fam
+    assert sum(len(tune.grid_configs(f)) for f in tune.FAMILIES) == 3602
+
+
+def test_run_grid_small_matches_cv_and_compares_random(monkeypatch):
+    """작은 그리드: 병렬 점수가 직접 계산한 교차검증 점수와 같고, 랜덤 서치 비교 칸이 채워진다."""
+    monkeypatch.setitem(tune.SPACE, "logreg", {"C": [0.1, 1.0], "penalty": ["l2"]})
+    df = _toy(n=40)
+    fake_random = {"search": {"logreg": [{"params": {"C": 1.0, "penalty": "l2"}, "log_loss": 0.7}]}}
+    rep = tune.run_grid(df, families=("logreg",), jobs=1, random_report=fake_random, log=lambda *a: None)
+    assert rep["n_configs"] == {"logreg": 2} and rep["protocol"]["test_used_for_selection"] is False
+    top = rep["search"]["logreg"][0]
+    assert top["log_loss"] == pytest.approx(tune.cv_score("logreg", top["params"], df)["log_loss"])
+    vr = rep["vs_random_search"]["logreg"]
+    assert vr["grid_rank_of_random_best"] in (1, 2) and vr["grid_best_cv"] <= rep["search"]["logreg"][-1]["log_loss"]
+    json.dumps(rep, default=str)

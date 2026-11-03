@@ -6,3 +6,4 @@ nbclient==0.10.2
 nbconvert==7.16.6
 ipykernel==6.29.5
 xgboost==2.1.4
+flaml==2.3.4
