@@ -72,7 +72,7 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
                               → 가을야구·시리즈 몬테카를로 1만 회 → outlook 블록 (latest.json, 되감기)
                                 (시리즈의 오늘 경기만 라이브 v0.3의 선발 포함 확률)
         → GitHub Actions
-            daily.yml           매일 09:07, 17:07 KST  수집 + 추론 + outlook
+            daily.yml           매일 09:07, 17:07, 17:55 KST  수집 + 추론 + outlook
             weekly_retrain.yml  월요일 03:07 KST       라이브 재학습 + 군집 확인(바뀌면 실패) + 전체 parity(노트북 포함)
             ci.yml              push · PR             테스트 + parity (--quick)
           → data/public/*.json, *.csv
@@ -344,7 +344,7 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 
 | 워크플로 | 언제 (KST) | 하는 일 | 결과 |
 | --- | --- | --- | --- |
-| [`daily.yml`](.github/workflows/daily.yml) | 매일 09:07, 17:07 (UTC `7 0`, `7 8`) + 수동 | [`run_pipeline.py`](scripts/run_pipeline.py): 대상일 −7~+14일 일정·박스스코어 수집 → 오늘 경기가 있으면 예고 선발 → 수집 창 이전인데 박스스코어가 없는 정규시즌 FINAL 재수집(최신순 20개 — 얼린 시즌 2015~2026은 하지 않음, 위 수집이 예외로 멈춘 실행도 건너뜀) → `history.csv` 적중 기록 갱신 → 라이브 v0.3 추론 + `outlook` → `latest.json`(경기 있는 날만)·`status.json` (30분 제한) | `github-actions[bot]`이 `data/raw`·`data/public`을 `auto: predictions YYYY-MM-DD-HHMM`으로 커밋, 수집 실패 시 `collect-failure` 이슈 |
+| [`daily.yml`](.github/workflows/daily.yml) | 매일 09:07, 17:07, 17:55 (UTC `7 0`, `7 8`, `55 8`) + 수동. 17:55는 경기(18:30) 직전 바뀐 예고 선발 반영용 | [`run_pipeline.py`](scripts/run_pipeline.py): 대상일 −7~+14일 일정·박스스코어 수집 → 오늘 경기가 있으면 예고 선발 → 수집 창 이전인데 박스스코어가 없는 정규시즌 FINAL 재수집(최신순 20개 — 얼린 시즌 2015~2026은 하지 않음, 위 수집이 예외로 멈춘 실행도 건너뜀) → `history.csv` 적중 기록 갱신 → 라이브 v0.3 추론 + `outlook` → `latest.json`(경기 있는 날만)·`status.json` (30분 제한) | `github-actions[bot]`이 `data/raw`·`data/public`을 `auto: predictions YYYY-MM-DD-HHMM`으로 커밋, 수집 실패 시 `collect-failure` 이슈 |
 | [`weekly_retrain.yml`](.github/workflows/weekly_retrain.yml) | 매주 월요일 03:07 (UTC 일요일 `7 18`) + 수동 | 피처 재생성 → `train_win live --skip-if-same`(예측과 manifest의 `live.features_fingerprint`가 모두 그대로면 쓰지 않음) → 군집 후보 fit → `cluster compare --types`(유형 정의가 같은지, 유형표 해시가 바뀌었는지) → 유형표가 바뀌었으면(`types_changed=1`) **실패**("frozen cluster inputs changed — refreeze by hand", 자동 fit·publish 없음) → 전체 `check_parity --require-live`(노트북 02~05 포함) | main에서만 `auto: weekly retrain YYYY-MM-DD`로 커밋(바뀐 것이 없으면 커밋 없음), 실패 시 `parity-failure` 이슈 |
 | [`ci.yml`](.github/workflows/ci.yml) | main push, PR | `pytest -m "not slow"` + `check_parity --quick` (ubuntu, 30분 제한, 같은 브랜치의 이전 실행 취소) | 위 `ci · parity` 배지 |
 

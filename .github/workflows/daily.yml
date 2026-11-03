@@ -3,6 +3,9 @@ on:
   schedule:
     - cron: "7 0 * * *"    # 09:07 KST
     - cron: "7 8 * * *"    # 17:07 KST
+    # 17:55 KST — 18:30 경기 직전에 바뀐 예고 선발을 반영하는 마지막 실행. GitHub 예약 실행은 정각에 몰려 10~20분 늦기 쉬워
+    # 18:00 대신 17:55로 둔다. 늦게 돌아 경기가 시작된 뒤여도 history.csv는 경기 전(SCHEDULED) 행만 갱신하므로 기록이 섞이지 않는다.
+    - cron: "55 8 * * *"   # 17:55 KST
   workflow_dispatch:
 permissions:
   contents: write
