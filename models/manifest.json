@@ -1,6 +1,6 @@
 {
-  "commit_sha": "388d371c290ed08aab4139ecf678e61eb1f47189",
-  "generated_at": "2026-10-29T22:21:12+09:00",
+  "commit_sha": "b507b85716fb06a96de296ca2c112e2ea609b3a4",
+  "generated_at": "2026-11-03T10:21:04+09:00",
   "models": {
     "clusters": {
       "fit_seasons": [
@@ -36,24 +36,24 @@
       "version": "clusters-2026"
     },
     "live": {
-      "features_fingerprint": "752b43190545bbe609bab02591e42cd4752ea86b425e06f07169b7a84416bce1",
-      "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
+      "features_fingerprint": "6761e086389c662af274a9b91c4e14761bb235d731a00394e96eaf1151361d4f",
+      "features_sha256": "3fef6450719d9076cc87268b75c6a6b8fea358e4d209869485290e99a1ae640c",
       "path": "models/win_model.pkl",
-      "sha256": "48b18dbb31706193b0be87832f762f485883ebb4a7d82dd98a1e62ff205b2af5",
-      "version": "v0.2"
+      "sha256": "1a66f962ab30b50ff22a54443052bc404dbf6533734c676f62557b456e6aa86a",
+      "version": "v0.3"
     },
     "report": {
-      "features_fingerprint": "752b43190545bbe609bab02591e42cd4752ea86b425e06f07169b7a84416bce1",
-      "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
+      "features_fingerprint": "6761e086389c662af274a9b91c4e14761bb235d731a00394e96eaf1151361d4f",
+      "features_sha256": "3fef6450719d9076cc87268b75c6a6b8fea358e4d209869485290e99a1ae640c",
       "matchup_fingerprint": "3419c8c1d944f32b23a214b88d864c0782fd4bc25c031ec8e5b0c0581cd3475b",
       "matchup_sha256": "c13c19b8bb2e965a8752a5946c8bf34088f0bbdfd8eebd536926263621aaeeb6",
       "path": "models/report-2026.pkl",
-      "sha256": "6a5e5b16f4af2180525f28c16f748ca28419ddef3dbd78718071fbc091bfd1b6",
+      "sha256": "c9430eb2aad4bc5f1fa8b4d4d7465dd007f4d7432822b8e8722a5a37a49f1f26",
       "version": "report-2026"
     },
     "team": {
-      "features_fingerprint": "752b43190545bbe609bab02591e42cd4752ea86b425e06f07169b7a84416bce1",
-      "features_sha256": "47c1d961f080f250350a7b5ef084844b3c4e8ac07c4cab917c8a84eee2752e1e",
+      "features_fingerprint": "6761e086389c662af274a9b91c4e14761bb235d731a00394e96eaf1151361d4f",
+      "features_sha256": "3fef6450719d9076cc87268b75c6a6b8fea358e4d209869485290e99a1ae640c",
       "path": "models/team-2026.pkl",
       "seasons": [
         2015,
@@ -69,7 +69,7 @@
         2025,
         2026
       ],
-      "sha256": "078668817b84ec40cb6f285298ca65f9cd7f57d8be10570e14f1d2e6159cd8a4",
+      "sha256": "1a937ce04fca4c0add69af91d3bc7a54d15c7e3ef27b757c50198a02fe3f3169",
       "version": "team-2026"
     }
   }

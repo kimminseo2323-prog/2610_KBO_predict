@@ -8,6 +8,7 @@ from kbo_predict import teams
 from kbo_predict.features import (
     FACTOR_LABELS,
     FEATURE_NAMES,
+    MODEL_FEATURES,
     STARTER_FEATURES,
     TEAM_FEATURES,
     LeagueState,
@@ -85,7 +86,8 @@ def rows_equal(df_a, df_b, gid):
 # ---------- 이름·라벨 ----------
 
 def test_feature_names_are_26_and_labelled():
-    assert len(FEATURE_NAMES) == 26 and set(FACTOR_LABELS) == set(FEATURE_NAMES) | {"bias"}
+    assert len(FEATURE_NAMES) == 26 and set(FACTOR_LABELS) == set(MODEL_FEATURES) | {"bias"}
+    assert MODEL_FEATURES == FEATURE_NAMES + ["elo_diff"]
     assert FEATURE_NAMES == TEAM_FEATURES + STARTER_FEATURES and len(set(FEATURE_NAMES)) == 26
     assert FACTOR_LABELS["bias"] == "기본 홈 어드밴티지"
 
@@ -393,7 +395,7 @@ def test_training_frame_excludes_draws_and_non_regular():
     ]
     df = build_training_frame(games, {}, season=2026)
     assert df.game_id.tolist() == [3, 5] and df.y.tolist() == [1, 0]
-    assert list(df.columns) == ["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES, "y"]
+    assert list(df.columns) == ["game_id", "date", "season", "home_code", "away_code", *MODEL_FEATURES, "y"]
     # 무승부(2번)는 행은 없지만 상태에는 들어가고, 시범경기(1번)는 상태에도 안 들어간다
     assert df.loc[df.game_id == 3, "season_progress"].item() == pytest.approx(1 / 144)
     assert df.loc[df.game_id == 5, "win_pct_diff"].item() == pytest.approx(1.0)
@@ -455,7 +457,7 @@ def test_build_dataset_links_seasons(two_season_data):
     assert df.season.tolist() == [2015, 2015, 2015, 2016, 2016]
     assert df.game_id.tolist() == [1, 2, 3, 10, 11]  # 시즌 안에서는 (date, game_id)
     assert df.index.tolist() == list(range(5))
-    assert df.columns.tolist() == ["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES, "y"]
+    assert df.columns.tolist() == ["game_id", "date", "season", "home_code", "away_code", *MODEL_FEATURES, "y"]
     first_2016 = df[df.season == 2016].iloc[0]
     assert first_2016.prev_season_diff == pytest.approx(2 / 3 - 1 / 3)  # 2015 최종 승률 차
     assert math.isnan(first_2016.win_pct_diff)  # 당해 0경기
@@ -571,9 +573,9 @@ def test_matchup_columns_absent_without_types(two_season_games):
     """유형표 없이(라이브 기본값) 만들면 기존 26개 피처 열 그대로, game_features에도 상성 키가 없다.
     유형표를 줘도 기본 26개 피처 값은 바뀌지 않는다."""
     plain = build_dataset_from(two_season_games)
-    assert list(plain.columns) == ["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES, "y"]
+    assert list(plain.columns) == ["game_id", "date", "season", "home_code", "away_code", *MODEL_FEATURES, "y"]
     typed = build_dataset_from(two_season_games, types=MATCHUP_TYPES, kb=2, kp=3)
-    assert list(typed.columns) == ["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES,
+    assert list(typed.columns) == ["game_id", "date", "season", "home_code", "away_code", *MODEL_FEATURES,
                                    *matchup_feature_names(2, 3), "y"]
     pd.testing.assert_frame_equal(typed[plain.columns], plain)
     f = game_features(mk("2026-04-05", 99), LeagueState())

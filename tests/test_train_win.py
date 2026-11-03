@@ -10,7 +10,7 @@ from scipy.stats import rankdata
 from sklearn.metrics import log_loss
 
 from kbo_predict import MODEL_VERSION, REPORT_VERSION, TEAM_VERSION, train_win
-from kbo_predict.features import (FACTOR_LABELS, FEATURE_NAMES, TEAM_FEATURES, load_features, parquet_fingerprint,
+from kbo_predict.features import (FACTOR_LABELS, FEATURE_NAMES, MODEL_FEATURES, TEAM_FEATURES, load_features, parquet_fingerprint,
                                   save_features)
 from kbo_predict.train_win import (
     LGBM_PARAMS,
@@ -38,7 +38,7 @@ from kbo_predict.train_win import (
 )
 
 BUNDLE_KEYS = {"kind", "model", "features", "calibration", "calibrator", "version",
-               "trained_at", "n_games", "seasons", "n_estimators"}
+               "trained_at", "n_games", "seasons", "n_estimators", "lr_params"}
 
 
 def _logit(p):
@@ -51,7 +51,7 @@ def data():
     선발 피처 일부와 다른 피처 몇 칸은 NaN(결측)으로 비워 둔다."""
     rng = np.random.default_rng(0)
     n = 2000
-    X = pd.DataFrame(rng.normal(0, 1, (n, len(FEATURE_NAMES))), columns=FEATURE_NAMES)
+    X = pd.DataFrame(rng.normal(0, 1, (n, len(MODEL_FEATURES))), columns=MODEL_FEATURES)
     logit = 2 * X["win_pct_diff"] - 1 * X["starter_era_diff"] + rng.normal(0, 0.5, n)
     y = (rng.random(n) < 1 / (1 + np.exp(-logit))).astype(int)
     starter_cols = [c for c in FEATURE_NAMES if c.startswith("starter_") and c != "starter_known"]
@@ -70,7 +70,7 @@ def _fit(data, kind, **kw):
 def test_lr_and_lgbm_fit_predict_shape_and_range(data, kind):
     bundle = _fit(data, kind, n_estimators=100)
     assert set(bundle) == BUNDLE_KEYS
-    assert bundle["kind"] == kind and bundle["features"] == FEATURE_NAMES
+    assert bundle["kind"] == kind and bundle["features"] == MODEL_FEATURES
     assert bundle["calibration"] == "none" and bundle["calibrator"] is None
     assert bundle["version"] == "v-test" and bundle["seasons"] == [2023, 2024]
     assert bundle["n_games"] == 1200
@@ -89,10 +89,10 @@ def test_explain_identity_lr(data):
     bundle = _fit(data, "lr")
     test = data["test"]
     contrib, base = explain(bundle, test)
-    assert contrib.shape == (len(test), len(FEATURE_NAMES)) and base.shape == (len(test),)
+    assert contrib.shape == (len(test), len(MODEL_FEATURES)) and base.shape == (len(test),)
     np.testing.assert_allclose(contrib.sum(axis=1) + base, _logit(predict_raw(bundle, test)), rtol=0, atol=1e-6)
     # 신호 방향: 승률차는 홈 승 쪽(+), 선발 ERA차는 홈 패 쪽(−)으로 기여
-    i_wp, i_era = FEATURE_NAMES.index("win_pct_diff"), FEATURE_NAMES.index("starter_era_diff")
+    i_wp, i_era = MODEL_FEATURES.index("win_pct_diff"), MODEL_FEATURES.index("starter_era_diff")
     assert np.corrcoef(contrib[:, i_wp], test["win_pct_diff"])[0, 1] > 0.99
     assert bundle["model"].named_steps["clf"].coef_[0][i_era] < 0
 
@@ -101,7 +101,7 @@ def test_explain_identity_lgbm(data):
     bundle = _fit(data, "lgbm", n_estimators=100)
     test = data["test"]
     contrib, base = explain(bundle, test)
-    assert contrib.shape == (len(test), len(FEATURE_NAMES)) and base.shape == (len(test),)
+    assert contrib.shape == (len(test), len(MODEL_FEATURES)) and base.shape == (len(test),)
     np.testing.assert_allclose(contrib.sum(axis=1) + base, _logit(predict_raw(bundle, test)), rtol=0, atol=1e-6)
 
 
@@ -225,7 +225,7 @@ def test_evaluate_keys_and_values(data):
 @pytest.mark.parametrize("kind", ["lr", "lgbm"])
 def test_feature_importance_normalized_sorted_labeled(data, kind):
     imp = feature_importance(_fit(data, kind, n_estimators=100))
-    assert len(imp) == len(FEATURE_NAMES) and {d["name"] for d in imp} == set(FEATURE_NAMES)
+    assert len(imp) == len(MODEL_FEATURES) and {d["name"] for d in imp} == set(MODEL_FEATURES)
     assert sum(d["importance"] for d in imp) == pytest.approx(1.0)
     assert [d["importance"] for d in imp] == sorted((d["importance"] for d in imp), reverse=True)
     assert all(d["label"] == FACTOR_LABELS[d["name"]] for d in imp)
@@ -245,7 +245,7 @@ def test_fit_model_with_feature_subset(data, kind):
     contrib, base = explain(bundle, test)
     assert contrib.shape == (len(test), 19)
     np.testing.assert_allclose(contrib.sum(axis=1) + base, _logit(predict_raw(bundle, test)), rtol=0, atol=1e-6)
-    assert _fit(data, kind, n_estimators=60)["features"] == FEATURE_NAMES  # 기본값은 26개 그대로
+    assert _fit(data, kind, n_estimators=60)["features"] == MODEL_FEATURES  # 기본값은 27개(26개 + Elo)
     df = data["train"][data["train"]["season"].isin([2023, 2024])]  # 합성 시즌 2개
     oof = oof_predictions(df, kind=kind, n_estimators=60, features=TEAM_FEATURES)
     m = fit_model(df[df["season"] == 2024], kind=kind, n_estimators=60, version="x", seasons=[2024],
@@ -333,7 +333,7 @@ def test_train_report_keys_and_selection(report):
     assert sig["baseline_correct"] == round(rep["baselines"]["test"][sig["vs"]] * 500)
     assert 0 <= sig["mcnemar_p"] <= 1
     assert len(rep["calibration_bins"]) == 10 and sum(b["n"] for b in rep["calibration_bins"]) == 500
-    assert len(rep["feature_importance"]) == len(FEATURE_NAMES)
+    assert len(rep["feature_importance"]) == len(MODEL_FEATURES)
     assert rep["matchup_feature_ablation"] is None and rep["cluster_quality"] is None
     # 번들: 선택된 알고리즘, report 버전, 선택된 캘리브레이션, 학습은 train 시즌만
     assert bundle["kind"] == rep["selected"] and bundle["version"] == REPORT_VERSION
@@ -385,9 +385,9 @@ def test_train_report_no_starter_ablation(report, season_df):
     test = season_df[season_df["season"] == 2026]
     n_est = ns["best_iteration"] or 300
     b = fit_model(train, kind=ns["kind"], n_estimators=n_est, version="x", seasons=[2023, 2024],
-                  features=TEAM_FEATURES)
+                  features=TEAM_FEATURES, lr_params=train_win.TEAM_LR)
     if ns["calibration"] != "none":
-        oof = oof_predictions(train, kind=ns["kind"], n_estimators=n_est, features=TEAM_FEATURES)
+        oof = oof_predictions(train, kind=ns["kind"], n_estimators=n_est, features=TEAM_FEATURES, lr_params=train_win.TEAM_LR)
         b["calibrator"] = fit_calibrator(ns["calibration"], oof, train["y"].to_numpy())
     assert evaluate(b, test) == ns["test"]
 
@@ -443,7 +443,7 @@ def test_train_live_uses_all_seasons_and_oof_calibrator(season_df, kind, calibra
 
 
 def test_train_live_features_kwarg(season_df):
-    """M-5: features를 주면 그 피처만으로 학습·캘리브레이션한다 (기본은 FEATURE_NAMES 26개)."""
+    """M-5: features를 주면 그 피처만으로 학습·캘리브레이션한다 (기본은 MODEL_FEATURES 27개)."""
     bundle = train_live(season_df, kind="lr", calibration="platt", n_estimators=60, meta=META,
                         features=TEAM_FEATURES)
     assert bundle["features"] == list(TEAM_FEATURES)
@@ -451,7 +451,7 @@ def test_train_live_features_kwarg(season_df):
     want = fit_calibrator("platt", oof, season_df["y"].to_numpy())
     p = predict_raw(bundle, season_df.iloc[:50])
     np.testing.assert_array_equal(apply_calibrator(bundle["calibrator"], p), apply_calibrator(want, p))
-    assert train_live(season_df, kind="lr", calibration="none", n_estimators=60, meta=META)["features"] == FEATURE_NAMES
+    assert train_live(season_df, kind="lr", calibration="none", n_estimators=60, meta=META)["features"] == MODEL_FEATURES
 
 
 def test_write_manifest_updates_one_model_and_keeps_others(tmp_path, data):
@@ -502,7 +502,7 @@ def _cli_parquet(tmp_path, extra_rows: int = 0):
     """기본 분할(2015~2024 / 2025 / 2026)을 쓰는 12시즌짜리 작은 합성 parquet. extra_rows만큼 2026 행을 덧붙인다."""
     rng = np.random.default_rng(3)
     n = 12 * 120
-    X = pd.DataFrame(rng.normal(0, 1, (n, len(FEATURE_NAMES))), columns=FEATURE_NAMES)
+    X = pd.DataFrame(rng.normal(0, 1, (n, len(MODEL_FEATURES))), columns=MODEL_FEATURES)
     y = (rng.random(n) < 1 / (1 + np.exp(-2 * X["win_pct_diff"]))).astype(int)
     df = X.assign(season=np.repeat(range(2015, 2027), 120), y=y)
     if extra_rows:
@@ -635,7 +635,7 @@ def test_report_matchup_does_not_change_main_report(report, matchup_report):
     drop = {"matchup_feature_ablation", "cluster_quality", "generated_at", "commit_sha", "run_url",
             "features_sha256"}
     assert {k: v for k, v in rep.items() if k not in drop} == {k: v for k, v in plain.items() if k not in drop}
-    assert bundle["features"] == FEATURE_NAMES
+    assert bundle["features"] == MODEL_FEATURES
 
 
 def test_report_matchup_with_reproduces_by_hand(matchup_report, small_df, small_matchup):
@@ -645,7 +645,7 @@ def test_report_matchup_with_reproduces_by_hand(matchup_report, small_df, small_
     n_est = rep["models"]["lgbm"]["best_iteration"] if kind == "lgbm" else 300
     df = small_df.merge(small_matchup, on="game_id")
     train, test = df[df["season"].isin([2023, 2024])], df[df["season"] == 2026]
-    feats = FEATURE_NAMES + MATCHUP_NAMES
+    feats = MODEL_FEATURES + MATCHUP_NAMES
     b = fit_model(train, kind=kind, n_estimators=n_est, version="x", seasons=[2023, 2024], features=feats)
     if cal != "none":
         oof = oof_predictions(train, kind=kind, n_estimators=n_est, features=feats)

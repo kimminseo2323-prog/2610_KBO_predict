@@ -1,8 +1,8 @@
 {
  "season": 2026,
  "model_version": "report-2026",
- "generated_at": "2026-10-29T21:24:52+09:00",
- "commit_sha": "2ff7697f2953d8509e1bcf56f7f7411db698e689",
+ "generated_at": "2026-11-03T10:21:07+09:00",
+ "commit_sha": "b507b85716fb06a96de296ca2c112e2ea609b3a4",
  "dates": [
   {
    "date": "2026-03-28",
@@ -13,7 +13,7 @@
   {
    "date": "2026-03-29",
    "games": 5,
-   "correct": 3,
+   "correct": 4,
    "decided": 5
   },
   {
@@ -31,7 +31,7 @@
   {
    "date": "2026-04-02",
    "games": 5,
-   "correct": 4,
+   "correct": 3,
    "decided": 5
   },
   {
@@ -43,7 +43,7 @@
   {
    "date": "2026-04-04",
    "games": 5,
-   "correct": 2,
+   "correct": 3,
    "decided": 5
   },
   {
@@ -121,19 +121,19 @@
   {
    "date": "2026-04-19",
    "games": 5,
-   "correct": 2,
+   "correct": 1,
    "decided": 5
   },
   {
    "date": "2026-04-21",
    "games": 5,
-   "correct": 1,
+   "correct": 2,
    "decided": 5
   },
   {
    "date": "2026-04-22",
    "games": 4,
-   "correct": 1,
+   "correct": 2,
    "decided": 4
   },
   {
@@ -151,7 +151,7 @@
   {
    "date": "2026-04-25",
    "games": 5,
-   "correct": 3,
+   "correct": 2,
    "decided": 5
   },
   {
@@ -163,7 +163,7 @@
   {
    "date": "2026-04-28",
    "games": 5,
-   "correct": 3,
+   "correct": 2,
    "decided": 5
   },
   {
@@ -205,7 +205,7 @@
   {
    "date": "2026-05-06",
    "games": 5,
-   "correct": 3,
+   "correct": 2,
    "decided": 5
   },
   {
@@ -247,7 +247,7 @@
   {
    "date": "2026-05-14",
    "games": 5,
-   "correct": 2,
+   "correct": 1,
    "decided": 5
   },
   {
@@ -367,7 +367,7 @@
   {
    "date": "2026-06-06",
    "games": 5,
-   "correct": 1,
+   "correct": 2,
    "decided": 5
   },
   {
@@ -379,7 +379,7 @@
   {
    "date": "2026-06-09",
    "games": 5,
-   "correct": 3,
+   "correct": 4,
    "decided": 5
   },
   {
@@ -391,7 +391,7 @@
   {
    "date": "2026-06-11",
    "games": 5,
-   "correct": 3,
+   "correct": 5,
    "decided": 5
   },
   {
@@ -415,7 +415,7 @@
   {
    "date": "2026-06-16",
    "games": 5,
-   "correct": 5,
+   "correct": 4,
    "decided": 5
   },
   {
@@ -433,7 +433,7 @@
   {
    "date": "2026-06-19",
    "games": 4,
-   "correct": 3,
+   "correct": 2,
    "decided": 4
   },
   {
@@ -457,7 +457,7 @@
   {
    "date": "2026-06-24",
    "games": 5,
-   "correct": 2,
+   "correct": 3,
    "decided": 5
   },
   {
@@ -469,13 +469,13 @@
   {
    "date": "2026-06-26",
    "games": 5,
-   "correct": 2,
+   "correct": 3,
    "decided": 5
   },
   {
    "date": "2026-06-27",
    "games": 5,
-   "correct": 3,
+   "correct": 4,
    "decided": 5
   },
   {
@@ -505,7 +505,7 @@
   {
    "date": "2026-07-03",
    "games": 5,
-   "correct": 2,
+   "correct": 1,
    "decided": 5
   },
   {
@@ -523,25 +523,25 @@
   {
    "date": "2026-07-07",
    "games": 5,
-   "correct": 3,
+   "correct": 4,
    "decided": 5
   },
   {
    "date": "2026-07-08",
    "games": 5,
-   "correct": 3,
+   "correct": 2,
    "decided": 4
   },
   {
    "date": "2026-07-09",
    "games": 5,
-   "correct": 3,
+   "correct": 4,
    "decided": 4
   },
   {
    "date": "2026-07-16",
    "games": 5,
-   "correct": 3,
+   "correct": 2,
    "decided": 5
   },
   {
@@ -559,7 +559,7 @@
   {
    "date": "2026-07-19",
    "games": 5,
-   "correct": 0,
+   "correct": 2,
    "decided": 4
   },
   {
@@ -589,37 +589,37 @@
   {
    "date": "2026-07-25",
    "games": 5,
-   "correct": 3,
+   "correct": 2,
    "decided": 5
   },
   {
    "date": "2026-07-26",
    "games": 5,
-   "correct": 3,
+   "correct": 2,
    "decided": 4
   },
   {
    "date": "2026-07-28",
    "games": 5,
-   "correct": 2,
+   "correct": 3,
    "decided": 5
   },
   {
    "date": "2026-07-29",
    "games": 5,
-   "correct": 3,
+   "correct": 2,
    "decided": 5
   },
   {
    "date": "2026-07-30",
    "games": 5,
-   "correct": 2,
+   "correct": 3,
    "decided": 5
   },
   {
    "date": "2026-07-31",
    "games": 5,
-   "correct": 4,
+   "correct": 3,
    "decided": 5
   },
   {
@@ -631,7 +631,7 @@
   {
    "date": "2026-08-02",
    "games": 5,
-   "correct": 1,
+   "correct": 2,
    "decided": 4
   },
   {
@@ -679,7 +679,7 @@
   {
    "date": "2026-08-12",
    "games": 5,
-   "correct": 3,
+   "correct": 2,
    "decided": 5
   },
   {
@@ -715,13 +715,13 @@
   {
    "date": "2026-08-19",
    "games": 5,
-   "correct": 3,
+   "correct": 4,
    "decided": 5
   },
   {
    "date": "2026-08-20",
    "games": 5,
-   "correct": 3,
+   "correct": 2,
    "decided": 5
   },
   {
@@ -751,7 +751,7 @@
   {
    "date": "2026-08-26",
    "games": 5,
-   "correct": 2,
+   "correct": 3,
    "decided": 5
   },
   {
@@ -769,7 +769,7 @@
   {
    "date": "2026-08-29",
    "games": 5,
-   "correct": 4,
+   "correct": 5,
    "decided": 5
   },
   {
@@ -787,7 +787,7 @@
   {
    "date": "2026-09-02",
    "games": 5,
-   "correct": 3,
+   "correct": 4,
    "decided": 5
   },
   {
@@ -805,13 +805,13 @@
   {
    "date": "2026-09-05",
    "games": 5,
-   "correct": 3,
+   "correct": 2,
    "decided": 5
   },
   {
    "date": "2026-09-06",
    "games": 5,
-   "correct": 2,
+   "correct": 3,
    "decided": 5
   },
   {
@@ -823,7 +823,7 @@
   {
    "date": "2026-09-09",
    "games": 4,
-   "correct": 2,
+   "correct": 0,
    "decided": 4
   },
   {
@@ -859,7 +859,7 @@
   {
    "date": "2026-09-16",
    "games": 4,
-   "correct": 1,
+   "correct": 3,
    "decided": 3
   },
   {
@@ -871,19 +871,19 @@
   {
    "date": "2026-09-18",
    "games": 4,
-   "correct": 3,
+   "correct": 2,
    "decided": 3
   },
   {
    "date": "2026-09-19",
    "games": 4,
-   "correct": 4,
+   "correct": 3,
    "decided": 4
   },
   {
    "date": "2026-09-20",
    "games": 5,
-   "correct": 4,
+   "correct": 5,
    "decided": 5
   },
   {
@@ -895,7 +895,7 @@
   {
    "date": "2026-09-23",
    "games": 3,
-   "correct": 2,
+   "correct": 1,
    "decided": 3
   },
   {
@@ -907,13 +907,13 @@
   {
    "date": "2026-09-25",
    "games": 3,
-   "correct": 0,
+   "correct": 1,
    "decided": 1
   },
   {
    "date": "2026-09-26",
    "games": 3,
-   "correct": 1,
+   "correct": 2,
    "decided": 3
   },
   {
@@ -931,7 +931,7 @@
   {
    "date": "2026-09-30",
    "games": 5,
-   "correct": 4,
+   "correct": 5,
    "decided": 5
   },
   {
@@ -943,25 +943,25 @@
   {
    "date": "2026-10-03",
    "games": 5,
-   "correct": 3,
+   "correct": 4,
    "decided": 5
   },
   {
    "date": "2026-10-04",
    "games": 5,
-   "correct": 1,
+   "correct": 3,
    "decided": 4
   },
   {
    "date": "2026-10-05",
    "games": 5,
-   "correct": 3,
+   "correct": 4,
    "decided": 5
   },
   {
    "date": "2026-10-06",
    "games": 5,
-   "correct": 4,
+   "correct": 5,
    "decided": 5
   },
   {
@@ -995,7 +995,7 @@
    "decided": 3
   }
  ],
- "accuracy": 0.594,
+ "accuracy": 0.6097,
  "n_decided": 702,
  "note": "correct = (unrounded P(home win) >= 0.5) == home won, same rule as train_win._correct; draws and canceled games are not decided"
 }

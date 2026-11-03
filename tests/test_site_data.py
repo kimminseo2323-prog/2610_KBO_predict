@@ -8,7 +8,7 @@ import pytest
 
 from kbo_predict import cluster
 from kbo_predict.cluster import build_from, load_labels
-from kbo_predict.features import FEATURE_NAMES, save_features
+from kbo_predict.features import MODEL_FEATURES, save_features
 from kbo_predict.raw_store import upsert_games
 from kbo_predict.site_data import players_payload, roster_types, team_model_expected, teams_payload
 from kbo_predict.train_win import predict_proba, save_bundle
@@ -70,7 +70,7 @@ def _features_df():
     for i, (season, home, away) in enumerate([(2026, "LG", "HT"), (2026, "LG", "HT"), (2026, "HT", "LG"),
                                               (2026, "HT", "LG"), (2025, "SK", "LG"), (2025, "LG", "SK")]):
         rows.append({"game_id": i, "date": f"{season}-05-01", "season": season, "home_code": home, "away_code": away,
-                     **dict(zip(FEATURE_NAMES, rng.normal(0, 0.3, len(FEATURE_NAMES)))), "y": i % 2})
+                     **dict(zip(MODEL_FEATURES, rng.normal(0, 0.3, len(MODEL_FEATURES)))), "y": i % 2})
     return pd.DataFrame(rows)
 
 

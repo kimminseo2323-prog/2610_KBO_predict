@@ -124,6 +124,7 @@ export const FACTOR_LABELS = {
   "starter_bb9_diff": "선발 9이닝당 볼넷 차이",
   "starter_ip_diff": "선발 누적 이닝 차이",
   "starter_last3_runs_diff": "선발 최근 3경기 실점 차이",
+  "elo_diff": "Elo 전력 점수 차이",
   "bias": "기본 홈 어드밴티지"
 };
 

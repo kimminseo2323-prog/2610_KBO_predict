@@ -138,7 +138,7 @@ def test_factor_labels_match_python():
     py = _py_literal(ROOT / "src" / "kbo_predict" / "features.py", "FACTOR_LABELS")
     js = check_site.parse_js_const((ASSETS / "app.js").read_text(encoding="utf-8"), "FACTOR_LABELS")
     assert js == py
-    assert len(js) == 27 and js["bias"] == "기본 홈 어드밴티지"
+    assert len(js) == 28 and js["bias"] == "기본 홈 어드밴티지"
     # model_report.json의 feature_importance 이름이 모두 한글 표에 있고, 표의 한글은 JSON의 label과 같다
     report = json.loads((DATA / "model_report.json").read_text(encoding="utf-8"))
     for f in report["feature_importance"]:

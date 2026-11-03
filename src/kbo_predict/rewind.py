@@ -29,7 +29,7 @@ from itertools import groupby
 from pathlib import Path
 
 from . import raw_store
-from .features import LeagueState, regular_finals, starter_ids
+from .features import LeagueState, elo_through, regular_finals, starter_ids
 from .predict import canceled_entry, predict_game, raw_prob
 from .publish import _write_json
 from .seasons import is_regular
@@ -47,6 +47,8 @@ def _opening_state(season: int) -> LeagueState:
     """season 개막 직전 상태: 직전 시즌 정규 FINAL 전체(박스스코어 포함) → start_season(season).
     직전 시즌 데이터가 없으면(2015 등) 직전 시즌 없이 시작한다."""
     state = LeagueState()
+    # Elo는 2015부터 이어지는 점수라, 직전 시즌보다 앞선 시즌들을 먼저 반영해 둔다 (학습 build_dataset과 같은 점수)
+    state.elo = elo_through(season - 2)
     prev_games = raw_store.load_games(season - 1)
     if prev_games:
         state.start_season(season - 1)

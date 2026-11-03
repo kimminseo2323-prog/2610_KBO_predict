@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from kbo_predict.features import FACTOR_LABELS, FEATURE_NAMES, LeagueState, game_features
+from kbo_predict.features import FACTOR_LABELS, MODEL_FEATURES, LeagueState, game_features
 from kbo_predict.mykbo_parse import parse_week
 from kbo_predict.predict import factor_pp, predict_game
 from kbo_predict.train_win import explain, predict_proba, predict_raw
@@ -52,7 +52,7 @@ def _played_state() -> LeagueState:
 
 def _x(game, state, starters=None) -> pd.DataFrame:
     f = game_features(game, state, starters)
-    return pd.DataFrame([[f[n] for n in FEATURE_NAMES]], columns=FEATURE_NAMES)
+    return pd.DataFrame([[f[n] for n in MODEL_FEATURES]], columns=MODEL_FEATURES)
 
 
 def test_predict_game_shape_keeps_contract(bundle, fixture_html):
@@ -138,7 +138,7 @@ def test_factor_pp_applies_platt_slope_exactly(bundle, fixture_html):
         p = float(predict_proba(bundle, X)[0])
         p_raw = float(predict_raw(bundle, X)[0])
         items = factor_pp(bundle, X, p)
-        assert len(items) == len(FEATURE_NAMES) + 1
+        assert len(items) == len(bundle["features"]) + 1
         want = a * math.log(p_raw / (1 - p_raw)) * p * (1 - p) * 100
         assert abs(sum(v for _, v in items) - want) < 1e-6
     # isotonic·none은 기울기 보정 없이 기여 × p(1−p) × 100 그대로

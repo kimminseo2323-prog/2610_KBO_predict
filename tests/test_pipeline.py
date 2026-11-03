@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import requests
 
-from kbo_predict.features import FEATURE_NAMES, build_dataset, game_features, starter_ids
+from kbo_predict.features import MODEL_FEATURES, build_dataset, game_features, starter_ids
 from kbo_predict.mykbo_parse import parse_starters, parse_week
 from kbo_predict.publish import HISTORY_COLUMNS
 from kbo_predict.raw_store import append_boxscores, load_boxscores, load_games, load_starters, upsert_games
@@ -177,8 +177,8 @@ def test_build_state_matches_training_features(tmp_data_dir, fixture_html):
     for gid in (9202, 9203):
         g = games[gid]
         f = game_features(g, build_state(2026, g["date"]), starter_ids(boxes.get(gid)))
-        np.testing.assert_array_equal(np.array([f[n] for n in FEATURE_NAMES], dtype=float),
-                                      df.loc[gid, FEATURE_NAMES].to_numpy(dtype=float))
+        np.testing.assert_array_equal(np.array([f[n] for n in MODEL_FEATURES], dtype=float),
+                                      df.loc[gid, MODEL_FEATURES].to_numpy(dtype=float))
     st = build_state(2026, "2026-10-29")
     assert st.season == 2026
     assert st.team_line("HT", "2026-10-29")["prev_win_pct"] == 0.5  # 2025 정규 1승 1패(+무), 포스트시즌 제외

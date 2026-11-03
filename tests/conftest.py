@@ -28,7 +28,7 @@ def synthetic_df():
     import numpy as np
     import pandas as pd
 
-    from kbo_predict.features import FEATURE_NAMES
+    from kbo_predict.features import FEATURE_NAMES, MODEL_FEATURES
 
     rng = np.random.default_rng(42)
     n = 600
@@ -41,16 +41,21 @@ def synthetic_df():
     X.loc[X["starter_known"] == 0, starter_cols] = np.nan
     logit = 3 * X["win_pct_diff"] + 0.3 * X["run_diff_diff"] - 0.2 * X["starter_era_diff"].fillna(0)
     y = (rng.random(n) < 1 / (1 + np.exp(-logit))).astype(int)
+    # Elo 차이(v0.3 피처)는 별도 난수로 마지막에 붙인다 — 위 26개 값·y가 v0.2 때와 똑같이 남게 (고정 기대값이 그대로)
+    X["elo_diff"] = np.random.default_rng(7).normal(0, 50, n)
+    X = X[MODEL_FEATURES]
     return X.assign(y=y, season=np.repeat([2024, 2025], n // 2))
 
 
 @pytest.fixture(scope="session")
 def bundle(synthetic_df):
     """라이브 모델과 같은 구성(LR + platt 캘리브레이션)의 작은 번들. 캘리브레이터는 뒤쪽 200행으로 맞춘다."""
-    from kbo_predict.train_win import fit_model
+    from kbo_predict.features import FEATURE_NAMES
+    from kbo_predict.train_win import TEAM_LR, fit_model
 
+    # 피처 26개·L2 C=1(TEAM_LR, v0.2 구성): 팀 모델(전망)로도 쓰이고, 고정해 둔 기대값(test_simulate PINNED_1029)이 이 설정으로 계산됐다
     return fit_model(synthetic_df.iloc[:400], kind="lr", calibration="platt", calib_df=synthetic_df.iloc[400:],
-                     version="v-test", seasons=[2024, 2025])
+                     version="v-test", seasons=[2024, 2025], lr_params=TEAM_LR, features=FEATURE_NAMES)
 
 
 @pytest.fixture

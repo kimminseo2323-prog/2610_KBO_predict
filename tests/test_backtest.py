@@ -13,7 +13,7 @@ TEAMS = ["OB", "LT", "KT", "WO", "SK", "SS", "HH", "HT", "LG", "NC"]
 
 
 def _games(seasons=range(2015, 2027), n=40, seed=0):
-    """시즌마다 n경기, 날짜·팀 코드·피처(승패와 약하게 상관)를 가진 가짜 경기 표."""
+    """시즌마다 n경기, 날짜·팀 코드·피처(승패와 약하게 상관)·elo_diff를 가진 가짜 경기 표."""
     rng = np.random.default_rng(seed)
     rows, gid = [], 0
     for s in seasons:
@@ -23,24 +23,27 @@ def _games(seasons=range(2015, 2027), n=40, seed=0):
             y = int(rng.random() < 1 / (1 + np.exp(-(0.1 + 0.7 * x[0]))))
             gid += 1
             rows.append({"game_id": gid, "date": f"{s}-05-{1 + k % 28:02d}", "season": s, "home_code": h, "away_code": a,
-                         **dict(zip(FEATURE_NAMES, x)), "y": y})
+                         **dict(zip(FEATURE_NAMES, x)), "elo_diff": float(rng.normal(0, 50)), "y": y})
     return pd.DataFrame(rows)
 
 
-def test_elo_is_pre_game_and_ignores_own_result():
-    df = _games(n=30)
-    base = backtest.elo_feature(df)
-    flipped = df.copy()
-    i = flipped.index[200]
-    flipped.loc[i, "y"] = 1 - flipped.loc[i, "y"]
-    after = backtest.elo_feature(flipped)
-    order = df.sort_values(["date", "game_id"]).index
-    pos = list(order).index(i)
-    # 그 경기와 그 앞 경기의 Elo 차이는 그대로, 뒤 경기만 바뀔 수 있다
-    assert np.allclose(base.loc[order[: pos + 1]], after.loc[order[: pos + 1]])
-    assert not np.allclose(base.loc[order[pos + 1:]], after.loc[order[pos + 1:]])
-    # 첫 경기: 두 팀 모두 1500 → 차이 = 홈 이점
-    assert base.loc[order[0]] == pytest.approx(backtest.ELO_HOME)
+def test_elo_class_pre_game_carry_and_draws():
+    from kbo_predict.features import ELO_BASE, ELO_CARRY, ELO_HOME, Elo
+    e = Elo()
+    e.new_season(2015)
+    assert e.diff("LG", "KT") == pytest.approx(ELO_HOME)       # 처음: 둘 다 1500 + 홈 이점
+    before = e.diff("LG", "KT")
+    e.update("LG", "KT", 5, 3)                                  # 홈 승 → 홈 점수 오름, 원정 내림 (합은 그대로)
+    assert e.rating["LG"] > ELO_BASE > e.rating["KT"] and e.rating["LG"] + e.rating["KT"] == pytest.approx(2 * ELO_BASE)
+    assert e.diff("LG", "KT") > before
+    lg = e.rating["LG"]
+    e.update("LG", "KT", 2, 2)                                  # 무승부 = 0.5: 기대보다 못했으니 홈이 조금 내린다
+    assert e.rating["LG"] < lg
+    lg = e.rating["LG"]
+    e.new_season(2016)                                          # 새 시즌: 1500 쪽으로 1/3 되돌림
+    assert e.rating["LG"] == pytest.approx(ELO_BASE + ELO_CARRY * (lg - ELO_BASE))
+    e.new_season(2016)                                          # 같은 시즌 두 번은 아무 일 없음
+    assert e.rating["LG"] == pytest.approx(ELO_BASE + ELO_CARRY * (lg - ELO_BASE))
 
 
 def test_predictions_train_only_on_earlier_seasons(monkeypatch):

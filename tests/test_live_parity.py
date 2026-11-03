@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from kbo_predict import raw_store
-from kbo_predict.features import FEATURE_NAMES, build_dataset, game_features, starter_ids
+from kbo_predict.features import MODEL_FEATURES, build_dataset, game_features, starter_ids
 from kbo_predict.seasons import is_regular
 from scripts.run_pipeline import build_state
 
@@ -30,6 +30,6 @@ def test_live_features_equal_training_features(real_df, day):
     state = build_state(2026, day)
     for g in games:
         f = game_features(g, state, starter_ids(boxes.get(g["game_id"])))
-        live = np.array([f[n] for n in FEATURE_NAMES], dtype=float)
-        train = real_df.loc[g["game_id"], FEATURE_NAMES].to_numpy(dtype=float)
+        live = np.array([f[n] for n in MODEL_FEATURES], dtype=float)
+        train = real_df.loc[g["game_id"], MODEL_FEATURES].to_numpy(dtype=float)
         np.testing.assert_array_equal(live, train, err_msg=f"game {g['game_id']} on {day}")

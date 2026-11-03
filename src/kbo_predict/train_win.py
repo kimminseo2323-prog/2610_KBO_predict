@@ -3,8 +3,9 @@
 모델 하나는 "번들"(dict) 하나로 다닌다. 번들 키:
     kind          "lr" 또는 "lgbm"
     model         학습된 sklearn 호환 추정기 (LR은 Pipeline, LightGBM은 LGBMClassifier)
-    features      입력 피처 이름 목록 (기본 features.FEATURE_NAMES 26개, 순서 고정.
-                  선발 없는 변형(ablation)은 features.TEAM_FEATURES 19개) — 예측·요인 분해는 이 목록의 열만 쓴다
+    features      입력 피처 이름 목록 (기본 features.MODEL_FEATURES 27개 = 26개 + Elo, 순서 고정.
+                  선발 없는 팀 모델은 features.TEAM_FEATURES 19개) — 예측·요인 분해는 이 목록의 열만 쓴다
+    lr_params     LR일 때 규제 설정 {"C", "penalty"} (승패 모델 WIN_LR, 팀 모델 TEAM_LR)
     calibration   "none" / "platt" / "isotonic"
     calibrator    캘리브레이션 객체 (없으면 None)
     version       모델 버전 문자열 (예: MODEL_VERSION)
@@ -65,7 +66,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from . import FROZEN_SEASONS, KST, MODEL_VERSION, REPORT_VERSION, TEAM_VERSION
-from .features import FACTOR_LABELS, FEATURE_NAMES, TEAM_FEATURES, load_features, parquet_fingerprint
+from .features import FACTOR_LABELS, FEATURE_NAMES, MODEL_FEATURES, TEAM_FEATURES, load_features, parquet_fingerprint
 
 SEED = 42
 # 결정성: deterministic + 단일 스레드 + 고정 seed, 배깅(행 샘플링) 없음 → 같은 데이터면 같은 비트.
@@ -73,7 +74,13 @@ SEED = 42
 LGBM_PARAMS = dict(objective="binary", learning_rate=0.03, num_leaves=15, min_child_samples=50,
                    colsample_bytree=0.8, reg_lambda=1.0, deterministic=True, num_threads=1,
                    seed=SEED, verbose=-1, force_row_wise=True)
-LR_C = 1.0
+LR_C = 1.0  # 팀 모델(team-2026)과 v0.2 승패 모델의 L2 세기
+# 로지스틱 회귀 규제 설정 두 가지 (v0.3, 2026-11):
+# - 승패 모델(report·live): L1, C=0.03 — tune.py 랜덤 서치 추천이자 FLAML 오토머신러닝이 따로 고른 값. 여러 시즌 시험(backtest.py)에서
+#   Elo 피처와 함께 후보 중 가장 좋았다. 쓸모가 적은 피처의 계수를 0으로 만든다.
+# - 팀 모델(team-2026, 선발 없는 전망용): 예전 그대로 L2, C=1 — 얼린 전망 산출물을 바꾸지 않으려고.
+WIN_LR = {"C": 0.03, "penalty": "l1"}
+TEAM_LR = {"C": LR_C, "penalty": "l2"}
 
 KINDS = ("lr", "lgbm")
 CALIBRATIONS = ("none", "platt", "isotonic")
@@ -90,14 +97,19 @@ def _matrix(features: list[str], X: pd.DataFrame) -> pd.DataFrame:
     return X[features].astype(float)
 
 
-def _new_estimator(kind: str, n_estimators: int):
+def _new_estimator(kind: str, n_estimators: int, lr_params: dict | None = None):
     if kind == "lr":
         # 결측은 학습 데이터 중앙값으로 채운 뒤 표준화 → 계수가 "표준편차 1만큼 차이날 때의 로짓 변화"가 된다.
         # keep_empty_features=True: 학습 구간에 값이 하나도 없는 피처도 버리지 않아 계수가 항상 피처 수만큼 정렬된다.
+        lr = WIN_LR if lr_params is None else lr_params
+        if lr["penalty"] == "l1":  # tune.make_estimator와 같은 풀이기·반복 수 (같은 설정이면 같은 계수)
+            clf = LogisticRegression(C=lr["C"], penalty="l1", solver="liblinear", random_state=SEED, max_iter=5000)
+        else:
+            clf = LogisticRegression(C=lr["C"], random_state=SEED, max_iter=2000)
         return Pipeline([
             ("imputer", SimpleImputer(strategy="median", keep_empty_features=True)),
             ("scaler", StandardScaler()),
-            ("clf", LogisticRegression(C=LR_C, random_state=SEED, max_iter=2000)),
+            ("clf", clf),
         ])
     if kind == "lgbm":
         # LightGBM은 NaN을 스스로 처리(분기마다 결측이 갈 방향을 학습)하므로 대치하지 않는다.
@@ -107,10 +119,12 @@ def _new_estimator(kind: str, n_estimators: int):
 
 def fit_model(df: pd.DataFrame, *, kind: str, n_estimators: int = 300, calibration: str = "none",
               calib_df: pd.DataFrame | None = None, version: str, seasons: list[int],
-              features: list[str] | None = None) -> dict:
-    """df(피처 + y)로 모델을 학습해 번들을 돌려준다. features: 쓸 피처 목록 (기본 FEATURE_NAMES 26개).
+              features: list[str] | None = None, lr_params: dict | None = None) -> dict:
+    """df(피처 + y)로 모델을 학습해 번들을 돌려준다. features: 쓸 피처 목록 (기본 MODEL_FEATURES 27개).
+    lr_params: LR 규제 설정 (기본 WIN_LR — 승패 모델. 팀 모델은 TEAM_LR).
     calibration이 "none"이 아니면 calib_df(학습에 안 쓴 구간)의 예측으로 캘리브레이터를 따로 맞춘다."""
-    features = list(FEATURE_NAMES if features is None else features)
+    features = list(MODEL_FEATURES if features is None else features)
+    lr_params = dict(WIN_LR if lr_params is None else lr_params)
     if calibration not in CALIBRATIONS:
         raise ValueError(f"unknown calibration: {calibration!r} (expected one of {CALIBRATIONS})")
     if calibration != "none" and calib_df is None:
@@ -120,7 +134,7 @@ def fit_model(df: pd.DataFrame, *, kind: str, n_estimators: int = 300, calibrati
     if len(df) == 0:
         raise ValueError("no training rows")
 
-    model = _new_estimator(kind, n_estimators)
+    model = _new_estimator(kind, n_estimators, lr_params)
     model.fit(_matrix(features, df), df["y"].to_numpy())
     bundle = {
         "kind": kind,
@@ -133,6 +147,7 @@ def fit_model(df: pd.DataFrame, *, kind: str, n_estimators: int = 300, calibrati
         "n_games": int(len(df)),
         "seasons": [int(s) for s in seasons],
         "n_estimators": int(n_estimators) if kind == "lgbm" else None,
+        "lr_params": lr_params if kind == "lr" else None,
     }
     if calibration != "none":
         bundle["calibrator"] = fit_calibrator(calibration, predict_raw(bundle, calib_df), calib_df["y"].to_numpy())
@@ -274,10 +289,10 @@ def feature_importance(bundle: dict) -> list[dict]:
 
 
 def oof_predictions(df: pd.DataFrame, *, kind: str, n_estimators: int,
-                    features: list[str] | None = None) -> np.ndarray:
+                    features: list[str] | None = None, lr_params: dict | None = None) -> np.ndarray:
     """시즌 leave-one-out 예측: 시즌 s의 행은 's를 뺀 나머지 시즌'으로 학습한 모델이 예측한 확률(캘리브레이션 전).
     모든 행이 '학습에 안 쓴 데이터' 예측이 되므로, 전체 학습 모델의 캘리브레이터를 맞추는 데 쓴다. 행 순서 유지.
-    features는 fit_model과 같다 (기본 FEATURE_NAMES) — 캘리브레이터를 붙일 모델과 같은 피처로 맞춰야 한다."""
+    features·lr_params는 fit_model과 같다 (기본 MODEL_FEATURES·WIN_LR) — 캘리브레이터를 붙일 모델과 같은 설정으로 맞춰야 한다."""
     seasons = sorted(int(s) for s in df["season"].unique())
     if len(seasons) < 2:
         raise ValueError(f"leave-one-season-out needs >= 2 seasons, got {seasons}")
@@ -287,7 +302,7 @@ def oof_predictions(df: pd.DataFrame, *, kind: str, n_estimators: int,
         held = season_col == s
         rest = [x for x in seasons if x != s]
         m = fit_model(df[~held], kind=kind, n_estimators=n_estimators, version="oof", seasons=rest,
-                      features=features)
+                      features=features, lr_params=lr_params)
         out[held] = predict_raw(m, df[held])
     return out
 
@@ -297,8 +312,8 @@ def oof_predictions(df: pd.DataFrame, *, kind: str, n_estimators: int,
 def _early_stopping_rounds(train: pd.DataFrame, val: pd.DataFrame, max_rounds: int = 2000,
                            features: list[str] | None = None) -> int:
     """LightGBM 트리 개수 결정: val 로그 손실이 50라운드 연속 나아지지 않으면 멈추고, 가장 좋았던 라운드를 쓴다.
-    features: 쓸 피처 목록 (기본 FEATURE_NAMES)."""
-    features = list(FEATURE_NAMES if features is None else features)
+    features: 쓸 피처 목록 (기본 MODEL_FEATURES)."""
+    features = list(MODEL_FEATURES if features is None else features)
     m = _new_estimator("lgbm", max_rounds)
     m.fit(_matrix(features, train), train["y"].to_numpy(),
           eval_X=(_matrix(features, val),), eval_y=(val["y"].to_numpy(),), eval_metric="binary_logloss",
@@ -317,7 +332,7 @@ def _choose_calibration(bundle: dict, train: pd.DataFrame, val: pd.DataFrame) ->
     isotonic이 늘 이겨 버린다(낙관 편향). 라이브 모델(train_live)도 같은 방식(OOF)으로 맞춘다.
     반환: (선택된 캘리브레이터를 붙인 번들, {방법: val 로그 손실})."""
     oof = oof_predictions(train, kind=bundle["kind"], n_estimators=bundle["n_estimators"] or 300,
-                          features=bundle["features"])
+                          features=bundle["features"], lr_params=bundle.get("lr_params"))
     raw_val, y_val = predict_raw(bundle, val), val["y"].to_numpy()
     losses, calibrators = {}, {}
     for method in CALIBRATIONS:
@@ -349,9 +364,9 @@ def _fit_team(kind: str, calibration: str, train: pd.DataFrame, val: pd.DataFram
     best_iteration = _early_stopping_rounds(train, val, features=TEAM_FEATURES) if kind == "lgbm" else None
     n_est = best_iteration or 300
     b = fit_model(train, kind=kind, n_estimators=n_est, version=TEAM_VERSION, seasons=train_seasons,
-                  features=TEAM_FEATURES)
+                  features=TEAM_FEATURES, lr_params=TEAM_LR)
     if calibration != "none":
-        oof = oof_predictions(train, kind=kind, n_estimators=n_est, features=TEAM_FEATURES)
+        oof = oof_predictions(train, kind=kind, n_estimators=n_est, features=TEAM_FEATURES, lr_params=TEAM_LR)
         b.update(calibration=calibration, calibrator=fit_calibrator(calibration, oof, train["y"].to_numpy()))
     if meta and meta.get("generated_at"):
         b["trained_at"] = meta["generated_at"]
@@ -428,7 +443,7 @@ def _matchup_ablation(selected: str, calibration: str, best_iteration: int, trai
                       val: pd.DataFrame, test: pd.DataFrame, train_seasons: list[int], names: list[str], *,
                       fit_seasons: list[int] | None = None, cluster_version: str | None = None) -> dict:
     """상성 피처 전후 비교: 선택된 알고리즘(selected)·캘리브레이션 방법·트리 수(best_iteration)를 고정하고
-    피처만 FEATURE_NAMES → FEATURE_NAMES + names로 늘려 같은 절차(캘리브레이터는 train LOSO OOF)로 학습한다.
+    피처만 MODEL_FEATURES → MODEL_FEATURES + names로 늘려 같은 절차(캘리브레이터는 train LOSO OOF)로 학습한다.
     without은 본 모델과 같은 절차이므로 본 모델의 val·test 지표와 똑같다.
     mcnemar_p_test: test 경기에서 with와 without의 적중 차이 검정. adopt: with의 val 로그 손실이
     without보다 MATCHUP_ADOPT_MARGIN보다 더 낮을 때만 True (test는 채택 판단에 쓰지 않는다).
@@ -436,7 +451,7 @@ def _matchup_ablation(selected: str, calibration: str, best_iteration: int, trai
     val_season, test_season = int(val["season"].iloc[0]), int(test["season"].iloc[0])
     n_est = best_iteration if selected == "lgbm" else None
     out, correct = {}, {}
-    for key, feats in (("without", list(FEATURE_NAMES)), ("with", list(FEATURE_NAMES) + list(names))):
+    for key, feats in (("without", list(MODEL_FEATURES)), ("with", list(MODEL_FEATURES) + list(names))):
         b = _fit_fixed(selected, calibration, n_est, train, train_seasons, feats)
         out[key] = {"val": evaluate(b, val), "test": evaluate(b, test)}
         correct[key] = _correct(predict_proba(b, test), test["y"].to_numpy())
@@ -547,7 +562,7 @@ def train_live(df: pd.DataFrame, *, kind: str, calibration: str, n_estimators: i
                features: list[str] | None = None) -> dict:
     """사이트용 라이브 모델: 있는 시즌 전부로 학습 (알고리즘·캘리브레이션 방법·트리 수는 보고서에서 고른 값).
     전체를 학습에 쓰면 캘리브레이터를 맞출 '안 본 데이터'가 없으므로, 시즌 leave-one-out 예측(oof_predictions)으로 맞춘다.
-    features: 쓸 피처 목록 (기본 FEATURE_NAMES 26개). CLI는 기본값을 쓴다."""
+    features: 쓸 피처 목록 (기본 MODEL_FEATURES 27개). CLI는 기본값을 쓴다."""
     seasons = sorted(int(s) for s in df["season"].unique())
     bundle = fit_model(df, kind=kind, n_estimators=n_estimators, version=MODEL_VERSION, seasons=seasons,
                        features=features)

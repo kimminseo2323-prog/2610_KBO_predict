@@ -10,7 +10,7 @@
 후보와 고르는 규칙 (결과를 보기 전에 정한 것 — 2026-11-03)
 - current : 지금 라이브 모델과 같은 설정(로지스틱 회귀 L2, C=1, 피처 26개)
 - l1      : 로지스틱 회귀 L1, C=0.03 (tune.py 랜덤 서치 추천, 오토머신러닝도 같은 답)
-- l1_elo  : l1 + Elo 레이팅 차이 피처 1개 (아래 elo_feature, 설정은 미리 고정한 값 — 튜닝하지 않음)
+- l1_elo  : l1 + Elo 전력 점수 차이 피처 1개 (features.parquet의 elo_diff = features.Elo, 설정은 미리 고정한 값 — 튜닝하지 않음)
 - ensemble: l1 + 그리드 1등 랜덤포레스트 + 그리드 1등 XGBoost의 확률 평균
 - 개발 시즌 2018~2025의 합친 log loss가 가장 낮은 후보를 고른다. 2026은 고른 뒤 채점만 한다.
 - 주의(정직하게 적는 것): l1·ensemble의 설정은 2021~2025 교차검증으로 골랐으므로, 그 시즌 성적은 조금 유리하다.
@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 
 from . import KST
-from .features import FEATURE_NAMES, load_features
+from .features import ELO_BASE, ELO_CARRY, ELO_HOME, ELO_K, FEATURE_NAMES, load_features
 from .train_win import _baseline_preds, _correct, mcnemar_p
 from . import tune
 
@@ -48,8 +48,6 @@ CLEAN_SEASONS = [2018, 2019, 2020, 2026]  # 어떤 설정 선택에도 쓰지 �
 RULES = ("home_always", "better_win_pct", "lower_starter_era")
 EPS = 1e-6
 
-# Elo 설정 (미리 고정, 튜닝하지 않음): 한 경기 K=6, 홈 이점 +20점, 새 시즌은 평균(1500) 쪽으로 1/3 되돌린다.
-ELO_K, ELO_HOME, ELO_CARRY, ELO_BASE = 6.0, 20.0, 2 / 3, 1500.0
 
 RF_BEST = {"n_estimators": 300, "max_depth": 6, "min_samples_leaf": 20, "max_features": 0.3}
 XGB_BEST = {"learning_rate": 0.03, "n_estimators": 100, "max_depth": 3, "min_child_weight": 1, "subsample": 0.7,
@@ -61,33 +59,6 @@ CANDIDATES = {
     "ensemble": {"label": "앙상블 (L1 + 랜덤포레스트 + XGBoost 평균)",
                  "members": [("logreg", {"C": 0.03, "penalty": "l1"}), ("random_forest", RF_BEST), ("xgboost", XGB_BEST)], "elo": False},
 }
-
-
-def elo_feature(df: pd.DataFrame, *, k: float = ELO_K, home: float = ELO_HOME, carry: float = ELO_CARRY,
-                base: float = ELO_BASE) -> pd.Series:
-    """경기 전 Elo 차이(홈 − 원정, 홈 이점 포함) — 그 경기 결과는 쓰지 않는다(경기를 날짜·game_id 순으로 지나며 경기 뒤에 갱신).
-    시즌이 바뀌면 모든 팀 점수를 평균 쪽으로 (1 − carry)만큼 되돌린다. 반환은 df와 같은 index."""
-    order = df.sort_values(["date", "game_id"]).index
-    rating: dict[str, float] = {}
-    season_of: dict[str, int] = {}
-    out = pd.Series(np.nan, index=df.index, dtype=float)
-    for i in order:
-        row = df.loc[i]
-        s = int(row["season"])
-        for t in (row["home_code"], row["away_code"]):
-            if t not in rating:
-                rating[t], season_of[t] = base, s
-            elif season_of[t] != s:
-                rating[t] = base + carry * (rating[t] - base)
-                season_of[t] = s
-        h, a = rating[row["home_code"]], rating[row["away_code"]]
-        diff = h + home - a
-        out.loc[i] = diff
-        e = 1 / (1 + 10 ** (-diff / 400))
-        delta = k * (float(row["y"]) - e)
-        rating[row["home_code"]] = h + delta
-        rating[row["away_code"]] = a - delta
-    return out
 
 
 def _fit_predict(cand: dict, train: pd.DataFrame, test: pd.DataFrame, cols: list[str]) -> np.ndarray:
@@ -114,8 +85,8 @@ def paired_t_p(a: np.ndarray, b: np.ndarray) -> float:
 
 def predictions(df: pd.DataFrame, *, seasons=SEASONS, candidates=CANDIDATES, log=print) -> pd.DataFrame:
     """시즌마다 그 앞 시즌들로 학습한 후보별 P(홈 승). 열: season, game_id, y, 규칙 3개(1=홈), 후보별 확률."""
-    df = df.copy()
-    df["elo_diff"] = elo_feature(df)
+    if "elo_diff" not in df.columns:
+        raise ValueError("features.parquet에 elo_diff 열이 없습니다 — python -m kbo_predict.features --out ...로 다시 만드세요")
     rows = []
     for s in seasons:
         train, test = df[df["season"] < s], df[df["season"] == s]

@@ -36,6 +36,12 @@ STARTER_FEATURES = [
     "starter_bb9_diff", "starter_ip_diff", "starter_last3_runs_diff",
 ]
 FEATURE_NAMES = TEAM_FEATURES + STARTER_FEATURES  # 26개, 이 순서 고정 (모델·사이트가 의존)
+# Elo 전력 점수 차이 (v0.3, 2026-11): 2015년부터 이어 온 경기 결과로 매기는 팀 전력. 여러 시즌 시험(backtest.py)에서
+# 피처 26개 + Elo가 가장 좋아 채택했다. 기본 26개 목록은 그대로 두고(팀 모델·기존 분석이 의존) 승패 모델만 MODEL_FEATURES를 쓴다.
+ELO_FEATURES = ["elo_diff"]
+MODEL_FEATURES = FEATURE_NAMES + ELO_FEATURES  # 27개 — 승패 모델(report·live)의 입력
+# Elo 설정 (미리 고정, 튜닝하지 않음 — backtest.py 참고): 한 경기 K=6, 홈 이점 +20점, 새 시즌은 평균(1500) 쪽으로 1/3 되돌림
+ELO_K, ELO_HOME, ELO_CARRY, ELO_BASE = 6.0, 20.0, 2 / 3, 1500.0
 
 
 def matchup_feature_names(kb: int, kp: int) -> list[str]:
@@ -72,6 +78,7 @@ FACTOR_LABELS = {
     "starter_bb9_diff": "선발 9이닝당 볼넷 차이",
     "starter_ip_diff": "선발 누적 이닝 차이",
     "starter_last3_runs_diff": "선발 최근 3경기 실점 차이",
+    "elo_diff": "Elo 전력 점수 차이",
     "bias": "기본 홈 어드밴티지",
 }
 
@@ -163,6 +170,50 @@ def _new_pitcher() -> dict:
     return {"cur": _new_pitcher_totals(), "prev": _new_pitcher_totals(), "last3": deque(maxlen=3)}
 
 
+class Elo:
+    """팀 Elo 전력 점수. 정규시즌 FINAL 경기만, 경기가 끝난 뒤 갱신한다(그 경기 예측에는 경기 전 점수).
+    처음 보는 팀은 1500. 새 시즌(new_season)에는 모든 팀을 1500 쪽으로 (1 − ELO_CARRY)만큼 되돌린다.
+    무승부는 결과 0.5로 갱신한다(학습 행은 만들지 않지만 상태에는 반영 — LeagueState.update와 같은 규칙)."""
+
+    def __init__(self) -> None:
+        self.rating: dict[str, float] = {}
+        self.season: int | None = None
+
+    def new_season(self, season: int) -> None:
+        if season == self.season:
+            return
+        if self.season is not None:
+            self.rating = {t: ELO_BASE + ELO_CARRY * (r - ELO_BASE) for t, r in self.rating.items()}
+        self.season = season
+
+    def diff(self, home: str, away: str) -> float:
+        """경기 전 Elo 차이 (홈 − 원정 + 홈 이점)."""
+        return self.rating.get(home, ELO_BASE) + ELO_HOME - self.rating.get(away, ELO_BASE)
+
+    def update(self, home: str, away: str, home_score: int, away_score: int) -> None:
+        d = self.diff(home, away)
+        expected = 1 / (1 + 10 ** (-d / 400))
+        result = 1.0 if home_score > away_score else 0.0 if home_score < away_score else 0.5
+        delta = ELO_K * (result - expected)
+        self.rating[home] = self.rating.get(home, ELO_BASE) + delta
+        self.rating[away] = self.rating.get(away, ELO_BASE) - delta
+
+
+def elo_through(last_season: int, first_season: int | None = None) -> Elo:
+    """first_season(기본: 저장된 가장 이른 시즌)부터 last_season까지 정규시즌 FINAL을 모두 반영한 Elo.
+    라이브·되감기 상태(rewind.state_before)는 직전 시즌부터만 쌓으므로, 그보다 앞선 시즌의 Elo를 이것으로 채운다.
+    학습(build_dataset)은 2015부터 시즌을 이어 쌓으므로 같은 점수가 된다 (tests/test_live_parity.py)."""
+    elo = Elo()
+    seasons = raw_store.available_seasons()
+    start = min(seasons) if first_season is None and seasons else (first_season or last_season + 1)
+    for s in [x for x in seasons if start <= x <= last_season]:
+        elo.new_season(s)
+        for g in regular_finals(raw_store.load_games(s), s):
+            if g.get("home_score") is not None and g.get("away_score") is not None:
+                elo.update(g["home_code"], g["away_code"], g["home_score"], g["away_score"])
+    return elo
+
+
 class LeagueState:
     """FINAL 경기만 누적하는 리그 상태: 팀별 기록, 맞대결, 투수별 기록(당해 + 직전 시즌).
     types: (season, player_id) -> {"batter": 유형} / {"pitcher": 유형} (cluster.types_map). 주면 game_features가
@@ -175,6 +226,7 @@ class LeagueState:
         self._t: dict[str, dict] = defaultdict(_new_team)
         self._h2h: dict[tuple[str, str], int] = defaultdict(int)  # (승팀, 패팀) -> 당해 시즌 승수
         self._p: dict[int, dict] = defaultdict(_new_pitcher)
+        self.elo = Elo()  # 이전 시즌들까지 이어 오는 전력 점수 (start_season이 시즌 사이 되돌림을 한다)
 
     def start_season(self, season: int) -> None:
         """현재 시즌 누적을 '직전 시즌'으로 넘기고 현재 시즌을 비운다.
@@ -186,6 +238,7 @@ class LeagueState:
         if season == self.season:
             return
         self.season = season
+        self.elo.new_season(season)
         old = self._t
         self._t = defaultdict(_new_team)
         for code, t in old.items():
@@ -220,6 +273,7 @@ class LeagueState:
         if hs != as_:
             winner, loser = (home, away) if hs > as_ else (away, home)
             self._h2h[(winner, loser)] += 1
+        self.elo.update(home, away, hs, as_)
 
     def _add_box_side(self, t: dict, box: dict, side: str, day: _date) -> None:
         """박스스코어 한쪽 팀(side)의 타격·투수 기록을 팀과 투수 개인 상태에 더한다."""
@@ -380,6 +434,7 @@ def game_features(game: dict, state: LeagueState, starters: dict | None = None) 
     f["away_venue_pct"] = _or_nan(a["away_pct"])
     f["h2h_home_pct"] = _or_nan(state.h2h_home_pct(home, away))
     f["season_progress"] = h["games"] / SEASON_GAMES
+    f["elo_diff"] = state.elo.diff(home, away)
 
     hs, as_ = _starter_line(state, starters, "home"), _starter_line(state, starters, "away")
     known = hs is not None and as_ is not None
@@ -387,7 +442,7 @@ def game_features(game: dict, state: LeagueState, starters: dict | None = None) 
     for key in ("era", "fip", "k9", "bb9", "ip", "last3_runs"):
         f[f"starter_{key}_diff"] = _diff(hs[key], as_[key]) if known else float("nan")
     out = {
-        **{n: f[n] for n in FEATURE_NAMES},
+        **{n: f[n] for n in MODEL_FEATURES},
         "home_line": h, "away_line": a, "home_starter": hs, "away_starter": as_,
     }
     if state.types is not None:
@@ -423,19 +478,19 @@ def build_training_frame(
             rows.append({
                 "game_id": g["game_id"], "date": g["date"], "season": season,
                 "home_code": g["home_code"], "away_code": g["away_code"],
-                **{k: f[k] for k in FEATURE_NAMES},
+                **{k: f[k] for k in MODEL_FEATURES},
                 **{k: f[k] for k in extra},
                 "y": int(g["home_score"] > g["away_score"]),
             })
         for g in day_games:
             state.update(g, boxscores.get(g["game_id"]))
-    return pd.DataFrame(rows, columns=["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES,
+    return pd.DataFrame(rows, columns=["game_id", "date", "season", "home_code", "away_code", *MODEL_FEATURES,
                                        *extra, "y"])
 
 
 # ---------- 시즌 연결 데이터셋 + 저장 ----------
 
-BASE_COLUMNS = ["game_id", "date", "season", "home_code", "away_code", *FEATURE_NAMES, "y"]  # features.parquet 열
+BASE_COLUMNS = ["game_id", "date", "season", "home_code", "away_code", *MODEL_FEATURES, "y"]  # features.parquet 열 (26개 + elo_diff)
 
 
 def build_dataset(seasons: list[int], *, types: dict | None = None, kb: int = 0, kp: int = 0) -> pd.DataFrame:
