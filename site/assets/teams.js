@@ -25,7 +25,8 @@ const SVGNS = "http://www.w3.org/2000/svg";
 // 정규시즌 승률이 같아 결정전(1위·5위)으로 순위를 정한 시즌: 시즌 → [이긴 팀, 진 팀].
 // 결정전은 정규시즌 경기가 아니라 teams.json에 없으므로 실제 결과를 여기 적어 둔다 (JSON 문법 — tests/test_site.py가 읽는다).
 export const TIEBREAK_GAMES = {"2021": ["KT", "SS"], "2024": ["KT", "SK"]};
-const GROUPS = [["batter", "타자", "팀 타석(PA) 중 그 유형 타자가 선 비중"], ["pitcher", "투수", "팀 이닝(IP) 중 그 유형 투수가 던진 비중"]];
+// 비중은 유형이 붙은 선수끼리 나눈 값 (기록이 적어 유형이 없는 선수는 뺐다 — site_data.py)
+const GROUPS = [["batter", "타자", "유형이 붙은 타자들의 타석 중 이 유형이 맡은 비율"], ["pitcher", "투수", "유형이 붙은 투수들의 이닝 중 이 유형이 던진 비율"]];
 
 const state = {
   teams: null, report: null, status: null, errors: {},
@@ -39,6 +40,11 @@ const state = {
 /** 반올림 전 승률 (동률 판정용). 승패가 갈린 경기가 없으면 -1. */
 const exactPct = (t) => (t.wins + t.losses > 0 ? t.wins / (t.wins + t.losses) : -1);
 const shortName = (code, season) => teamNameFor(code, season);
+/** 받침에 따라 이/가: "두산이", "롯데가". 영문 이름(KT·SSG·KIA·LG·NC)은 모두 모음 소리로 끝나 "가". */
+const iga = (w) => {
+  const c = String(w).charCodeAt(String(w).length - 1);
+  return `${w}${c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 ? "이" : "가"}`;
+};
 const fullName = (code, season) => teamNameFor(code, season, { full: true });
 
 /** 팀 이름 칸: 넓은 화면은 정식 이름, 좁은 화면은 짧은 이름 (CSS가 하나만 보여 준다). 앞에 팀 색 점. */
@@ -193,7 +199,7 @@ function rulerRow(r, dom) {
       svg("rect", { class: "ruler__model", x: -6, y: -6, width: 12, height: 12, transform: "rotate(45)" })));
   }
   if (has(r.win_pct)) kids.push(svg("circle", { class: "ruler__act", cx: pctPos(r.win_pct, dom), cy: mid, r: 7 }));
-  const say = [`실제 ${fmtRate3(r.win_pct)}`, `피타고리안 ${fmtRate3(r.pyth_pct)}`, has(r.model_expected) ? `모델 기대 ${fmtRate3(r.model_expected)}` : null].filter(Boolean).join(", ");
+  const say = [`실제 ${fmtRate3(r.win_pct)}`, `득실 기대 ${fmtRate3(r.pyth_pct)}`, has(r.model_expected) ? `모델 예상 ${fmtRate3(r.model_expected)}` : null].filter(Boolean).join(", ");
   // 툴팁: 행 전체를 덮는 투명 칸 (마우스·탭) — 값 세 개를 줄 단위로
   kids.push(svg("rect", { x: 0, y: 0, width: "100%", height: 40, fill: "transparent", "data-tip": `${shortName(r.code, state.season)}
 ${say.replaceAll(", ", "\n")}` }));
@@ -209,7 +215,6 @@ function renderStandings(rows) {
   const body = $("standings-body");
   const season = state.season;
   const hasModel = rows.some((r) => fin(r.model_expected));
-  const version = state.teams.model_version ?? "report-2026";
   const games = [...new Set(rows.map((r) => r.games))];
   $("standings-lead").textContent =
     `${season} 정규시즌 ${rows.length}팀, 팀당 ${games.length === 1 ? games[0] : `${Math.min(...games)}~${Math.max(...games)}`}경기. 승률 순서이고, 무승부는 승률 계산에서 뺍니다.`;
@@ -217,8 +222,8 @@ function renderStandings(rows) {
   const dom = rulerDomain(rows);
   const cols = [
     ["순위", "num rank-col"], ["팀", "team-col"], ["승-패-무", "num"], ["승률", "num win-col"],
-    [[el("span", { class: "tn-full" }, "피타고리안"), el("span", { class: "tn-short" }, "피타")], "num"],
-    ...(hasModel ? [[[el("span", { class: "tn-full" }, "모델 기대 승률"), el("span", { class: "tn-short" }, "모델"), el("span", { class: "th-note" }, `${version} 홀드아웃 예측 평균`)], "num model-col"]] : []),
+    [[el("span", { class: "tn-full", title: "득점과 실점만으로 계산한 '이만큼은 이겼어야 할' 승률(피타고리안 승률)입니다." }, "득실 기대 승률"), el("span", { class: "tn-short" }, "기대")], "num"],
+    ...(hasModel ? [[[el("span", { class: "tn-full" }, "모델 예상 승률"), el("span", { class: "tn-short" }, "모델"), el("span", { class: "th-note" }, `${season} 경기별 예측 확률 평균`)], "num model-col"]] : []),
     [[el("span", { class: "sr-only" }, "한눈에 비교 (눈금)"), rulerHead(dom)], "ruler-col"],
     ["경기", "num hide-sm"], ["홈 승률", "num hide-sm"], ["원정 승률", "num hide-sm"],
   ];
@@ -245,25 +250,25 @@ function renderStandings(rows) {
   const chip = (label, g) => g ? el("li", { class: "fact" }, [el("span", { class: "fact__label" }, label), teamChip(g.r.code, shortName(g.r.code, season), "tchip--sm"), el("span", { class: "fact__num num" }, pp(g.d))]) : null;
   const legend = el("ul", { class: "ruler__legend", "aria-label": "눈금 보는 법" }, [
     el("li", {}, [el("i", { class: "mk mk--act", "aria-hidden": "true" }), "실제 승률"]),
-    el("li", {}, [el("i", { class: "mk mk--pyth", "aria-hidden": "true" }), "피타고리안"]),
-    hasModel ? el("li", {}, [el("i", { class: "mk mk--model", "aria-hidden": "true" }), "모델 기대"]) : null,
-    el("li", {}, [el("i", { class: "mk mk--half", "aria-hidden": "true" }), ".500 기준선"]),
+    el("li", {}, [el("i", { class: "mk mk--pyth", "aria-hidden": "true" }), "득실 기대 승률"]),
+    hasModel ? el("li", {}, [el("i", { class: "mk mk--model", "aria-hidden": "true" }), "모델 예상"]) : null,
+    el("li", {}, [el("i", { class: "mk mk--half", "aria-hidden": "true" }), "5할(.500) 선"]),
   ]);
-  const facts = gaps.length > 1 ? el("ul", { class: "facts", "aria-label": "실제 승률과 피타고리안의 차이" }, [
-    chip("피타고리안보다 가장 잘 이김", up), chip("피타고리안보다 가장 못 이김", down),
+  const facts = gaps.length > 1 ? el("ul", { class: "facts", "aria-label": "실제 승률과 득실 기대 승률의 차이" }, [
+    chip("득실에 비해 가장 많이 이긴 팀", up), chip("득실에 비해 가장 덜 이긴 팀", down),
   ]) : null;
   const cut = el("tr", { class: "cutline", "aria-hidden": "true" },
-    el("td", { colspan: String(cols.length) }, el("span", { class: "cutline__label" }, `가을야구 · 위 ${PLAYOFF_SPOTS}팀`)));
+    el("td", { colspan: String(cols.length) }, el("span", { class: "cutline__label" }, `여기까지 가을야구 (${PLAYOFF_SPOTS}위까지)`)));
   const bodyRows = rows.flatMap((r) => (r.rank === PLAYOFF_SPOTS && rows.length > PLAYOFF_SPOTS ? [tr(r), cut] : [tr(r)]));
 
   const notes = [
-    el("li", {}, "피타고리안: 득점과 실점만으로 계산한 기대 승률입니다. 실제 승률이 이보다 높으면 접전을 많이 이긴 팀입니다."),
+    el("li", {}, "득실 기대 승률(피타고리안): 득점과 실점만으로 계산한 '이만큼은 이겼어야 할' 승률입니다. 실제 승률이 이보다 높으면 접전에서 많이 이긴 편입니다."),
     hasModel
-      ? el("li", {}, `모델 기대 승률: ${version} 모델이 ${season} 경기마다 낸 그 팀의 승리 확률을 평균한 값으로, 승률과 다릅니다. 이 모델은 ${season} 시즌을 학습에 쓰지 않았고(홀드아웃), 확률이 50% 가까이에 모이므로 실제 승률보다 폭이 좁습니다.`)
-      : el("li", {}, `모델 기대 승률은 학습에 쓰지 않은 ${REWIND_SEASON} 시즌에만 있습니다. ${season} 시즌은 모델이 학습하거나 검증할 때 본 시즌이라 열을 뺐습니다.`),
+      ? el("li", {}, `모델 예상 승률: 모델이 ${season} 경기마다 낸 이 팀의 승리 확률을 평균한 값입니다. 실제 승률과는 다른 숫자입니다. 모델은 ${season} 시즌을 배우지 않았습니다. 확률이 50% 근처에 모이는 편이라 팀 사이 차이가 실제 승률보다 작게 나옵니다.`)
+      : el("li", {}, `모델 예상 승률은 모델이 배우지 않은 ${REWIND_SEASON} 시즌에만 있습니다. ${season} 시즌은 모델이 이미 본 시즌이라 뺐습니다.`),
     ...tieNotes(rows, season).map((t) => el("li", {}, `†: ${t}`)),
     TIEBREAK_GAMES[String(season)] && rows.some((r) => r.tied)
-      ? el("li", {}, "결정전은 정규시즌 경기가 아니라 데이터에 없으므로, 실제 결과를 따로 적어 넣었습니다(승패·승률에는 들어가지 않음).")
+      ? el("li", {}, "결정전은 정규시즌 경기가 아니라 데이터에 없어서 실제 결과를 따로 적었습니다. 승패와 승률에는 넣지 않았습니다.")
       : null,
   ];
 
@@ -286,7 +291,7 @@ function renderRoster(rows) {
   const body = $("roster-body");
   body.setAttribute("aria-busy", "false");
   if (!state.report) {
-    showError(body, `${state.errors.report ?? ""} 유형 이름을 읽지 못해 로스터 구성을 그리지 않았습니다.`, async () => {
+    showError(body, `${state.errors.report ?? ""} 유형 이름을 불러오지 못해 팀 선수 구성을 그리지 못했습니다.`, async () => {
       await loadReport();
       if (state.teams) renderRoster(standings(state.season));
     });
@@ -307,7 +312,7 @@ function renderRoster(rows) {
       colors: Object.fromEntries(keys.map((k) => [k, typeColor(g, k)])),
       labels: Object.fromEntries(types.map((t) => [String(t.id), t.name])),
       minShare: LABEL_SHARE,
-      label: `${season} 팀별 ${title} 유형 구성 (${g === "batter" ? "타석" : "이닝"} 비중, 순위 순서)`,
+      label: `${season} 팀별 ${title} 유형 구성 (${g === "batter" ? "타석" : "이닝"} 비율, 순위 순서)`,
     });
     return block;
   });
@@ -344,14 +349,14 @@ function renderH2H(rows) {
       return el("td", {
         class: `h2h__cell num${dark ? " is-dark" : ""}`,
         style: { background: `rgba(10, 10, 10, ${a.toFixed(2)})` },
-        "data-tip": `${shortName(r.code, season)} → ${shortName(c, season)} 상대
-승률 ${fmtRate3(v)}`,
+        "data-tip": `${shortName(r.code, season)}의 ${shortName(c, season)}전 승률
+${fmtRate3(v)}`,
       }, fmtRate3(v));
     }),
   ]));
   const grid = el("div", { class: "inset h2h__frame" }, el("div", { class: "table-scroll h2h__scroll", tabindex: "0", role: "region", "aria-label": `${season} 상대 전적 표 (가로로 넘겨 보기)` },
     el("table", { class: "h2h" }, [
-      el("caption", { class: "sr-only" }, `${season} 상대 전적: 행 팀이 열 상대에게 거둔 승률 (무승부 제외)`),
+      el("caption", { class: "sr-only" }, `${season} 상대 전적: 왼쪽 팀이 위쪽 팀을 상대로 거둔 승률 (무승부 제외)`),
       el("thead", {}, head),
       el("tbody", {}, bodyRows),
     ])));
@@ -367,13 +372,13 @@ function renderH2H(rows) {
     top ? el("div", { class: "inset h2h__fact" }, [
       el("p", { class: "h2h__fact-label" }, "가장 한쪽으로 기운 맞대결"),
       el("p", { class: "h2h__fact-big num" }, fmtRate3(top.v)),
-      el("p", {}, `${shortName(top.a, season)}, ${shortName(top.b, season)} 상대 승률`),
+      el("p", {}, `${shortName(top.a, season)}의 ${shortName(top.b, season)}전 승률`),
     ]) : null,
     first ? el("div", { class: "inset h2h__fact" }, [
-      el("p", { class: "h2h__fact-label" }, `1위 ${shortName(first.code, season)}의 5할 아래 상대`),
+      el("p", { class: "h2h__fact-label" }, `1위 ${iga(shortName(first.code, season))} 5할을 못 넘긴 상대`),
       weak.length
         ? el("ul", { class: "h2h__weak" }, weak.map(([c, v]) => el("li", {}, [el("span", {}, shortName(c, season)), el("b", { class: "num" }, fmtRate3(v))])))
-        : el("p", {}, "없음. 모든 상대에게 5할 이상을 거뒀습니다."),
+        : el("p", {}, "없습니다. 모든 상대에게 5할 이상을 거뒀습니다."),
     ]) : null,
     el("div", { class: "h2h__scale", "aria-hidden": "true" }, [
       el("span", { class: "h2h__ramp" }),
@@ -403,7 +408,7 @@ function showRewindError() {
   const body = $("rewind-body");
   body.setAttribute("aria-busy", "false");
   const box = showError(body, rw.error ?? "", () => { rw.phase = "idle"; renderRewind(); });
-  box.querySelector("strong").textContent = "되감기 확률을 불러오지 못했습니다. ";
+  box.querySelector("strong").textContent = "날짜별 확률을 불러오지 못했습니다. ";
 }
 
 /** 표본 날짜: 매 STRIDE번째 날 + 마지막 날. */
@@ -418,7 +423,7 @@ async function loadRewind() {
   const body = $("rewind-body");
   rw.phase = "loading";
   body.setAttribute("aria-busy", "true");
-  const progress = el("p", { class: "rewind__progress", role: "status" }, "되감기 날짜를 불러오는 중…");
+  const progress = el("p", { class: "rewind__progress", role: "status" }, "날짜별 확률을 불러오는 중…");
   body.replaceChildren(el("div", { class: "inset" }, el("div", { class: "skeleton skel-line" })), progress);
   try {
     rw.index = await fetchJSON(`rewind/${REWIND_SEASON}/index.json`, { fresh: true });
@@ -431,7 +436,7 @@ async function loadRewind() {
     })));
     rw.days = dates.map((d, i) => ({ date: d, outlook: results[i].status === "fulfilled" ? results[i].value?.outlook ?? null : null }));
     rw.failed = rw.days.filter((d) => !d.outlook?.teams).length;
-    if (rw.days.length - rw.failed < 2) throw new Error(`날짜 파일 ${dates.length}개 중 ${rw.failed}개를 받지 못했습니다.`);
+    if (rw.days.length - rw.failed < 2) throw new Error(`날짜 ${dates.length}개 중 ${rw.failed}개를 불러오지 못했습니다.`);
     rw.phase = "done";
   } catch (err) {
     rw.phase = "error";
@@ -471,9 +476,9 @@ function drawRewind() {
   body.replaceChildren(
     el("div", { class: "inset rewind__frame" }, chart),
     el("details", { class: "more rewind__note" }, [el("summary", {}, "그래프 읽는 법"), el("p", {},
-      `${fmtDate(first?.outlook?.as_of ?? first?.date)}부터 ${fmtDate(lastDay?.outlook?.as_of ?? lastDay?.date)}까지 약 일주일 간격 ${days.length - rw.failed}개 날짜. ` +
-      "각 점은 그날 경기 전 성적으로 남은 경기를 1만 번 시뮬레이션해 5위 안에 든 비율입니다. 범례 숫자는 마지막 날짜의 확률이고, 선 색은 구단 대표색입니다(남색 계열인 KT는 점선, 롯데는 점점선)." +
-      (rw.failed ? ` 날짜 ${rw.failed}개는 받지 못해 선을 끊었습니다.` : ""))]),
+      `${fmtDate(first?.outlook?.as_of ?? first?.date)}부터 ${fmtDate(lastDay?.outlook?.as_of ?? lastDay?.date)}까지 약 일주일 간격으로 ${days.length - rw.failed}개 날짜를 골랐습니다. ` +
+      "각 점은 그날 경기 전 성적으로 남은 경기를 가상으로 1만 번 치러 5위 안에 든 비율입니다. 이름 옆 숫자는 마지막 날짜의 확률입니다. 선 색은 구단 대표색이고, 색이 비슷한 KT는 점선, 롯데는 점점선입니다." +
+      (rw.failed ? ` 날짜 ${rw.failed}개는 불러오지 못해 선을 끊었습니다.` : ""))]),
   );
   lineChart(chart, series, {
     yDomain: [0, 1], yFormat: (v) => fmtPct(v), height: 300, endLabels: true,

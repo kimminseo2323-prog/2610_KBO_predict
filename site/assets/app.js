@@ -128,6 +128,88 @@ export const FACTOR_LABELS = {
   "bias": "기본 홈 어드밴티지"
 };
 
+// 화면용 요인 이름과 한 줄 풀이 (키 → {label, help}). FACTOR_LABELS는 파이썬·얼린 데이터와 같아야 하므로 그대로 두고,
+// 화면에는 이 표의 쉬운 이름을 쓴다. 데이터(latest.json·되감기 JSON)에는 FACTOR_LABELS의 옛 이름이 들어 있으므로
+// factorKey()가 그 이름을 키로 바꾼다. 모든 "차이"는 홈팀 값 − 원정팀 값이다.
+export const FACTOR_DISPLAY = {
+  win_pct_diff: { label: "올 시즌 승률 차이", help: "두 팀의 올 시즌 승률(무승부 제외) 차이입니다." },
+  last10_diff: { label: "최근 10경기 승률 차이", help: "최근 10경기 승률 차이입니다. 시즌 초에는 10경기보다 적을 수 있습니다." },
+  run_diff_diff: { label: "경기당 득실차 비교", help: "경기당 (득점 − 실점)을 두 팀끼리 뺀 값입니다." },
+  pyth_diff: { label: "득실로 본 기대 승률 차이", help: "득점과 실점만으로 계산한 '이만큼은 이겼어야 할' 승률(피타고리안 승률)의 차이입니다." },
+  prev_season_diff: { label: "지난 시즌 승률 차이", help: "두 팀의 지난 시즌 승률 차이입니다." },
+  obp_diff: { label: "타선 출루율 차이", help: "올 시즌 팀 타선 출루율 차이입니다." },
+  hr_rate_diff: { label: "타석당 홈런 차이", help: "홈런 ÷ 타석입니다. 올 시즌 팀 타선 기준입니다." },
+  k_rate_diff: { label: "타석당 삼진 차이", help: "삼진 ÷ 타석입니다. 올 시즌 팀 타선 기준입니다. 많을수록 타선에 불리합니다." },
+  bb_rate_diff: { label: "타석당 볼넷 차이", help: "볼넷 ÷ 타석입니다. 올 시즌 팀 타선 기준입니다." },
+  era_diff: { label: "팀 평균자책점 차이", help: "선발과 불펜을 합친 올 시즌 팀 평균자책점 차이입니다. 낮을수록 좋습니다." },
+  fip_diff: { label: "팀 투구 내용 차이 (FIP)", help: "FIP는 홈런, 볼넷과 몸에 맞는 공, 삼진만으로 매긴 투수 점수입니다. 수비와 운을 덜 탑니다. 이 사이트는 리그 보정 상수를 더하지 않아 평균자책점과 숫자 크기가 다릅니다. 낮을수록 좋습니다." },
+  k9_diff: { label: "팀 투수 9이닝당 삼진 차이", help: "올 시즌 팀 투수진이 9이닝마다 잡은 삼진 수 차이입니다." },
+  bb9_diff: { label: "팀 투수 9이닝당 볼넷 차이", help: "올 시즌 팀 투수진이 9이닝마다 내준 볼넷 수 차이입니다." },
+  rest_diff: { label: "직전 경기 뒤 지난 날 수 차이", help: "마지막 경기부터 오늘까지 지난 날 수의 차이입니다. 어제 경기했으면 1일입니다." },
+  bullpen3_diff: { label: "최근 3일 불펜이 던진 공 수 차이", help: "최근 3일 동안 구원 투수들이 던진 공 수의 차이입니다. 많을수록 불펜이 지쳤을 수 있습니다." },
+  home_venue_pct: { label: "홈팀의 올 시즌 홈 승률", help: "홈팀이 올 시즌 자기 구장에서 거둔 승률입니다. 차이가 아니라 홈팀 값 하나입니다." },
+  away_venue_pct: { label: "원정팀의 올 시즌 원정 승률", help: "원정팀이 올 시즌 원정에서 거둔 승률입니다. 차이가 아니라 원정팀 값 하나입니다." },
+  h2h_home_pct: { label: "올 시즌 맞대결 홈팀 승률", help: "구장과 상관없이 올 시즌 두 팀 맞대결에서 홈팀이 거둔 승률입니다." },
+  season_progress: { label: "시즌 진행 정도", help: "홈팀이 치른 경기 수 ÷ 144입니다. 시즌 초반인지 후반인지 모델에 알려 줍니다." },
+  starter_known: { label: "두 선발 기록이 있는지", help: "두 선발 모두 작년이나 올해 1군 등판 기록이 있으면 선발 요인을 씁니다. 하나라도 없거나 선발 발표 전이면 쓰지 않습니다." },
+  starter_era_diff: { label: "선발 평균자책점 차이 (작년+올해)", help: "두 선발의 지난 시즌과 올 시즌을 합친 평균자책점 차이입니다. 경기 카드의 평균자책점은 올해 기록만이라 다를 수 있습니다." },
+  starter_fip_diff: { label: "선발 투구 내용 차이 (FIP)", help: "두 선발의 작년+올해 FIP 차이입니다. FIP는 홈런, 볼넷과 몸에 맞는 공, 삼진만으로 매긴 투수 점수입니다. 리그 보정 상수를 더하지 않아 평균자책점과 숫자 크기가 다릅니다." },
+  starter_k9_diff: { label: "선발 9이닝당 삼진 차이", help: "두 선발이 작년+올해 9이닝마다 잡은 삼진 수 차이입니다." },
+  starter_bb9_diff: { label: "선발 9이닝당 볼넷 차이", help: "두 선발이 작년+올해 9이닝마다 내준 볼넷 수 차이입니다." },
+  starter_ip_diff: { label: "선발이 작년부터 던진 이닝 차이", help: "두 선발이 지난 시즌과 올 시즌에 던진 이닝 합계(구원 등판 포함)의 차이입니다." },
+  starter_last3_runs_diff: { label: "선발 최근 3번 등판 평균 실점 차이", help: "각 선발이 최근 3번 선발 등판에서 내준 실점(비자책 포함)의 평균 차이입니다. 작년 등판이 섞일 수 있습니다." },
+  elo_diff: { label: "Elo 전력 점수 차이", help: "경기 결과로 매 경기 고치는 팀 전력 점수(Elo)의 차이입니다. 홈 이점 20점을 넣었습니다. 2015년부터 이어서 계산합니다." },
+  bias: { label: "홈 경기 기본 이점", help: "다른 요인이 모두 평균인 경기에서도 모델이 홈팀에 주는 기본 몫입니다." },
+};
+
+const FACTOR_KEY_OF_LABEL = new Map(Object.entries(FACTOR_LABELS).map(([k, v]) => [v, k]));
+/** 요인 키("pyth_diff") 또는 데이터 속 옛 한글 이름("피타고리안 기대 승률 차이") → 키. 모르면 null. */
+export function factorKey(nameOrKey) {
+  if (nameOrKey in FACTOR_DISPLAY) return nameOrKey;
+  return FACTOR_KEY_OF_LABEL.get(nameOrKey) ?? null;
+}
+/** 화면용 요인 이름. 모르는 이름은 그대로. */
+export function factorLabel(nameOrKey) {
+  const k = factorKey(nameOrKey);
+  return k ? FACTOR_DISPLAY[k].label : String(nameOrKey ?? "");
+}
+/** 요인 한 줄 풀이(툴팁용). 모르면 "". */
+export function factorHelp(nameOrKey) {
+  const k = factorKey(nameOrKey);
+  return k ? FACTOR_DISPLAY[k].help : "";
+}
+
+// 선수 유형 설명(화면용). players.json의 blurb는 얼린 파일이라 여기서 쉬운 말로 덮어쓴다.
+// [유형 이름, 설명] — 유형 이름이 데이터와 같을 때만 쓴다(유형을 다시 나눠 id 뜻이 바뀌면 데이터의 blurb로 돌아간다).
+const TYPE_BLURBS = {
+  batter: {
+    0: ["파워형", "타석당 홈런 4.9%, 순수 장타력(ISO) .229로 장타가 가장 많고 볼넷(11%)도 잘 고르는 중심 타자입니다."],
+    1: ["장타 지향형", "삼진이 22%로 가장 많고 볼넷은 적지만 장타를 노리는(순수 장타력 .138), 거칠지만 힘 있는 타자입니다."],
+    2: ["컨택형", "삼진이 13.5%로 가장 적고 홈런은 드뭅니다. 공을 잘 맞히는 테이블세터나 교타자입니다."],
+    3: ["주루형", "1루에 나갈 때마다 도루를 .186개씩 하는, 가장 발 빠른 유형입니다. 장타는 적습니다."],
+  },
+  pitcher: {
+    0: ["선발형", "등판의 96%가 선발입니다. 볼넷+사구 비율 8.6%로 제구가 안정적이고 긴 이닝을 맡습니다."],
+    1: ["스윙맨형", "선발 비율 29%로 선발과 긴 구원을 오갑니다. 삼진은 적고 피홈런(3.6%)이 많은 편입니다."],
+    2: ["제구 불안 불펜형", "거의 구원으로 나옵니다(선발 8.5%). 볼넷+사구 비율이 12.9%로 가장 높지만, 맞은 공이 안타가 되는 비율은 .265로 가장 낮습니다."],
+    3: ["삼진 불펜형", "거의 구원만 나오고(선발 4.3%) 삼진 비율이 20%로 가장 높습니다. 짧은 이닝을 삼진으로 막는 필승조형입니다."],
+  },
+};
+/** 유형 설명: 이름이 맞으면 화면용 문장, 아니면 데이터의 blurb. t = {id, name, blurb}. */
+export function typeBlurb(group, t) {
+  if (!t) return null;
+  const [name, text] = TYPE_BLURBS[group]?.[t.id] ?? [];
+  return name && name === t.name ? text : t.blurb ?? null;
+}
+
+/** 유형 닮은 정도(소속 확신도) 설명. 얼린 model_report.json의 membership_note 대신 쓴다(모르는 방법이면 원문). */
+export function membershipText(method, raw) {
+  if (method === "kmeans_softmax") {
+    return "유형 닮은 정도(선수 카드의 %)는 각 유형 대표점까지의 거리로 계산한 상대 점수입니다. 실제로 그 유형일 확률로 맞춘 값은 아닙니다.";
+  }
+  return raw ?? null;
+}
+
 // 선수 유형 색 (유형 id는 config/cluster_labels.yaml). 타자: 파워형 핑크 · 장타 지향형 피치 · 컨택형 틸 · 주루형 라벤더.
 // 투수: 선발형 틸 · 스윙맨형 오커 · 제구 불안 불펜형 핑크 · 삼진 불펜형 라벤더. 홈·선수·팀 페이지가 모두 이것을 쓴다.
 export const TYPE_COLORS = {
@@ -167,7 +249,7 @@ const TYPE_TABLE_COLS = {
     ["선발 비율", (s) => (fin(s.games) && s.games > 0 ? s.starts / s.games : null), (v) => fmtPct(v, 0), "max"],
     ["이닝", (s) => s.ip, (v) => v.toFixed(0), "max", "sm-hide"],
     ["삼진 비율", (s) => s.k_pct, (v) => fmtPct(v, 1), "max"],
-    ["볼넷 비율", (s) => s.bb_pct, (v) => fmtPct(v, 1), "max"],
+    ["볼넷+사구 비율", (s) => s.bb_pct, (v) => fmtPct(v, 1), "max"],
   ],
 };
 export function typeSummaryTable(players, group, types, { nameOf = (p) => p.name_ko ?? p.name, caption } = {}) {
@@ -188,16 +270,19 @@ export function typeSummaryTable(players, group, types, { nameOf = (p) => p.name
   const body = rows.map(({ t, n, vals, top }) => el("tr", {}, [
     el("th", { scope: "row" }, [
       el("span", { class: "type-table__name" }, [el("span", { class: "dot", style: { background: colorVar(typeColor(group, t.id)) }, "aria-hidden": "true" }), t.name]),
-      t.blurb ? el("span", { class: "type-table__blurb" }, t.blurb) : null,
+      typeBlurb(group, t) ? el("span", { class: "type-table__blurb" }, typeBlurb(group, t)) : null,
     ]),
     el("td", { class: "num" }, `${n}명`),
     ...vals.map((v, j) => el("td", { class: `num${fin(v) && v === best[j] ? " is-best" : ""}${cols[j][4] ? ` ${cols[j][4]}` : ""}` }, fin(v) ? cols[j][2](v) : "—")),
     el("td", { class: "type-table__top" }, top.join(", ") || "—"),
   ]));
-  return el("div", { class: "table-scroll type-table-wrap" }, el("table", { class: "table type-table" }, [
-    el("caption", { class: "sr-only" }, caption ?? "유형별 선수 수와 평균 기록"),
-    el("thead", {}, head), el("tbody", {}, body),
-  ]));
+  return el("div", { class: "type-table-wrap" }, [
+    el("div", { class: "table-scroll" }, el("table", { class: "table type-table" }, [
+      el("caption", { class: "sr-only" }, caption ?? "유형별 선수 수와 평균 기록"),
+      el("thead", {}, head), el("tbody", {}, body),
+    ])),
+    el("p", { class: "type-table__note" }, "숫자 칸은 그 유형 선수들의 평균입니다. 열마다 가장 두드러진 값을 굵게 칠했습니다."),
+  ]);
 }
 
 export function typeColor(group, typeId) {
@@ -238,9 +323,13 @@ async function fetchOK(name, { base = DATA_BASE, fresh = false } = {}) {
   try {
     res = await fetch(url, fresh ? { cache: "no-store" } : {});
   } catch (err) {
-    throw new Error(`${name}을(를) 받지 못했습니다 (네트워크 오류).`, { cause: err });
+    console.warn(`[KBO] ${name}: 네트워크 오류`, err); // 파일 이름은 개발자용으로 콘솔에만 남긴다
+    throw new Error("인터넷 연결을 확인하고 다시 불러오기를 눌러 주세요.", { cause: err });
   }
-  if (!res.ok) throw new Error(`${name}을(를) 받지 못했습니다 (HTTP ${res.status}).`);
+  if (!res.ok) {
+    console.warn(`[KBO] ${name}: HTTP ${res.status}`);
+    throw new Error(`데이터를 받지 못했습니다 (HTTP ${res.status}). 잠시 뒤 다시 불러오기를 눌러 주세요.`);
+  }
   return res;
 }
 
@@ -253,7 +342,8 @@ export async function fetchJSON(name, opts = {}) {
   try {
     return await res.json();
   } catch (err) {
-    throw new Error(`${name}의 형식이 올바르지 않습니다.`, { cause: err });
+    console.warn(`[KBO] ${name}: JSON 형식 오류`, err);
+    throw new Error("데이터 파일이 손상돼 읽지 못했습니다.", { cause: err });
   }
 }
 
@@ -503,29 +593,30 @@ function runId(url) {
 
 /**
  * 푸터 증거 바(#evidence)를 status.json으로 채운다:
- * "마지막 갱신 {KST} · Actions 실행 #{run} · 커밋 {sha7} · 모델 {version}" — 실행·커밋·모델은 링크.
- * run_url이 null이면 "로컬 실행"(링크 없음). status가 없으면(읽기 실패) 그 사실을 적는다. 채운 요소를 돌려준다.
+ * "마지막 갱신 {KST}. 자동 실행 기록 #{run}, 코드 버전 {sha7}, 예측 모델 {version}" — 실행·커밋·모델은 링크.
+ * run_url이 null이면 "내 컴퓨터에서 실행"(링크 없음). status가 없으면(읽기 실패) 그 사실을 적는다. 채운 요소를 돌려준다.
  */
 export function renderFooter(status, mount = document.getElementById("evidence")) {
   if (!mount) return null;
   if (!status) {
-    mount.replaceChildren("갱신 정보(status.json)를 불러오지 못했습니다. 데이터는 아래 저장소에서 직접 확인할 수 있습니다.");
+    mount.replaceChildren("갱신 정보를 불러오지 못했습니다. 데이터는 GitHub 저장소에서 직접 볼 수 있습니다.");
     return mount;
   }
-  const sep = () => " · ";
+  const sep = () => ", ";
   const link = (href, text, label) => el("a", { href, "aria-label": label }, text);
   const id = runId(status.run_url);
   const sha = status.commit_sha ?? null;
-  const run = !status.run_url ? ["로컬 실행"]
-    : id ? ["Actions 실행 ", link(status.run_url, `#${id}`, `GitHub Actions 실행 ${id} 기록 열기`)]
-    : [link(status.run_url, "Actions 실행 기록", "GitHub Actions 실행 기록 열기")];
+  // 자동 실행 기록 = GitHub Actions가 매일 데이터를 모으고 예측을 올린 실행
+  const run = !status.run_url ? ["내 컴퓨터에서 실행"]
+    : id ? [el("span", { title: "GitHub Actions가 매일 데이터를 모으고 예측을 올린 실행입니다" }, "자동 실행 기록 "), link(status.run_url, `#${id}`, `GitHub Actions 실행 ${id} 기록 열기`)]
+    : [link(status.run_url, "자동 실행 기록", "GitHub Actions 실행 기록 열기")];
   const commit = sha
-    ? ["커밋 ", link(`${REPO_URL}/commit/${sha}`, sha.slice(0, 7), `커밋 ${sha.slice(0, 7)} 보기`)]
-    : ["커밋 —"];
+    ? ["코드 버전 ", link(`${REPO_URL}/commit/${sha}`, sha.slice(0, 7), `커밋 ${sha.slice(0, 7)} 보기`)]
+    : ["코드 버전 —"];
   const model = status.model_version
-    ? ["모델 ", link(`${REPO_URL}#모델`, status.model_version, `모델 ${status.model_version} 설명 (README) 열기`)]
-    : ["모델 —"];
-  mount.replaceChildren(`마지막 갱신 ${fmtKST(status.generated_at)}`, sep(), ...run, sep(), ...commit, sep(), ...model);
+    ? ["예측 모델 ", link(`${REPO_URL}#모델`, status.model_version, `모델 ${status.model_version} 설명 (README) 열기`)]
+    : ["예측 모델 —"];
+  mount.replaceChildren(`마지막 갱신 ${fmtKST(status.generated_at)}. `, ...run, sep(), ...commit, sep(), ...model);
   return mount;
 }
 

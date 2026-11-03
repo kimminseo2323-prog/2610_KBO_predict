@@ -147,10 +147,13 @@ function svgRoot(w, h, label, role = "img") {
 /**
  * 가로 막대. rows = [{label, value}], 음수가 있으면 0을 가운데 둔 양방향 막대(요인 pp 등). 값이 없는 행은 막대 없이 "—".
  * options: valueKey="value", labelKey="label", color="teal"(또는 row → 토큰 함수), negativeColor="pink",
- *          format(v)=v, label(aria), max(눈금 최대 |값|). 좁은 화면(<480px)에서는 이름을 막대 위에 쓴다.
+ *          format(v)=v, label(aria), max(눈금 최대 |값|), helpKey="help"(행에 이 키가 있으면 툴팁 셋째 줄에 풀이를 덧붙인다).
+ *          좁은 화면(<480px)에서는 이름을 막대 위에 쓴다. 넓은 화면에서 이름이 길면 이름 칸을 넓히고(너비의 42%까지), 그래도 넘치면 글자를 줄인다.
  */
+/** 13px 글자 폭 어림: 한글·전각은 13px, 그 밖(숫자·영문·기호·공백)은 7px. */
+const textW = (s, px = 13) => [...String(s ?? "")].reduce((w, ch) => w + (ch.charCodeAt(0) > 0x2000 ? px : px * 0.54), 0);
 export function barChart(el, rows, { valueKey = "value", labelKey = "label", color = "teal", negativeColor = "pink",
-  format = (v) => String(v), label = "막대 그래프", max, sides } = {}) {
+  format = (v) => String(v), label = "막대 그래프", max, sides, helpKey = "help" } = {}) {
   // sides = { neg: {text, ink}, pos: {text, ink} } (양방향 막대일 때만): 0선 양쪽 위에 어느 쪽이 어느 팀인지 머리글,
   // 막대 끝 값도 그쪽 글자색(ink)으로 칠한다.
   const vals = (rows ?? []).map((r) => (fin(r[valueKey]) ? Number(r[valueKey]) : null));
@@ -163,7 +166,9 @@ export function barChart(el, rows, { valueKey = "value", labelKey = "label", col
   return mount(el, (W) => {
     const narrow = W < 480;
     const rowH = narrow ? 46 : 34;
-    const labelW = narrow ? 0 : Math.min(220, W * 0.38);
+    const need = Math.max(0, ...rows.map((r) => textW(r[labelKey]))) + 16;
+    const base = Math.min(220, W * 0.38);
+    const labelW = narrow ? 0 : Math.min(Math.max(base, need), Math.max(base, W * 0.42), 280);
     const valW = 56;
     const x0 = labelW + (diverging ? valW : 0);
     const x1 = W - valW;
@@ -183,10 +188,13 @@ export function barChart(el, rows, { valueKey = "value", labelKey = "label", col
       const barH = narrow ? 18 : 22;
       const len = v === null ? 0 : Math.min(Math.abs(v), m) * scale;
       const x = v !== null && v < 0 ? zero - len : zero;
+      const room = narrow ? W : labelW - 14;
+      const tw = textW(r[labelKey]);
       svg.append(svgEl("text", { class: "c-label", x: narrow ? 0 : labelW - 12, y: narrow ? top - 6 : top + barH / 2 + 4,
-        "text-anchor": narrow ? "start" : "end" }, String(r[labelKey] ?? "")));
+        "text-anchor": narrow ? "start" : "end", style: tw > room ? `font-size:${Math.max(10, Math.floor((13 * room) / tw))}px` : null }, String(r[labelKey] ?? "")));
       const tip = `${r[labelKey] ?? ""}
-${fmt(v)}`;
+${fmt(v)}${r[helpKey] ? `
+${r[helpKey]}` : ""}`;
       svg.append(svgEl("rect", { class: "c-hit", x: 0, y: head + i * rowH, width: W, height: rowH, fill: "transparent", "data-tip": tip }));
       if (v !== null) svg.append(svgEl("rect", { class: `c-bar${v < 0 ? " c-bar--neg" : ""}`, x, y: top, width: Math.max(len, 1), height: barH, style: `fill:${cv(fill(r, v))}; --i:${i}`, "data-tip": tip }));
       const ink = head && v !== null && v !== 0 ? (v < 0 ? sides.neg.ink : sides.pos.ink) : null;
@@ -410,7 +418,7 @@ export function stackedBar(el, rows, { keys, colors, labels = {}, labelKey = "la
         const tok = colors[k];
         const text = format(val(r, k));
         svg.append(svgEl("rect", { class: "c-bar", x: x.toFixed(1), y: top, width: Math.max(w - 1.5, 0.5).toFixed(1), height: barH, style: `fill:${cv(tok)}; --i:${i}`,
-          "data-tip": `${r[labelKey] ?? ""} · ${labels[k] ?? k}
+          "data-tip": `${r[labelKey] ?? ""}, ${labels[k] ?? k}
 ${text}` }));
         const fits = fin(minShare) ? val(r, k) / total >= minShare && w >= String(text).length * 8.5 + 6 : w > 38;
         if (fits) svg.append(svgEl("text", { class: "c-value", x: (x + w / 2).toFixed(1), y: top + barH / 2 + 4, "text-anchor": "middle", style: `fill:${textOn(tok)}` }, text));
@@ -425,15 +433,15 @@ ${text}` }));
 
 /**
  * 신뢰도 곡선(캘리브레이션). bins = model_report.json calibration_bins [{lo, hi, n, pred_mean, actual_rate}].
- * 막대 = 그 구간에 든 경기의 실제 홈 승률, 점선 = 완벽한 보정(예측 = 실제). 경기가 없는 구간(n = 0)은 비운다.
+ * 막대 = 그 구간에 든 경기의 실제 홈팀 승리 비율, 점선 = 완벽한 보정(예측 = 실제). 경기가 없는 구간(n = 0)은 비운다.
  * options: color="ink", label.
  */
-export function calibrationChart(el, bins, { color = "ink", label = "신뢰도 곡선: 예측 홈 승률 구간별 실제 홈 승률" } = {}) {
+export function calibrationChart(el, bins, { color = "ink", label = "신뢰도 곡선: 모델이 예측한 홈팀 승리 확률 구간별 실제 홈팀 승리 비율" } = {}) {
   const all = (bins ?? []).filter((b) => b && fin(b.lo) && fin(b.hi));
   const has = (b) => fin(b.n) && b.n > 0 && fin(b.actual_rate);
   if (!all.some(has)) return empty(el);
   return mount(el, (W) => {
-    const L = 44, R = 8, T = 18, B = 40;
+    const L = 44, R = 8, T = 26, B = 40;
     const H = Math.round(Math.min(380, Math.max(240, W * 0.62)));
     const X = (v) => L + v * (W - L - R);
     const Y = (v) => T + (1 - v) * (H - T - B);
@@ -447,8 +455,8 @@ export function calibrationChart(el, bins, { color = "ink", label = "신뢰도 �
     all.filter(has).forEach((b) => {
       const x = X(b.lo) + 2, w = X(b.hi) - X(b.lo) - 4;
       svg.append(svgEl("rect", { class: "c-col", x, y: Y(b.actual_rate), width: Math.max(w, 1), height: Y(0) - Y(b.actual_rate), style: `fill:${cv(color)}; --i:${Math.round(b.lo * 10)}`, "fill-opacity": 0.9,
-        "data-tip": `예측 ${pct(b.lo)}–${pct(b.hi)} 구간 · ${b.n}경기
-실제 홈 승률 ${pct(b.actual_rate)} · 예측 평균 ${pct(b.pred_mean)}` }));
+        "data-tip": `예측 ${pct(b.lo)}–${pct(b.hi)} 구간, ${b.n}경기
+실제 홈팀 승리 ${pct(b.actual_rate)}, 예측 평균 ${pct(b.pred_mean)}` }));
       if (w > 22) {
         svg.append(svgEl("text", { class: "c-axis", x: x + w / 2, y: Y(b.actual_rate) - 5, "text-anchor": "middle" }, String(b.n)));
         counts += 1;
@@ -456,9 +464,10 @@ export function calibrationChart(el, bins, { color = "ink", label = "신뢰도 �
     });
     svg.append(svgEl("line", { class: "c-ref", x1: X(0), y1: Y(0), x2: X(1), y2: Y(1) }));
     svg.append(svgEl("text", { class: "c-axis", x: (L + W - R) / 2, y: H - 4, "text-anchor": "middle" },
-      counts ? "예측 홈 승률 (막대 위 숫자 = 경기 수)" : "예측 홈 승률"));
-    const table = srTable(label, ["예측 구간", "경기 수", "예측 평균", "실제 홈 승률"],
-      all.map((b) => [`${pct(b.lo)}–${pct(b.hi)}`, String(b.n ?? "—"), pct(b.pred_mean), has(b) ? pct(b.actual_rate) : "표본 없음"]));
+      counts ? "모델이 예측한 홈팀 승리 확률 (막대 위 숫자 = 경기 수)" : "모델이 예측한 홈팀 승리 확률"));
+    svg.append(svgEl("text", { class: "c-axis", x: 4, y: 11, "text-anchor": "start" }, "↑ 실제 홈팀 승리 비율"));
+    const table = srTable(label, ["예측 구간", "경기 수", "예측 평균", "실제 홈팀 승리 비율"],
+      all.map((b) => [`${pct(b.lo)}–${pct(b.hi)}`, String(b.n ?? "—"), pct(b.pred_mean), has(b) ? pct(b.actual_rate) : "경기 없음"]));
     return [svg, table];
   });
 }

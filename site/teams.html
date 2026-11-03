@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>팀 · KBO Predict</title>
-<meta name="description" content="KBO 2015~2026 시즌별 순위표, 피타고리안 기대 승률, report-2026 모델 기대 승률, 로스터 유형 구성, 상대 전적, 2026 가을야구 확률 되감기.">
+<meta name="description" content="KBO 2015~2026 시즌별 순위표, 득실로 본 기대 승률, 모델 예상 승률, 팀 선수 유형 구성, 상대 전적, 2026 가을야구 확률 변화.">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
@@ -33,7 +33,7 @@
   <div class="page-head teams-head">
     <div>
       <h1 class="display-md">팀</h1>
-      <p class="lead" id="teams-lead">시즌별 순위, 로스터 유형, 상대 전적, 가을야구 확률</p>
+      <p class="lead" id="teams-lead">시즌별 순위와 팀 선수 구성, 상대 전적, 가을야구 확률을 봅니다.</p>
     </div>
     <div class="season-ctl">
       <label class="season-ctl__label" for="season-select">시즌</label>
@@ -54,8 +54,8 @@
 
   <div class="teams-stack">
     <section class="card" id="roster-types" aria-labelledby="roster-title">
-      <h2 class="card__title" id="roster-title">로스터 유형 구성</h2>
-      <p class="card__lead" id="roster-lead">팀 타석·이닝을 어떤 유형이 맡았나</p>
+      <h2 class="card__title" id="roster-title">팀 선수 유형 구성</h2>
+      <p class="card__lead" id="roster-lead">팀 타석과 이닝을 어떤 유형의 선수가 맡았는지 봅니다. 기록이 적어 유형이 없는 선수는 빼고, 남은 선수끼리 합이 100%가 되게 나눴습니다.</p>
       <div id="roster-body" aria-busy="true">
         <div class="roster">
           <div class="inset"><div class="skeleton skel-bars"></div></div>
@@ -66,13 +66,13 @@
 
     <section class="card" id="head-to-head" aria-labelledby="h2h-title">
       <h2 class="card__title" id="h2h-title">상대 전적</h2>
-      <p class="card__lead" id="h2h-lead">가로줄 팀이 세로줄 상대에게 거둔 승률, 진할수록 많이 이김</p>
+      <p class="card__lead" id="h2h-lead">왼쪽에 적힌 팀이 위쪽 팀을 상대로 거둔 승률입니다. 칸이 진할수록 많이 이겼습니다.</p>
       <div id="h2h-body" aria-busy="true"><div class="inset"><div class="skeleton skel-grid"></div></div></div>
     </section>
 
     <section class="card" id="playoff-rewind" aria-labelledby="rewind-title">
-      <h2 class="card__title" id="rewind-title">가을야구 확률 되감기</h2>
-      <p class="card__lead" id="rewind-lead">2026 시즌 동안 5위 안에 들 확률</p>
+      <h2 class="card__title" id="rewind-title">2026 가을야구 확률 변화</h2>
+      <p class="card__lead" id="rewind-lead">2026 시즌 동안 날짜별로 계산한 5위 안에 들 확률입니다.</p>
       <div id="rewind-body" aria-busy="true"><div class="inset"><div class="skeleton skel-line"></div></div></div>
     </section>
   </div>

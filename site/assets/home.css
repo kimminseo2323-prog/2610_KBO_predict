@@ -215,6 +215,7 @@
 .starter__team { font-size: 12px; font-weight: 700; color: var(--muted); }
 .starter__stats { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 8px; }
 .starter__stat { display: grid; }
+.starter__cap { flex-basis: 100%; margin: 0; font-size: 11px; font-weight: 800; color: var(--muted); }
 .starter__stat small { font-size: 11px; font-weight: 800; color: var(--muted); }
 .starter__stat b { font-family: var(--font-num); font-size: 22px; font-weight: 700; line-height: 1.1; }
 .starter__note { margin-top: 4px; font-size: 13px; color: var(--muted); }

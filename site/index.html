@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>오늘의 경기 · KBO Predict</title>
-<meta name="description" content="KBO 경기 승패 예측: 오늘 경기의 홈팀 승리 확률, 확률을 가른 요인, 선발 유형, 2026 시즌 되감기.">
+<meta name="description" content="KBO 경기 승패 예측: 오늘 경기의 홈팀 승리 확률, 확률을 가른 요인, 선발 유형, 2026 시즌 지난 경기 다시 보기.">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
@@ -38,14 +38,14 @@
     <div class="datebar" id="date-bar">
       <div class="datebar__live" id="live-chip">
         <span class="pill pill--ink" id="live-pill"><span class="dot live-dot" aria-hidden="true"></span>라이브</span>
-        <button class="btn btn--secondary" type="button" id="rewind-toggle" aria-controls="rewind-bar" aria-expanded="false">2026 시즌 되감기</button>
+        <button class="btn btn--secondary" type="button" id="rewind-toggle" aria-controls="rewind-bar" aria-expanded="false">지난 경기일 다시 보기 (2026)</button>
       </div>
       <div class="rewind" id="rewind-bar" hidden>
         <div class="rewind__row">
           <button class="btn btn--secondary rewind__step" type="button" id="rewind-prev" aria-label="이전 경기일">‹</button>
-          <label class="rewind__label" for="rewind-range"><span class="sr-only">되감기 날짜 (2026 시즌 경기일)</span><output id="rewind-date" for="rewind-range">—</output></label>
+          <label class="rewind__label" for="rewind-range"><span class="sr-only">다시 볼 날짜 (2026 시즌 경기일)</span><output id="rewind-date" for="rewind-range">—</output></label>
           <button class="btn btn--secondary rewind__step" type="button" id="rewind-next" aria-label="다음 경기일">›</button>
-          <button class="btn" type="button" id="to-live">라이브로</button>
+          <button class="btn" type="button" id="to-live">오늘로 돌아가기</button>
         </div>
         <input class="rewind__range" type="range" id="rewind-range" min="0" max="0" step="1" value="0" aria-describedby="rewind-hint">
         <p class="rewind__hint" id="rewind-hint">2026 시즌 경기일만 이동합니다. 화살표 키로도 움직일 수 있습니다.</p>
@@ -70,7 +70,7 @@
     <div class="bento__col bento__col--main">
       <section class="card b-factors" id="factors" aria-labelledby="factors-title">
         <h2 class="card__title" id="factors-title">승률을 가른 요인</h2>
-        <p class="card__lead" id="factors-lead">홈팀 승률을 올린 요인(+)과 내린 요인(−), 단위 %p</p>
+        <p class="card__lead" id="factors-lead">홈팀 승리 확률을 올린 요인(+)과 내린 요인(−)입니다. 단위는 %p(퍼센트포인트)입니다.</p>
         <div class="factor-tabs" id="factor-tabs" role="tablist" aria-label="경기 고르기" hidden></div>
         <div class="inset" id="factors-body"><div class="skeleton" style="height:160px"></div></div>
         <p class="card__foot" id="factors-foot"></p>
@@ -78,13 +78,13 @@
 
       <section class="card b-starters" id="starters" aria-labelledby="starters-title">
         <h2 class="card__title" id="starters-title">오늘 선발, 어떤 유형?</h2>
-        <p class="card__lead" id="starters-lead">선수 유형 모델이 직전 시즌 기록으로 붙인 유형</p>
+        <p class="card__lead" id="starters-lead">작년 기록으로 붙인 투수 유형입니다.</p>
         <div id="starters-body"><div class="skeleton" style="height:180px;margin-top:16px"></div></div>
       </section>
 
       <section class="card b-typemap" id="type-map" aria-labelledby="typemap-title">
         <h2 class="card__title" id="typemap-title">선수 유형 지도</h2>
-        <p class="card__lead" id="typemap-lead">비슷한 기록의 타자끼리 가깝게 놓은 지도</p>
+        <p class="card__lead" id="typemap-lead">비슷한 기록의 타자끼리 가깝게 놓은 지도입니다.</p>
         <div id="typemap-body"><div class="inset"><div class="skeleton" style="height:200px"></div></div></div>
         <p class="typemap__link"><a class="btn btn--secondary" href="players.html">선수 페이지에서 보기</a></p>
       </section>

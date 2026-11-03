@@ -261,6 +261,7 @@ details.more li + li { margin-top: 4px; }
 
 /* 유형별 요약 표 (app.js typeSummaryTable): 열마다 가장 두드러진 유형은 굵게 + 옅은 회색 칸 */
 .type-table-wrap { margin-top: var(--sp-16); }
+.type-table__note { margin-top: 6px; font-size: 12px; color: var(--muted); }
 .type-table th[scope="row"] { min-width: 12em; max-width: 22em; white-space: normal; word-break: keep-all; }
 .type-table__name { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: var(--ink); }
 .type-table__name .dot { width: 10px; height: 10px; flex: none; }
