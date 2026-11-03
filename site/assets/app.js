@@ -13,16 +13,20 @@ export const RAW_BASE = "https://raw.githubusercontent.com/kimminseo2323-prog/26
 
 /** 로컬 미리보기(python -m http.server, 저장소 루트에서 /site/를 연다)면 true. */
 export const IS_LOCAL = ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname ?? "");
+// 소식 페이지의 기사 목록 프록시(proxy/news-worker.js를 Cloudflare Workers에 올린 주소, 끝에 / 없이).
+// 비어 있으면 소식 페이지는 구단별 네이버 뉴스 검색 링크만 보여 준다. 예: "https://kbo-news.<계정>.workers.dev"
+export const NEWS_PROXY = "";
 
 /** 데이터 위치: 로컬이면 저장소의 data/public, 배포본(GitHub Pages 등)이면 raw.githubusercontent.com. */
 export const DATA_BASE = IS_LOCAL ? "../data/public" : RAW_BASE;
 
-/** 메뉴 4개 — 순서·이름 고정 (check_site.py의 NAV와 같다). */
+/** 메뉴 5개 — 순서·이름 고정 (check_site.py의 NAV와 같다). */
 export const NAV = [
   ["index.html", "오늘의 경기"],
   ["teams.html", "팀"],
   ["players.html", "선수"],
-  ["report.html", "모델 성적표"],
+  ["report.html", "모델 성적표"],,
+  ["news.html", "소식"]
 ];
 
 // 10구단: 코드 → 한글 이름(ko, teams.py와 같음), 정식 이름(full), 차트 축용 짧은 이름(short), 강조색(color = 토큰 이름).

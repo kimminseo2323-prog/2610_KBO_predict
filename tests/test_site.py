@@ -110,7 +110,7 @@ def test_broadcast_visual_rules():
     assert "1.05 / (L + 0.05) >= (L + 0.05) / (inkL + 0.05)" in app_js  # 흰색·잉크 중 대비가 높은 쪽
     assert "countUp(" in home_js and "ballSVG(" in home_js and "function tape(" in home_js
     # 머리: 검정 스코어 버그 + 메뉴, 푸터: 다이아몬드 그림 (4페이지 공통)
-    for page in ("index.html", "teams.html", "players.html", "report.html"):
+    for page in ("index.html", "teams.html", "players.html", "report.html", "news.html"):
         html = (SITE / page).read_text(encoding="utf-8")
         assert 'class="bugbar"' in html and 'class="menubar"' in html and 'id="bug-slot"' in html, page
         assert 'class="footer__field"' in html and "Barlow+Condensed" in html, page
@@ -792,3 +792,33 @@ def test_team_colors_are_legible():
         if code != "kt":
             assert _contrast(text, white) >= 4.5, (code, _contrast(text, white))
     assert _contrast(var("team-hh"), ink) > _contrast(var("team-hh"), white)
+
+
+# ---------- 소식 (news.html) ----------
+
+def test_news_page_tabs_favorites_and_attribution():
+    """소식: 구단 탭(전체·즐겨찾기·10개 구단), 즐겨찾기는 localStorage(실패해도 동작), 기사는 프록시가 있을 때만
+    네이버 검색 결과를 그대로 + "네이버 검색결과" 표시 + 원문 링크, 없으면 구단별 네이버 뉴스 검색 링크만."""
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup((SITE / "news.html").read_text(encoding="utf-8"), "html.parser")
+    assert soup.find(id="news-tabs")["role"] == "tablist" and soup.find(id="news-body") is not None
+    assert soup.find("a", attrs={"aria-current": "page"})["href"] == "news.html"
+    assert "저장하지 않고" in soup.find(id="news-about").get_text()
+    js = (ASSETS / "news.js").read_text(encoding="utf-8")
+    assert 'localStorage.getItem(FAV_KEY)' in js and js.count("try {") >= 2      # 저장소를 못 써도 페이지는 돈다
+    assert '"네이버 검색결과"' in js and "originallink || it.link" in js and 'rel: "noopener"' in js
+    assert "if (!NEWS_PROXY)" in js and "search.naver.com/search.naver?where=news" in js
+    assert 'fetchJSON("teams.json")' in js and "history.replaceState" in js and "aria-pressed" in js
+    app = (ASSETS / "app.js").read_text(encoding="utf-8")
+    assert re.search(r'export const NEWS_PROXY = "(https://[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev)?";', app)
+
+
+def test_news_worker_hides_key_and_keeps_results_as_is():
+    """프록시: 키는 비밀 변수(env)로만, 허용 출처만 CORS, 서버 캐시 없음(브라우저만 private), 팀 코드는 사이트 TEAMS와 같다."""
+    w = (ROOT / "proxy" / "news-worker.js").read_text(encoding="utf-8")
+    assert "env.NAVER_KEY_ID" in w and "env.NAVER_KEY" in w and "caches." not in w
+    assert '"Cache-Control": "private, max-age=600"' in w and "https://kimminseo2323-prog.github.io" in w
+    assert 'sort: "date"' in w and "items: data.items" in w
+    codes = set(re.findall(r"([A-Z]{2}): \"", w.split("TEAM_QUERY = {")[1].split("};")[0]))
+    app = (ASSETS / "app.js").read_text(encoding="utf-8")
+    assert codes == set(re.findall(r'^  "([A-Z]{2})": \{"ko"', app, re.M))

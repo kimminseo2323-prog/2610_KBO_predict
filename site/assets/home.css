@@ -168,7 +168,9 @@
 .tape__k { text-align: center; font-size: 12px; font-weight: 800; color: var(--muted); }
 .tape__v { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .tape__v--home { flex-direction: row-reverse; }
-.tape__n { flex: none; min-width: 3.4ch; font-family: var(--font-num); font-size: 26px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: var(--body); }
+/* 숫자 칸은 모든 행이 같은 폭 — 값 글자 수(.647 / 10승 0패 / +1.22)와 상관없이 막대 길이(트랙)가 행마다 같게 */
+.tape__n { flex: none; width: 3.9em; white-space: nowrap; font-family: var(--font-num); font-size: 26px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: var(--body); }
+.tape__v--away .tape__n { text-align: left; }
 .tape__v--home .tape__n { text-align: right; }
 .tape__v.is-win .tape__n { color: var(--ink); font-weight: 800; }
 .tape__bar { flex: 1; height: 8px; background: var(--surface-card); display: flex; }
@@ -274,8 +276,12 @@
   .rewind { width: 100%; }
   .matchups { margin-inline: -16px; margin-bottom: var(--sp-32); }
   .tape { padding-inline: 16px; }
-  .tape__row { grid-template-columns: minmax(0, 1fr) 78px minmax(0, 1fr); gap: 8px; }
-  .tape__n { font-size: 22px; }
+  /* 휴대폰: 항목 이름을 위 줄 가운데로 올리고, 아래 줄에 두 팀 값·막대를 반씩 — 막대 자리가 넓어진다 */
+  .tape__row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "k k" "a h"; gap: 4px 12px; }
+  .tape__k { grid-area: k; }
+  .tape__v--away { grid-area: a; }
+  .tape__v--home { grid-area: h; }
+  .tape__n { font-size: 20px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .live-dot { animation: none; }

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>소식 · KBO Predict</title>
+<meta name="description" content="KBO 10개 구단 최신 소식. 구단별로 골라 보고, 응원하는 구단은 즐겨찾기로 맨 앞에.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/news.css">
+</head>
+<body>
+<a class="skip-link" href="#main">본문으로 건너뛰기</a>
+<header class="topnav">
+  <div class="bugbar"><div class="bugbar__inner wrap">
+    <a class="brand" href="index.html"><svg class="brand__ball" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10.5" fill="#fff"/><path d="M6.6 3.6c2.6 2.6 2.6 14.2 0 16.8M17.4 3.6c-2.6 2.6-2.6 14.2 0 16.8" fill="none" stroke="#d8232a" stroke-width="1.3"/><path d="M6.6 3.6c2.6 2.6 2.6 14.2 0 16.8M17.4 3.6c-2.6 2.6-2.6 14.2 0 16.8" fill="none" stroke="#d8232a" stroke-width="3" stroke-dasharray="0.9 1.6"/></svg>KBO PREDICT</a>
+    <div class="bug-slot" id="bug-slot"></div>
+    <a class="btn btn--bug" href="https://github.com/kimminseo2323-prog/2610_KBO_predict">GitHub에서 보기</a>
+  </div></div>
+  <nav class="menubar" aria-label="주 메뉴"><ul class="wrap">
+    <li><a href="index.html">오늘의 경기</a></li>
+    <li><a href="teams.html">팀</a></li>
+    <li><a href="players.html">선수</a></li>
+    <li><a href="report.html">모델 성적표</a></li>
+    <li><a href="news.html" aria-current="page">소식</a></li>
+  </ul></nav>
+</header>
+
+<main id="main" class="wrap">
+  <div class="page-head news-head">
+    <div>
+      <h1 class="display-md">소식</h1>
+      <p class="lead" id="news-lead">구단별 최신 소식을 봅니다. 별을 누르면 그 구단이 맨 앞에 오고, 즐겨찾기 탭에 모입니다.</p>
+    </div>
+  </div>
+  <noscript><p class="error-box">이 페이지는 자바스크립트로 그립니다. 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
+
+  <!-- 구단 탭: 전체 · 즐겨찾기 · 10개 구단 (?team=KT로도 열 수 있다) -->
+  <div class="news-tabs" id="news-tabs" role="tablist" aria-label="구단 고르기"></div>
+  <p class="sr-only" id="news-status" aria-live="polite"></p>
+
+  <section class="card news-board" id="news" aria-labelledby="news-title">
+    <h2 class="card__title" id="news-title">전체 구단</h2>
+    <p class="card__lead" id="news-board-lead"></p>
+    <div id="news-body" aria-busy="true"><div class="skeleton" style="height:320px;margin-top:16px"></div></div>
+  </section>
+
+  <details class="more news-about" id="news-about">
+    <summary>이 소식은 어디서 오나요</summary>
+    <ul>
+      <li>기사 목록은 네이버 검색 API(뉴스)의 결과를 볼 때마다 그 자리에서 불러와, 순서와 내용을 바꾸지 않고 그대로 보여 줍니다. 기사 제목을 누르면 원문으로 갑니다.</li>
+      <li>이 사이트는 기사를 저장하지 않고, 예측 모델에도 쓰지 않습니다.</li>
+      <li>기사 목록 연결이 준비되지 않았을 때는 구단마다 네이버 뉴스 검색 결과로 가는 링크만 보여 줍니다.</li>
+      <li>즐겨찾기는 이 브라우저에만 저장됩니다. 다른 기기에서는 다시 골라야 합니다.</li>
+    </ul>
+  </details>
+</main>
+
+<footer class="footer">
+  <div class="footer__inner wrap">
+    <p id="evidence" class="evidence">갱신 정보를 불러오는 중…</p>
+    <p class="footer__note">데이터: MyKBOStats(비공식 팬 사이트)의 박스스코어를 집계했습니다. 개인 학습용 프로젝트이며 베팅 조언이 아닙니다.</p>
+  </div>
+  <svg class="footer__field" viewBox="0 0 200 200" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2"><path d="M100 182 L188 94 M100 182 L12 94"/><path d="M12 94 Q100 -24 188 94"/><path d="M100 172 L148 124 L100 76 L52 124 Z"/><circle cx="100" cy="126" r="7"/><rect x="144" y="120" width="8" height="8" transform="rotate(45 148 124)"/><rect x="96" y="72" width="8" height="8" transform="rotate(45 100 76)"/><rect x="48" y="120" width="8" height="8" transform="rotate(45 52 124)"/><path d="M95 170 h10 v4 l-5 5 l-5 -5 z"/></svg>
+</footer>
+<script type="module" src="assets/news.js"></script>
+</body>
+</html>

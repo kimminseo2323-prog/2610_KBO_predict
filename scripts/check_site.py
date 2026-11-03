@@ -35,9 +35,13 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO_URL = "https://github.com/kimminseo2323-prog/2610_KBO_predict"
 RAW_BASE = "https://raw.githubusercontent.com/kimminseo2323-prog/2610_KBO_predict/main/data/public"
 PAGES_URL = "https://kimminseo2323-prog.github.io/2610_KBO_predict"  # 사이트가 공개될 주소 (README 링크와 같음)
+# 소식 페이지: 나가는 링크(네이버 뉴스 검색 결과 페이지 — 우리가 데이터를 받지 않음)와 뉴스 프록시(Cloudflare Workers, proxy/news-worker.js)
+NEWS_LINK = "https://search.naver.com/search.naver"
+NEWS_PROXY_RE = re.compile(r"^https://[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev$")
 # REPO_URL·RAW_BASE는 site/assets/app.js의 같은 이름 상수와 같다 (tests/test_site.py가 확인).
-PAGES = ["index.html", "teams.html", "players.html", "report.html"]
-NAV = [("index.html", "오늘의 경기"), ("teams.html", "팀"), ("players.html", "선수"), ("report.html", "모델 성적표")]
+PAGES = ["index.html", "teams.html", "players.html", "report.html", "news.html"]
+NAV = [("index.html", "오늘의 경기"), ("teams.html", "팀"), ("players.html", "선수"), ("report.html", "모델 성적표"),
+       ("news.html", "소식")]
 # 허용하는 외부 리소스: https + 호스트 정확히 일치 + (jsDelivr는) 경로 접두사. 그 밖의 외부 리소스는 모두 금지.
 ALLOWED = {
     "fonts.googleapis.com": "/",                              # Inter 글꼴 CSS
@@ -333,11 +337,13 @@ def _own_url(url: str, base: str) -> bool:
 
 def js_external_urls(src: str) -> list[str]:
     """JS 문자열 리터럴 안의 https:// 주소 중 허용 밖인 것.
-    허용: 글꼴(ALLOWED), RAW_BASE 아래 데이터, 이 저장소(REPO_URL — 커밋·#모델 같은 앵커·/blob/… 등), 공개 사이트(PAGES_URL)."""
+    허용: 글꼴(ALLOWED), RAW_BASE 아래 데이터, 이 저장소(REPO_URL — 커밋·#모델 같은 앵커·/blob/… 등), 공개 사이트(PAGES_URL),
+    소식 페이지의 나가는 링크(NEWS_LINK)와 뉴스 프록시 주소(*.workers.dev)."""
     bad = []
     for s in scan_js(src).strings:
         for url in re.findall(r"https://[^\s\"'`<>()]+", s):
-            ok = (_allowed(url) or _own_url(url, RAW_BASE) or _own_url(url, REPO_URL) or _own_url(url, PAGES_URL))
+            ok = (_allowed(url) or _own_url(url, RAW_BASE) or _own_url(url, REPO_URL) or _own_url(url, PAGES_URL)
+                  or _own_url(url, NEWS_LINK) or bool(NEWS_PROXY_RE.match(url)))
             if not ok:
                 bad.append(url)
     return bad
@@ -373,7 +379,7 @@ def check_page(site: Path, page: str) -> list[Row]:
         elif current != [page]:
             fail("nav", f'aria-current="page"가 {current} (기대: {page})')
         else:
-            rows.append(Row("nav", page, "OK", "링크 4개 순서·aria-current"))
+            rows.append(Row("nav", page, "OK", f"링크 {len(NAV)}개 순서·aria-current"))
     gh = [a for a in soup.find_all("a", href=True) if a["href"].rstrip("/") == REPO_URL]
     if not any("GitHub에서 보기" in a.get_text(strip=True) for a in gh):
         fail("github-link", f'"GitHub에서 보기" → {REPO_URL} 링크 없음')
