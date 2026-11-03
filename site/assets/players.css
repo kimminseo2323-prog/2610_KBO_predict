@@ -63,7 +63,9 @@
 /* ---------- 무대: 크림 지도 | 핑크 선수 카드. 6px 크림 선으로 맞붙인 한 장면 ---------- */
 .stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-24); }
 @media (min-width: 901px) {
-  .stage { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--sp-32); }
+  /* 카드를 지도 높이만큼 늘리지 않는다(늘리면 카드 안에 빈 검정 면이 생긴다). 대신 스크롤하면 메뉴 아래에 따라온다 */
+  .stage { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--sp-32); align-items: start; }
+  .stage > .player-card { position: sticky; top: 112px; }
 }
 
 /* ---------- 유형 지도 (크림) ---------- */
@@ -157,7 +159,7 @@
 .member.is-own .member__pct { color: var(--on-dark); }
 
 /* 주요 기록: 숫자 타일 (3열) */
-.pcard__stats { margin-top: auto !important; padding: var(--sp-12) var(--sp-16) var(--sp-16); }
+.pcard__stats { margin-top: var(--sp-16) !important; padding: var(--sp-12) var(--sp-16) var(--sp-16); }
 .pcard__cap { font-size: 13px; font-weight: 800; }
 .stats-grid { margin: var(--sp-8) 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-12) var(--sp-8); }
 .stat { min-width: 0; }

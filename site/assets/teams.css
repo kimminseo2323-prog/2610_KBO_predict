@@ -142,6 +142,7 @@
 
 /* ---------- ③ 상대 전적 격자 ---------- */
 .h2h-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--sp-16); align-items: start; }
+@media (min-width: 901px) { .h2h-layout > :last-child { position: sticky; top: 112px; } }
 .h2h__frame { padding: var(--sp-12); }
 .h2h__scroll { overflow-x: auto; overflow-y: hidden; }
 .h2h__scroll:focus-visible { outline-offset: 2px; }

@@ -34,7 +34,9 @@ table.sr-only { position: fixed !important; top: 0; left: 0; }
 
 /* ---------- 레이아웃 ---------- */
 .wrap { width: 100%; max-width: 1200px; margin-inline: auto; padding-inline: 20px; }
-main { display: block; padding-bottom: var(--sp-96); }
+main { display: block; padding-bottom: var(--sp-48); }
+/* 메뉴 띠가 화면 위에 붙어 있으므로(스코어 버그 52px + 메뉴 47px) 앵커·scrollIntoView로 옮긴 섹션의 첫 줄이 가려지지 않게 */
+main section[id], main [id].card, #player-card { scroll-margin-top: 116px; }
 .stack > * + * { margin-top: var(--sp-16); }
 .page-head {
   display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
@@ -238,7 +240,7 @@ details.more li + li { margin-top: 4px; }
 @keyframes pop { from { transform: scale(0); opacity: 0; } }
 
 /* ---------- 푸터 ---------- */
-.footer { position: relative; overflow: hidden; margin-top: var(--sp-48); border-top: var(--rule) solid var(--ink); background: var(--canvas); color: var(--body); font-size: 13px; line-height: 1.55; }
+.footer { position: relative; overflow: hidden; margin-top: 0; border-top: var(--rule) solid var(--ink); background: var(--canvas); color: var(--body); font-size: 13px; line-height: 1.55; }
 .footer__inner { position: relative; z-index: 1; padding-block: var(--sp-24) var(--sp-48); }
 .evidence { color: var(--body-strong); font-weight: 600; max-width: 70ch; }
 .evidence a { color: var(--ink); text-decoration: underline; font-variant-numeric: tabular-nums; }

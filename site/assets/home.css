@@ -171,19 +171,19 @@
 .tape__v--home .tape__bar i { transform-origin: left center; }
 
 /* ---------- 섹션 격자 ---------- */
-.home-bento > .b-factors { grid-column: span 7; order: 1; }
-.home-bento > .b-outlook { grid-column: span 5; order: 2; }
-.home-bento > .b-starters { grid-column: span 7; order: 3; }
-.home-bento > .b-accuracy { grid-column: span 5; order: 4; }
-.home-bento > .b-typemap { grid-column: span 7; order: 5; }
-.home-bento > .b-recent { grid-column: span 5; order: 6; }
+/* 두 열이 각자 쌓인다: 행 높이를 옆 칸에 맞추지 않으므로 짧은 칸 아래에 빈 공간이 생기지 않는다 */
+.home-bento { align-items: start; }
+.home-bento > .bento__col { display: flex; flex-direction: column; gap: var(--sp-48); min-width: 0; }
+.home-bento > .bento__col--main { grid-column: span 7; }
+.home-bento > .bento__col--side { grid-column: span 5; }
 @media (max-width: 900px) {
-  .home-bento > .b-factors { order: 1; }
-  .home-bento > .b-outlook { order: 2; }
-  .home-bento > .b-starters { order: 3; }
-  .home-bento > .b-recent { order: 4; }
-  .home-bento > .b-accuracy { order: 5; }
-  .home-bento > .b-typemap { order: 6; }
+  .home-bento > .bento__col { display: contents; }
+  .home-bento .b-factors { order: 1; }
+  .home-bento .b-outlook { order: 2; }
+  .home-bento .b-starters { order: 3; }
+  .home-bento .b-recent { order: 4; }
+  .home-bento .b-accuracy { order: 5; }
+  .home-bento .b-typemap { order: 6; }
 }
 
 /* ① 요인 */

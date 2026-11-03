@@ -430,7 +430,7 @@ def test_status_rewind_fixture():
 
 # ---------- 홈 (index.html) ----------
 
-HOME_SECTIONS = ["factors", "accuracy", "starters", "outlook", "type-map", "recent"]  # 벤토 순서 고정
+HOME_SECTIONS = ["factors", "starters", "type-map", "outlook", "accuracy", "recent"]  # 문서 순서 고정 (왼쪽 열 → 오른쪽 열)
 
 
 def _home_soup():
@@ -441,8 +441,10 @@ def _home_soup():
 def test_home_markup_has_sections():
     """근거 섹션 6개(문서 순서 고정, 모두 굵은 선 섹션 .card), 매치업 컨테이너, 되감기 슬라이더 컨테이너, 푸터 #evidence가 정적으로 있다."""
     soup = _home_soup()
-    cards = soup.select(".home-bento > section")
+    cards = soup.select(".home-bento > .bento__col > section")
     assert [c["id"] for c in cards] == HOME_SECTIONS
+    cols = soup.select(".home-bento > .bento__col")
+    assert [[s["id"] for s in c.find_all("section")] for c in cols] == [HOME_SECTIONS[:3], HOME_SECTIONS[3:]]
     for c in cards:
         assert "card" in c["class"] and not any(k.startswith("card--") for k in c["class"])
     for c in cards:

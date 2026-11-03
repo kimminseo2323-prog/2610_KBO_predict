@@ -64,44 +64,48 @@
   </section>
   <noscript><p class="error-box">이 페이지는 자바스크립트로 데이터를 읽어 그립니다. 브라우저에서 자바스크립트를 켜 주세요.</p></noscript>
 
-  <!-- 근거 섹션: 굵은 선으로 시작, 데스크톱 7:5 두 단 (순서는 home.css order) -->
+  <!-- 근거 섹션: 데스크톱은 왼쪽(7)·오른쪽(5) 두 열이 각자 세로로 쌓인다(한쪽이 길어도 다른 쪽 아래가 비지 않게).
+       휴대폰은 열 상자를 풀어(display: contents) home.css order로 한 줄에 다시 섞는다. -->
   <div class="bento home-bento">
-    <section class="card b-factors" id="factors" aria-labelledby="factors-title">
-      <h2 class="card__title" id="factors-title">승률을 가른 요인</h2>
-      <p class="card__lead" id="factors-lead">홈팀 승률을 올린 요인(+)과 내린 요인(−), 단위 %p</p>
-      <div class="factor-tabs" id="factor-tabs" role="tablist" aria-label="경기 고르기" hidden></div>
-      <div class="inset" id="factors-body"><div class="skeleton" style="height:160px"></div></div>
-      <p class="card__foot" id="factors-foot"></p>
-    </section>
+    <div class="bento__col bento__col--main">
+      <section class="card b-factors" id="factors" aria-labelledby="factors-title">
+        <h2 class="card__title" id="factors-title">승률을 가른 요인</h2>
+        <p class="card__lead" id="factors-lead">홈팀 승률을 올린 요인(+)과 내린 요인(−), 단위 %p</p>
+        <div class="factor-tabs" id="factor-tabs" role="tablist" aria-label="경기 고르기" hidden></div>
+        <div class="inset" id="factors-body"><div class="skeleton" style="height:160px"></div></div>
+        <p class="card__foot" id="factors-foot"></p>
+      </section>
 
-    <section class="card b-accuracy" id="accuracy" aria-labelledby="accuracy-title">
-      <h2 class="card__title" id="accuracy-title">모델은 얼마나 맞나</h2>
-      <div id="accuracy-body"><div class="skeleton" style="height:180px;margin-top:16px"></div></div>
-    </section>
+      <section class="card b-starters" id="starters" aria-labelledby="starters-title">
+        <h2 class="card__title" id="starters-title">오늘 선발, 어떤 유형?</h2>
+        <p class="card__lead" id="starters-lead">선수 유형 모델이 직전 시즌 기록으로 붙인 유형</p>
+        <div id="starters-body"><div class="skeleton" style="height:180px;margin-top:16px"></div></div>
+      </section>
 
-    <section class="card b-starters" id="starters" aria-labelledby="starters-title">
-      <h2 class="card__title" id="starters-title">오늘 선발, 어떤 유형?</h2>
-      <p class="card__lead" id="starters-lead">선수 유형 모델이 직전 시즌 기록으로 붙인 유형</p>
-      <div id="starters-body"><div class="skeleton" style="height:180px;margin-top:16px"></div></div>
-    </section>
+      <section class="card b-typemap" id="type-map" aria-labelledby="typemap-title">
+        <h2 class="card__title" id="typemap-title">선수 유형 지도</h2>
+        <p class="card__lead" id="typemap-lead">비슷한 기록의 타자끼리 가깝게 놓은 지도</p>
+        <div id="typemap-body"><div class="inset"><div class="skeleton" style="height:200px"></div></div></div>
+        <p class="typemap__link"><a class="btn btn--secondary" href="players.html">선수 페이지에서 보기</a></p>
+      </section>
+    </div>
+    <div class="bento__col bento__col--side">
+      <section class="card b-outlook" id="outlook" aria-labelledby="outlook-title">
+        <h2 class="card__title" id="outlook-title">전망</h2>
+        <div id="outlook-body"><div class="skeleton" style="height:160px;margin-top:16px"></div></div>
+      </section>
 
-    <section class="card b-outlook" id="outlook" aria-labelledby="outlook-title">
-      <h2 class="card__title" id="outlook-title">전망</h2>
-      <div id="outlook-body"><div class="skeleton" style="height:160px;margin-top:16px"></div></div>
-    </section>
+      <section class="card b-accuracy" id="accuracy" aria-labelledby="accuracy-title">
+        <h2 class="card__title" id="accuracy-title">모델은 얼마나 맞나</h2>
+        <div id="accuracy-body"><div class="skeleton" style="height:180px;margin-top:16px"></div></div>
+      </section>
 
-    <section class="card b-typemap" id="type-map" aria-labelledby="typemap-title">
-      <h2 class="card__title" id="typemap-title">선수 유형 지도</h2>
-      <p class="card__lead" id="typemap-lead">비슷한 기록의 타자끼리 가깝게 놓은 지도</p>
-      <div id="typemap-body"><div class="inset"><div class="skeleton" style="height:200px"></div></div></div>
-      <p class="typemap__link"><a class="btn btn--secondary" href="players.html">선수 페이지에서 보기</a></p>
-    </section>
-
-    <section class="card b-recent" id="recent" aria-labelledby="recent-title">
-      <h2 class="card__title" id="recent-title">최근 예측</h2>
-      <p class="card__lead" id="recent-lead">경기 전 마지막 예측과 실제 결과</p>
-      <div id="recent-body"><div class="skeleton" style="height:160px;margin-top:16px"></div></div>
-    </section>
+      <section class="card b-recent" id="recent" aria-labelledby="recent-title">
+        <h2 class="card__title" id="recent-title">최근 예측</h2>
+        <p class="card__lead" id="recent-lead">경기 전 마지막 예측과 실제 결과</p>
+        <div id="recent-body"><div class="skeleton" style="height:160px;margin-top:16px"></div></div>
+      </section>
+    </div>
   </div>
 </main>
 
