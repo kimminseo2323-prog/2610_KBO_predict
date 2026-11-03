@@ -190,9 +190,33 @@
   .home-bento .b-factors { order: 1; }
   .home-bento .b-outlook { order: 2; }
   .home-bento .b-starters { order: 3; }
+  .home-bento .b-whatif { order: 3; } /* 문서 순서상 선발 카드 바로 뒤 */
   .home-bento .b-recent { order: 4; }
   .home-bento .b-accuracy { order: 5; }
   .home-bento .b-typemap { order: 6; }
+}
+
+/* 선발 바꿔 보기 */
+.wi-picks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-12); margin-top: var(--sp-16); }
+.wi-pick { display: grid; gap: 6px; min-width: 0; }
+.wi-pick__label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; color: var(--ink); }
+.wi-select { width: 100%; min-height: 44px; padding: 0 12px; border: 0; outline: 2px solid var(--ink); outline-offset: -2px; background: var(--canvas); color: var(--ink); font: inherit; font-size: 15px; font-weight: 700; }
+.wi-result { margin-top: var(--sp-16); }
+.wi-sides { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--sp-12); }
+.wi-side { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.wi-sides .wi-side:last-child { flex-direction: row-reverse; text-align: right; }
+.wi-side__name { font-size: 16px; font-weight: 800; color: var(--body); }
+.wi-side__num { font-family: var(--font-num); font-style: italic; font-size: 34px; font-weight: 800; line-height: 1; padding: 2px 8px; }
+b.wi-side__num { color: var(--body); }
+.wi-vs { font-family: var(--font-num); font-style: italic; font-weight: 800; color: var(--muted); }
+.wi-split { margin-top: var(--sp-12); }
+.wi-delta { margin-top: var(--sp-12); font-size: 14px; color: var(--body); }
+.wi-delta b { font-family: var(--font-num); font-size: 18px; color: var(--ink); }
+.wi-note { margin-top: 6px; font-size: 13px; color: var(--muted); }
+.wi-foot { margin-top: var(--sp-12); }
+@media (max-width: 479px) {
+  .wi-picks { grid-template-columns: minmax(0, 1fr); }
+  .wi-side__num { font-size: 28px; }
 }
 
 /* ① 요인 */

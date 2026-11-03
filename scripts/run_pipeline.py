@@ -22,6 +22,7 @@ from kbo_predict.publish import settle_history, upsert_history, write_latest, wr
 from kbo_predict.rewind import state_before
 from kbo_predict.simulate import load_postseason, next_game_card, outlook_for
 from kbo_predict.train_win import load_bundle
+from kbo_predict import whatif
 
 
 # upto('YYYY-MM-DD') 경기 직전 시점의 리그 상태. 되감기(rewind)와 같은 함수를 쓰도록 kbo_predict.rewind로 옮겼다.
@@ -183,6 +184,15 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
         # history의 model_version = 실제로 예측한 번들의 버전 (패키지 상수가 아니라)
         upsert_history(pub / "history.csv", preds, predicted_at=meta["generated_at"],
                        model_version=meta["model_version"])
+        # 선발 바꿔 보기(사이트): 모델 숫자 + 경기별 후보 선발 기록. 실패해도 예측 발행은 그대로 (표시용 부가 기능)
+        try:
+            boxes = raw_store.load_boxscores(season)
+            blocks = [whatif.game_block(g, state, starters.get(g["game_id"]), games, boxes, regular_only=False)
+                      for g in day if g["status"] != "CANCELED"]
+            write_whatif(pub / "whatif.json", date=iso, model=whatif.model_params(bundle), games=blocks, meta=meta)
+        except Exception as e:
+            collect_errors.append(f"whatif unavailable: {e!r}")
+            print(f"[pipeline] whatif unavailable, continuing: {e!r}", file=sys.stderr)
 
     # ⑥ status
     upcoming = [g["date"] for g in games if g["date"] > iso and g["status"] != "CANCELED"]
@@ -190,6 +200,13 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
                  next_game_date=min(upcoming) if upcoming else None,
                  games_today=len(preds), meta=meta, collect_errors=collect_errors)
     return {"games_today": len(preds), "settled": settled}
+
+
+def write_whatif(path: Path, *, date: str, model: dict | None, games: list[dict], meta: dict) -> None:
+    """data/public/whatif.json — 사이트의 "선발 바꿔 보기"가 읽는다 (모델이 로지스틱 회귀가 아니면 model = None)."""
+    import json
+    obj = {"date": date, "generated_at": meta.get("generated_at"), "model": model, "games": games if model else []}
+    path.write_text(json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
 def main(argv=None) -> None:

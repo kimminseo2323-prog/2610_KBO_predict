@@ -18,6 +18,7 @@ import {
   teamColors, teamChip, teamText, favState, typeSummaryTable, fmtProb, fmtDateShort, fmtScore, teamLogo, factorKey, factorLabel, factorHelp, typeBlurb,
 } from "./app.js";
 import { barChart, scatter } from "./charts.js";
+import { whatifProb } from "./whatif.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -27,6 +28,8 @@ const REWIND = "rewind/2026";
 
 const state = {
   status: null, latest: null, index: null, history: null, report: null, players: null,
+  whatif: null,            // whatif.json (오늘 경기의 선발 바꿔 보기 데이터)
+  wiPick: null,            // 선발 바꿔 보기에서 고른 선발 {gameId, home, away} (player_id)
   nameKo: null,            // player_id → 한글 이름 (players.json을 읽은 뒤에 채운다)
   errors: {},              // 파일별 읽기 실패 메시지
   mode: "live",            // "live" | "rewind"
@@ -95,6 +98,7 @@ function loadCore() {
     ? fetchJSON("status_rewind.json", { base: FIXTURE_BASE, fresh: true }) : fetchJSON("status.json", { fresh: true });
   return Promise.all([
     settle(state, "status", status), settle(state, "latest", latest), loadIndex(), loadHistory(), loadReport(),
+    settle(state, "whatif", fetchJSON("whatif.json", { fresh: true })),
   ]);
 }
 
@@ -574,6 +578,7 @@ function selectGame(i) {
   renderTabs();
   renderFactors();
   renderStarters();
+  renderWhatif();
   renderOutlook();
 }
 
@@ -736,6 +741,96 @@ function renderStarters() {
     return;
   }
   body.replaceChildren(starterBlock(g, "away"), starterBlock(g, "home"));
+}
+
+// ---------- 선발 바꿔 보기 ----------
+// 모델 숫자(로지스틱 회귀 계수·중앙값·평균·표준편차)와 경기별 후보 선발 기록으로 브라우저에서 확률을 다시 계산한다(whatif.js).
+// 라이브: whatif.json (오늘 경기), 되감기: 그날 파일의 whatif + index.json의 whatif_model. 예고(실제) 선발이 기본값이고,
+// 그때의 확률은 위 매치업 카드의 공개 확률과 같다(tests/test_whatif.py).
+
+function whatifData(g) {
+  if (!g) return null;
+  if (state.mode === "rewind") {
+    const model = state.index?.whatif_model, block = state.day?.whatif?.find((b) => b.game_id === g.game_id);
+    return model && block ? { model, block } : null;
+  }
+  const w = state.whatif;
+  if (!w?.model || w.date !== state.day?.date) return null;
+  const block = w.games?.find((b) => b.game_id === g.game_id);
+  return block ? { model: w.model, block } : null;
+}
+
+function renderWhatif() {
+  const body = $("whatif-body");
+  const g = selectedGame();
+  const data = whatifData(g);
+  if (!data) {
+    body.replaceChildren(el("p", { class: "empty" }, g ? "이 경기는 선발을 바꿔 볼 데이터가 없습니다." : "이날은 바꿔 볼 경기가 없습니다."));
+    return;
+  }
+  const { model, block } = data;
+  const sides = ["away", "home"];
+  const ann = block.announced ?? {};
+  if (state.wiPick?.gameId !== g.game_id) state.wiPick = { gameId: g.game_id, away: ann.away, home: ann.home };
+  const cand = (side, pid) => block.candidates[side].find((c) => c.player_id === pid) ?? null;
+  const nameOf = (c) => state.nameKo?.get(c.player_id) ?? c.name ?? "이름 없음";
+  const word = state.mode === "live" ? "예고" : "실제";
+  const pickNow = () => ({ home: cand("home", state.wiPick.home), away: cand("away", state.wiPick.away) });
+
+  const result = el("div", { class: "wi-result", "aria-live": "polite" });
+  const draw = () => {
+    const now = pickNow();
+    const p = whatifProb(model, block.base, now.home?.line ?? null, now.away?.line ?? null);
+    const p0 = whatifProb(model, block.base, cand("home", ann.home)?.line ?? null, cand("away", ann.away)?.line ?? null);
+    const same = state.wiPick.home === ann.home && state.wiPick.away === ann.away;
+    const fav = favState(p);
+    const pct = (v) => `${Math.round(v * 1000) / 10}%`;
+    const d = (p - p0) * 100;
+    const side = (code, v) => el("div", { class: `wi-side${fav && fav !== "tie" && ((fav === "home") === (code === g.home.code)) ? " is-fav" : ""}` }, [
+      teamLogo(code, { size: "md" }), el("span", { class: "wi-side__name" }, teamName(code)),
+      fav && fav !== "tie" && ((fav === "home") === (code === g.home.code)) ? teamChip(code, pct(v), "wi-side__num") : el("b", { class: "wi-side__num" }, pct(v)),
+    ]);
+    result.replaceChildren(
+      el("div", { class: "wi-sides" }, [side(g.away.code, 1 - p), el("span", { class: "wi-vs", "aria-hidden": "true" }, "vs"), side(g.home.code, p)]),
+      el("div", { class: "split wi-split", role: "img", "aria-label": `${teamName(g.away.code)} ${pct(1 - p)}, ${teamName(g.home.code)} ${pct(p)}` }, [
+        el("i", { style: { flexGrow: String(Math.max(0.02, 1 - p)), background: teamColors(g.away.code).bg } }),
+        el("i", { style: { flexGrow: String(Math.max(0.02, p)), background: teamColors(g.home.code).bg } }),
+      ]),
+      el("p", { class: "wi-delta" }, same
+        ? `${word} 선발 그대로입니다. 위 경기 카드의 확률과 같습니다.`
+        : [`${word} 선발일 때보다 ${teamName(g.home.code)} 승리 확률이 `, el("b", {}, `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}%p`), ` ${d >= 0 ? "올라갑니다" : "내려갑니다"}.`]),
+      ...(!now.home?.line || !now.away?.line // replaceChildren은 null을 "null" 글자로 넣으므로 펼친다
+        ? [el("p", { class: "wi-note" }, "고른 선발 중 작년·올해 기록이 없는 투수가 있어, 선발 기록 없이 계산했습니다.")] : []),
+    );
+  };
+
+  const picker = (side) => {
+    const code = g[side].code;
+    const sel = el("select", { class: "wi-select", id: `wi-${side}`, onchange: (e) => { state.wiPick[side] = Number(e.target.value); draw(); } },
+      block.candidates[side].map((c) => {
+        const tag = c.player_id === ann[side] ? ` (${word} 선발)` : c.starts ? ` (선발 ${c.starts}경기)` : "";
+        return el("option", { value: String(c.player_id), selected: c.player_id === state.wiPick[side] ? "" : null }, `${nameOf(c)}${tag}`);
+      }));
+    return el("label", { class: "wi-pick" }, [
+      el("span", { class: "wi-pick__label" }, [teamLogo(code, { size: "sm" }), `${teamName(code)} ${side === "home" ? "홈" : "원정"} 선발`]), sel]);
+  };
+  const reset = el("button", { class: "btn btn--secondary wi-reset", type: "button", onclick: () => {
+    state.wiPick = { gameId: g.game_id, away: ann.away, home: ann.home };
+    renderWhatif();
+  } }, `${word} 선발로 되돌리기`);
+
+  $("whatif-lead").textContent = `${matchLabel(g)}. 두 팀 선발을 이 시즌 선발로 나온 다른 투수로 골라 보면 모델이 승리 확률을 다시 계산합니다.`;
+  body.replaceChildren(
+    el("div", { class: "wi-picks" }, sides.map(picker)),
+    result,
+    el("div", { class: "wi-foot" }, [reset]),
+    el("details", { class: "more" }, [el("summary", {}, "어떻게 계산하나요"), el("ul", {}, [
+      el("li", {}, "실제 예측에 쓰는 모델 그대로, 선발과 관련된 요인만 바꿔 다시 계산합니다. 팀 성적·Elo 같은 나머지 요인은 그대로입니다."),
+      el("li", {}, "선발 요인은 그 투수의 작년+올해 기록(평균자책점·FIP·9이닝당 삼진·볼넷·던진 이닝·최근 3경기 실점)으로 만듭니다. 이 경기 전날까지의 기록만 씁니다."),
+      el("li", {}, "후보는 이 시즌 그날 전까지 그 팀 선발로 나온 투수 중 선발 수가 많은 순입니다. 계산은 이 브라우저에서 바로 하며, 실제 예측 기록은 바뀌지 않습니다."),
+    ])]),
+  );
+  draw();
 }
 
 // ---------- ④ 전망 ----------
@@ -906,9 +1001,10 @@ async function loadPlayers() {
   }
   state.nameKo ??= koreanNames(state.players);
   renderTypeMap();
-  if (state.day) { // 선발 이름을 한글로 바꾸고(매치업·선발 카드) 유형 설명(blurb)을 덧붙인다
+  if (state.day) { // 선발 이름을 한글로 바꾸고(매치업·선발 카드·선발 바꿔 보기) 유형 설명(blurb)을 덧붙인다
     renderMatchups();
     renderStarters();
+    renderWhatif();
   }
 }
 
@@ -959,6 +1055,7 @@ function renderDay() {
   renderTabs();
   renderFactors();
   renderStarters();
+  renderWhatif();
   renderOutlook();
   renderRecent();
   announce();

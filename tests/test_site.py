@@ -374,7 +374,7 @@ def test_no_null_children_in_dom_calls():
 
 
 # 브라우저 캐시를 피할(fresh) 파일: 매일 바뀌는 4개뿐. 되감기 날짜 파일·players·teams·model_report는 기본 캐시.
-FRESH = {"status.json", "latest.json", "history.csv", "index.json", "latest_edge.json", "status_rewind.json"}
+FRESH = {"status.json", "latest.json", "history.csv", "index.json", "latest_edge.json", "status_rewind.json", "whatif.json"}
 
 
 def test_fresh_fetch_only_for_daily_files():
@@ -431,7 +431,7 @@ def test_status_rewind_fixture():
 
 # ---------- 홈 (index.html) ----------
 
-HOME_SECTIONS = ["factors", "starters", "type-map", "outlook", "accuracy", "recent"]  # 문서 순서 고정 (왼쪽 열 → 오른쪽 열)
+HOME_SECTIONS = ["factors", "starters", "whatif", "type-map", "outlook", "accuracy", "recent"]  # 문서 순서 고정 (왼쪽 열 → 오른쪽 열)
 
 
 def _home_soup():
@@ -445,7 +445,7 @@ def test_home_markup_has_sections():
     cards = soup.select(".home-bento > .bento__col > section")
     assert [c["id"] for c in cards] == HOME_SECTIONS
     cols = soup.select(".home-bento > .bento__col")
-    assert [[s["id"] for s in c.find_all("section")] for c in cols] == [HOME_SECTIONS[:3], HOME_SECTIONS[3:]]
+    assert [[s["id"] for s in c.find_all("section")] for c in cols] == [HOME_SECTIONS[:4], HOME_SECTIONS[4:]]
     for c in cards:
         assert "card" in c["class"] and not any(k.startswith("card--") for k in c["class"])
     for c in cards:

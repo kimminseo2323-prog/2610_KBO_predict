@@ -34,6 +34,7 @@ from .predict import canceled_entry, predict_game, raw_prob
 from .publish import _write_json
 from .seasons import is_regular
 from .simulate import outlook_for
+from . import whatif
 
 MODE = "rewind"
 STARTER_SOURCE = "actual (boxscore pitching order 1)"
@@ -128,6 +129,10 @@ def day_payload(season: int, on: str, *, games: list[dict], boxscores: dict[int,
         e["result"] = _result(g, raw_prob(bundle, g, state, starters))
         entries.append(e)
     outlook = outlook_for(season, on, games, state=state, team_bundle=team_bundle, ps_config=ps_config)
+    # 선발 바꿔 보기: 경기마다 선발과 상관없는 피처 값 + 후보 선발 기록 (모델 숫자는 index.json의 whatif_model)
+    wi = [whatif.game_block(g, state, starter_ids(boxscores.get(g["game_id"])), games, boxscores, regular_only=True)
+          for g in sorted((g for g in day_rows(games, season) if g["date"] == on and g["status"] == "FINAL"),
+                          key=lambda g: g["game_id"])] if whatif.model_params(bundle) else []
     return {
         "generated_at": meta.get("generated_at"),
         "date": on,
@@ -139,6 +144,7 @@ def day_payload(season: int, on: str, *, games: list[dict], boxscores: dict[int,
         "run_url": meta.get("run_url"),
         "games": entries,
         "outlook": outlook,
+        "whatif": wi,
     }
 
 
@@ -212,6 +218,7 @@ def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict, meta:
         "accuracy": round(n_correct / n_decided, 4) if n_decided else None,
         "n_decided": n_decided,
         "note": INDEX_NOTE,
+        "whatif_model": whatif.model_params(bundle),  # 선발 바꿔 보기용 모델 숫자 (로지스틱 회귀일 때만, 아니면 None)
     }
     _write_json(index_path, index, indent=1)
     return index
