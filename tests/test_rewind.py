@@ -103,7 +103,7 @@ def test_rewind_matches_report_model(real_small, day, training_rows):
     """되감기 확률 == report-2026으로 학습 데이터셋의 같은 경기 행을 예측한 값 (소수 4자리)."""
     rows = training_rows
     assert len(rows) == 5
-    p = predict_proba(real_small["bundle"], rows[FEATURE_NAMES])
+    p = predict_proba(real_small["bundle"], rows[real_small["bundle"]["features"]])
     expected = {gid: round(float(v), 4) for gid, v in zip(rows.index, p)}
     got = {g["game_id"]: g["home_win_prob"] for g in day["games"] if g["result"]["winner"] != "DRAW"}
     assert got == expected

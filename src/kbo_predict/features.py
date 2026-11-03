@@ -498,6 +498,8 @@ def build_dataset(seasons: list[int], *, types: dict | None = None, kb: int = 0,
     행 순서는 시즌 → (date, game_id). 저장된 원본(raw_store)을 읽는다.
     types(cluster.types_map)·kb·kp를 주면 상성 열도 붙는다 (기본 26개 피처 값은 types가 있든 없든 같다)."""
     state = LeagueState(types=types, kb=kb, kp=kp)
+    if seasons:  # Elo는 저장된 가장 이른 시즌부터 이어지는 점수 — 중간 시즌부터 만들어도 같은 값이 되게 앞 시즌들을 먼저 반영
+        state.elo = elo_through(min(seasons) - 1)
     frames = []
     for season in sorted(set(seasons)):
         state.start_season(season)
