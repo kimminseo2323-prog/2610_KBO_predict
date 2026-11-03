@@ -830,9 +830,10 @@ def test_team_logos_are_safe_svgs_with_sources():
     출처·라이선스는 logos/SOURCES.md에 파일마다 적는다. SSG처럼 파일이 없는 구단은 글자 배지로 대신한다."""
     app = (ASSETS / "app.js").read_text(encoding="utf-8")
     files = set(re.findall(r'"([A-Z]{2})"', re.search(r"const LOGO_FILES = new Set\(\[([^\]]*)\]\)", app).group(1)))
-    assert files and "SK" not in files
+    assert files == {"OB", "LT", "KT", "WO", "SK", "SS", "HH", "HT", "LG", "NC"}
     sources = (ASSETS / "logos" / "SOURCES.md").read_text(encoding="utf-8")
-    for code in files:
+    assert (ASSETS / "logos" / "SK.png").read_bytes()[:4] == bytes([0x89, 0x50, 0x4E, 0x47]) and "| SK |" in sources  # SSG만 PNG
+    for code in files - {"SK"}:
         svg = (ASSETS / "logos" / f"{code}.svg").read_text(encoding="utf-8")
         assert "<svg" in svg and "viewBox" in svg, code
         assert not re.search(r"<script|<foreignObject|\son\w+=|href=\"https?:|data:image", svg, re.I), code

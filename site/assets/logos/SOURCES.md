@@ -13,7 +13,7 @@
 | LT | 롯데 자이언츠 | https://en.wikipedia.org/wiki/File:Lotte_Giants_logo.svg | https://upload.wikimedia.org/wikipedia/en/e/ef/Lotte_Giants_logo.svg | Non-free logo (`{{Non-free logo\|South Korean baseball logos}}`); "Fair use" | 롯데 자이언츠 (소유자 칸 비어 있음) | (적혀 있지 않음) | 12,123 B |
 | KT | KT 위즈 | https://en.wikipedia.org/wiki/File:KT_Wiz.svg | https://upload.wikimedia.org/wikipedia/en/e/e5/KT_Wiz.svg | Non-free logo (`{{Non-free logo}}`, `{{SVG-Logo}}`); "Fair use" | KT Wiz (파일 문서 Owner 칸) | http://www.ktwiz.co.kr/sports/site/baseball/intro/bi/emblem.do | 11,221 B |
 | WO | 키움 히어로즈 | https://en.wikipedia.org/wiki/File:Kiwoom_Heroes.svg | https://upload.wikimedia.org/wikipedia/en/d/dc/Kiwoom_Heroes.svg | Non-free logo (`{{Non-free logo\|South Korean baseball logos}}`); "Fair use" | 키움 히어로즈 (소유자 칸 없음) | https://heroesbaseball.co.kr/heroes/bi/bi.do | 25,098 B |
-| SK | SSG 랜더스 | **없음 (SVG를 찾지 못함)** | — | — | — | — | — |
+| SK | SSG 랜더스 | https://www.ssglanders.com/landers/emblem (구단 공식 BI 페이지, 'SSG랜더스 메인 로고(엠블럼)') | https://www.ssglanders.com/img/wyverns/emblem/ssg_emblem1.png | 구단 페이지 표기: "개인의 목적으로 사용이 가능하나 상업적 목적이나 용도로 사용될 경우 저작권법에 의해 처벌을 받으실 수 있습니다." (2026-11-03 확인) | SSG 랜더스 | 구단 공식 사이트 | PNG 18,826 B |
 | SS | 삼성 라이온즈 | https://en.wikipedia.org/wiki/File:Samsung_Lions.svg | https://upload.wikimedia.org/wikipedia/en/0/0e/Samsung_Lions.svg | Non-free logo (`{{Non-free logo}}`, `{{SVG-logo}}`); "Fair use" | Samsung Lions (파일 문서 Owner 칸) | http://www.samsunglions.com/intro/intro04.asp | 26,442 B |
 | HH | 한화 이글스 | https://en.wikipedia.org/wiki/File:Hanwha_Eagles_2025.svg | https://upload.wikimedia.org/wikipedia/en/a/af/Hanwha_Eagles_2025.svg | Non-free logo (`{{Non-free logo\|South Korean baseball logos}}`); "Fair use" | 한화 이글스 (소유자 칸 없음) | (적혀 있지 않음) | 25,111 B |
 | HT | KIA 타이거즈 | https://en.wikipedia.org/wiki/File:Kia_Tigers_logo.svg | https://upload.wikimedia.org/wikipedia/en/2/2f/Kia_Tigers_logo.svg | Non-free logo (`{{Non-free logo}}`); "Fair use" | KIA 타이거즈 (소유자 칸 없음) | https://tigers.co.kr/ | 23,971 B |
@@ -34,3 +34,9 @@
 - KT, SS: 외부 DTD를 가리키는 `<!DOCTYPE …>` 줄을 지웠습니다.
 - 한 페이지에 여러 로고를 인라인으로 넣을 때 `id`가 겹치지 않도록 `id`에 구단 코드를 붙였습니다 (예: HH의 `a` → `HH-a`, 짝이 되는 `url(#…)` 참조도 함께). 대상: OB 1개, KT 1개, SS 1개, HH 47개, HT 1개, LG 2개.
 - 200 KB를 넘는 파일은 없습니다 (가장 큰 것이 NC, 약 38 KB).
+
+## SSG 랜더스 (SK.png) 처리 (2026-11-03)
+- 현재 로고의 SVG가 위키미디어·위키백과·구단 사이트 어디에도 없어, 구단 공식 BI 페이지의 PNG를 받았습니다(식별 가능한 UA, 요청 2번, 5초 간격).
+- 원본(1420×600)에는 BI 안내용 반투명 회색 격자와 바깥 테두리가 함께 들어 있어, 로고 둘레(채도 높은 픽셀 상자 + 30px)로 자르고 반투명한 밝은 회색 격자 픽셀만 투명으로 지웠습니다.
+  로고 모양·색은 바꾸지 않았습니다. 480px 폭으로 줄이고 128색 팔레트로 저장했습니다(약 19 KB).
+- 구단 안내대로 비상업 개인 포트폴리오에서 팀을 알아보게 하는 용도로만 씁니다.
