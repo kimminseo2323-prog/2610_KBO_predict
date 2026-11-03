@@ -23,7 +23,9 @@ const state = { report: null, history: null, status: null, errors: {} };
 /** 소수 d자리. 값이 없으면 "—". */
 const num = (v, d = 3) => (fin(v) ? Number(v).toFixed(d) : "—");
 /** p값: 0.001 미만은 "< .001", 그 밖은 ".046". */
-const pval = (p) => (!fin(p) ? "—" : Number(p) < 0.001 ? "< .001" : fmtRate3(p));
+const pval = (p) => (!fin(p) ? "—" : Number(p) < 0.001 ? "<.001" : fmtRate3(p));
+// 문장 속 p값: 0.001 미만이면 "p < .001", 아니면 "p = 0.xxx" 꼴 ("p = < .001"처럼 기호가 겹치지 않게).
+const pText = (p) => (!fin(p) ? "p = —" : Number(p) < 0.001 ? "p < .001" : `p = ${fmtRate3(p)}`);
 /** 정확도 차이(0~1 소수 두 개) → "+1.5%p". */
 const pp = (a, b) => {
   if (!fin(a) || !fin(b)) return "—";
@@ -285,12 +287,8 @@ function renderStage() {
   const live = liveFacts();
   const calib = CALIB[r.models?.[sel]?.calibration] ?? r.models?.[sel]?.calibration;
 
-  const top = el("div", { class: "stage__top" }, el("div", { class: "pills" }, [
-    el("span", { class: "pill pill--ink" }, r.model_version ?? "report"),
-    el("span", { class: "pill pill--white" }, `시험 ${season} 정규시즌 ${fmtInt(m.n)}경기`),
-    el("span", { class: "pill pill--white" }, `${algoName(sel)}${calib ? ` + ${calib}` : ""}`),
-    el("span", { class: "pill pill--white" }, `학습 ${fmtRange(r.train_seasons)} · 검증 ${r.val_season ?? "—"}`),
-  ]));
+  const top = el("p", { class: "stage__top stage__caption" },
+    `${season} 정규시즌 ${fmtInt(m.n)}경기로 시험했습니다. 학습 ${fmtRange(r.train_seasons)}, 검증 ${r.val_season ?? "—"}, 모델 ${algoName(sel)}${calib ? `(${calib} 보정)` : ""}.`);
 
   // 왼쪽(핑크): 좋은 숫자
   const goodHead = diffNum === null ? "비교하지 못했습니다" : diffNum > 0 ? "기준선보다 높습니다" : diffNum < 0 ? "기준선보다 낮습니다" : "기준선과 같습니다";
@@ -320,14 +318,15 @@ function renderStage() {
       el("h3", { class: "side__team" }, limitHead),
     ]),
     el("p", { class: "side__prob" }, [
-      el("span", { class: "side__num" }, [el("small", { class: "num__pre" }, "p ="), pval(sig.mcnemar_p)]),
+      el("span", { class: "side__num" }, [el("small", { class: "num__pre" }, fin(sig.mcnemar_p) && sig.mcnemar_p < 0.001 ? "p <" : "p ="),
+        fin(sig.mcnemar_p) && sig.mcnemar_p < 0.001 ? ".001" : pval(sig.mcnemar_p)]),
       el("span", { class: "side__who" }, "McNemar 검정, 같은 경기를 견줌"),
     ]),
     el("div", { class: "side__details" }, el("div", { class: "side__chip" }, [
       el("p", { class: "chip__row" }, [el("span", {}, ["유의수준 ", el("b", { class: "num" }, fmtRate3(ALPHA, 2))]),
         el("span", { class: "chip__sub" }, ok ? "비교 대상 기준 유의함" : "비교 대상 기준 우연과 구분 안 됨")]),
       statRows([
-        ...BASELINES.map(([key, label]) => [label, `p = ${pval(sig.all?.[key]?.mcnemar_p)}`, signif(sig.all?.[key]?.mcnemar_p), key === sig.vs ? "미리 정한 비교 대상" : null]),
+        ...BASELINES.map(([key, label]) => [label, pText(sig.all?.[key]?.mcnemar_p), signif(sig.all?.[key]?.mcnemar_p), key === sig.vs ? "미리 정한 비교 대상" : null]),
         liveRow,
       ]),
     ])),
@@ -356,7 +355,7 @@ function renderStage() {
           el("li", {}, [el("span", { class: "key key--base", "aria-hidden": "true" }), "빈 점 = 규칙의 정확도, 노란 점(*) = 미리 정한 비교 대상"]),
         ]),
       ]),
-      el("div", { class: "ruler__notes" }, [
+      el("details", { class: "more ruler__notes" }, [el("summary", {}, "이 눈금 읽는 법"),
         el("p", { class: "ruler__note" }, [
           el("b", {}, "이 구간 안의 규칙: "), inside.join(", ") || "없음",
           outside.length ? [el("b", {}, " · 밖의 규칙: "), outside.join(", ")] : null,
@@ -408,8 +407,8 @@ function renderHoldout() {
       ]),
       el("td", { class: "num" }, fmtPct(t.accuracy, 1)),
       el("td", { class: "num" }, num(t.log_loss)),
-      el("td", { class: "num" }, num(t.brier)),
-      el("td", { class: "num" }, ""),
+      el("td", { class: "num col-brier" }, num(t.brier)),
+      el("td", { class: "num muted" }, "—"),
     ]);
   };
   const baseRow = ([key, label]) => el("tr", { class: "is-baseline" }, [
@@ -419,7 +418,7 @@ function renderHoldout() {
     ]),
     el("td", { class: "num" }, fmtPct(base[key], 1)),
     el("td", { class: "num muted" }, "—"),
-    el("td", { class: "num muted" }, "—"),
+    el("td", { class: "num muted col-brier" }, "—"),
     el("td", { class: "num" }, pval(sig.all?.[key]?.mcnemar_p)),
   ]);
   const order = [sel, ...Object.keys(r.models ?? {}).filter((k) => k !== sel)];
@@ -428,7 +427,7 @@ function renderHoldout() {
     el("p", { class: "holdout__pointer" }, `비교 대상 규칙(${baseName(sig.vs)})은 ${sig.selected_on === "val" ? `${r.val_season} 검증에서` : "미리"} 가장 강했던 규칙`),
     el("div", { class: "inset" }, table(
       `${r.test_season} 시험 성적: 모델 ${order.length}개와 규칙 3개`,
-      [["모델 / 규칙"], ["정확도", "num"], ["log loss", "num"], ["Brier", "num"], ["p값", "num"]],
+      [["모델 / 규칙"], ["정확도", "num"], ["log loss", "num"], ["Brier", "num col-brier"], ["p값", "num"]],
       [...order.map(modelRow), ...BASELINES.map(baseRow)],
       "holdout-table",
     )),
@@ -533,7 +532,7 @@ function renderVariants() {
     blocks.push(el("div", { class: "variant" }, [
       el("div", { class: "variant__head" }, [
         el("h3", { class: "variant__title" }, "선수 유형 상성 피처를 더하면"),
-        el("span", { class: `pill pill--sm ${adopt ? "pill--ink" : "pill--white"}` }, adopt ? "채택" : "채택 안 함"),
+        el("span", { class: `pill pill--sm ${adopt ? "pill--ink" : "pill--muted"}` }, adopt ? "채택" : "채택 안 함"),
       ]),
       variantTable("유형 상성 피처를 더한 모델과 비교", [
         ["상성 피처 없이 (지금)", mf.without, !adopt],
@@ -541,7 +540,7 @@ function renderVariants() {
       ]),
       el("p", { class: "variant__note" },
         `${adopt ? "검증 log loss가 좋아져 채택했습니다." : "검증 log loss가 좋아지지 않아 라이브 모델에 넣지 않았습니다."} ` +
-        `시험에서 두 모델의 적중 차이는 McNemar p = ${pval(mf.mcnemar_p_test)}로 ${fin(mf.mcnemar_p_test) && mf.mcnemar_p_test < ALPHA ? "유의합니다" : "유의하지 않습니다"}.`),
+        `시험에서 두 모델의 적중 차이는 McNemar ${pText(mf.mcnemar_p_test)}로 ${fin(mf.mcnemar_p_test) && mf.mcnemar_p_test < ALPHA ? "유의합니다" : "유의하지 않습니다"}.`),
       mf.validation_scope ? el("p", { class: "variant__scope" }, [el("b", {}, "비교 범위 "), mf.validation_scope]) : null,
     ]));
   }
@@ -573,7 +572,7 @@ function clusterGroup(group, q) {
     ]),
     table(`${GROUP[group]} K별 실루엣·유지율·점수`, [["K"], ["실루엣", "num"], ["유지율", "num"], ["점수", "num"]], kRows, "k-table"),
     el("p", { class: "cluster__stats" }, [
-      `실루엣 ${fmtRate3(chosen?.silhouette)} · 유지율(전체 ${fmtInt(q.n_all)}명 기준) ${fmtRate3(q.retention)} · GMM 일치율 ${fmtRate3(q.gmm_agreement)}`,
+      `다른 묶기 방법(GMM)과 같은 유형으로 묶인 비율 ${fmtRate3(q.gmm_agreement)}`,
       q.membership_method === "kmeans_softmax" ? " · 소속 확률은 GMM 대신 중심까지 거리로 계산" : "",
     ]),
     el("p", { class: "cluster__cap" }, "유형별 인원과 대표 선수"),
@@ -624,7 +623,8 @@ function renderLive() {
       el("td", { class: "num" }, fmtInt(mine.length)),
       el("td", { class: "num" }, fmtInt(decided.length)),
       el("td", { class: "num" }, fmtInt(correct)),
-      el("td", { class: "num" }, decided.length ? fmtPct(correct / decided.length, 1) : "—"),
+      // 결과가 난 경기가 LIVE_SHORT 미만이면 %로 쓰지 않는다 (3경기의 "100.0%"는 과장)
+      el("td", { class: "num" }, !decided.length ? "—" : decided.length < LIVE_SHORT ? `${correct}/${decided.length}` : fmtPct(correct / decided.length, 1)),
     ]);
   });
   const first = rows.map((h) => h.date).filter(Boolean).sort()[0];
