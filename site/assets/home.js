@@ -15,7 +15,7 @@
 import {
   IS_LOCAL, TEAMS, TYPE_COLORS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInnings, fmtDate, fmtKST,
   teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError, ballSVG, countUp,
-  teamColors, teamChip, teamText, favState,
+  teamColors, teamChip, teamText, favState, typeSummaryTable,
 } from "./app.js";
 import { barChart, scatter } from "./charts.js";
 
@@ -926,10 +926,8 @@ function renderTypeMap() {
   const bat = all.filter((p) => p.season === season);
   const types = state.players.types?.batter ?? [];
   $("typemap-lead").textContent = `${season} 타자 ${bat.length}명, 기록이 비슷할수록 가깝게`;
-  const counts = el("ul", { class: "typemap__counts" }, types.map((t) => el("li", { class: "pill pill--white" }, [
-    el("span", { class: "dot", style: { background: `var(--${TYPE_COLORS.batter[t.id]})` }, "aria-hidden": "true" }),
-    t.name, el("b", { class: "num" }, String(bat.filter((p) => p.type?.id === t.id).length)),
-  ])));
+  // 범례 알약 대신 유형별 요약 표: 선수 수·평균 기록·대표 선수 (지도 색과 같은 점)
+  const counts = typeSummaryTable(bat, "batter", types, { caption: `${season} 타자 유형별 선수 수와 평균 기록` });
   const chart = el("div");
   body.replaceChildren(el("div", { class: "inset" }, chart), counts);
   scatter(chart, bat.map((p) => ({ id: p.player_id, x: p.x, y: p.y, label: `${p.name_ko ?? p.name} · ${teamName(p.team)}`, type: p.type })), {

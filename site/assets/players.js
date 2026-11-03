@@ -14,7 +14,7 @@
 
 import {
   TEAMS, el, fetchJSON, settle, fin, fmtPct, fmtRate3, fmtInt, fmtRange, fmtInnings, teamName, teamNameFor,
-  typeColor, colorVar, onColor, renderNav, renderFooter, showError, teamColors,
+  typeColor, colorVar, onColor, renderNav, renderFooter, showError, teamColors, typeSummaryTable,
 } from "./app.js";
 import { scatter } from "./charts.js";
 
@@ -341,19 +341,9 @@ function buildMapShell() {
       el("p", { class: "picked__chip", id: "map-picked" }),
       el("button", { class: "btn map__jump", type: "button", onclick: jumpToCard }, "선수 카드 보기 ↓"),
     ]),
-    el("ul", { class: "type-legend", id: "map-legend", "aria-label": "유형별 선수 수" }),
-    el("details", { class: "type-notes", id: "map-details" }, [
-      el("summary", {}, "유형 설명 보기"),
-      el("dl", { class: "type-notes__list", id: "map-notes" }),
-    ]),
+    // 유형별 요약 표(선수 수·평균 기록·설명·대표 선수) — 범례와 "유형 설명 보기"를 한 표로 합쳤다
+    el("div", { id: "map-legend", "aria-label": "유형별 선수 수와 평균 기록" }),
   );
-  // 넓은 화면(2열)에서는 유형 설명을 펼쳐 둔다 — 지도 카드가 선수 카드 높이만큼 내려오고, 처음 보는 사람이 유형 뜻을 바로 읽는다.
-  // 좁은 화면(1열)에서는 접어 둔다. 화면 폭이 기준을 넘나들 때만 다시 맞춘다.
-  const wide = window.matchMedia?.("(min-width: 901px)");
-  if (wide) {
-    $("map-details").open = wide.matches;
-    wide.addEventListener?.("change", (e) => { const d = $("map-details"); if (d) d.open = e.matches; });
-  }
 }
 
 function jumpToCard() {
@@ -383,15 +373,9 @@ function renderMap() {
   const team = state.team;
   $("map-lead").textContent = `${state.season} ${GROUP[g]} ${fmtInt(all.length)}명` +
     (team ? `, ${teamNameFor(team, state.season)} ${fmtInt(pool.length)}명 진하게` : "") + ". 점을 누르면 선수 카드가 바뀝니다";
-  $("map-legend").replaceChildren(...types.map((t) => el("li", { class: "type-legend__item" }, [
-    el("span", { class: "dot", style: { background: colorVar(typeColor(g, t.id)) }, "aria-hidden": "true" }),
-    t.name,
-    el("b", { class: "num" }, `${fmtInt(pool.filter((p) => p.type?.id === t.id).length)}명`),
-  ])));
-  $("map-notes").replaceChildren(...types.flatMap((t) => [
-    el("dt", {}, [el("span", { class: "dot", style: { background: colorVar(typeColor(g, t.id)) }, "aria-hidden": "true" }), t.name]),
-    el("dd", {}, t.blurb ?? "—"),
-  ]));
+  $("map-legend").replaceChildren(typeSummaryTable(pool, g, types, {
+    nameOf, caption: `${state.season} ${GROUP[g]}${team ? ` ${teamNameFor(team, state.season)}` : ""} 유형별 선수 수와 평균 기록`,
+  }));
   const chart = $("map-chart");
   if (!pool.length) {
     chart.replaceChildren(el("p", { class: "empty map__empty" }, `${teamNameFor(team, state.season)}에는 ${state.season} ${GROUP[g]} 기록이 없습니다. 팀을 '전체'로 바꿔 보세요.`));

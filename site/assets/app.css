@@ -258,3 +258,17 @@ details.more li + li { margin-top: 4px; }
   .chart .c-bar, .chart .c-col { transform: none !important; }
   .chart .c-lines, .chart .c-point { opacity: 1 !important; clip-path: none !important; }
 }
+
+/* 유형별 요약 표 (app.js typeSummaryTable): 열마다 가장 두드러진 유형은 굵게 + 옅은 회색 칸 */
+.type-table-wrap { margin-top: var(--sp-16); }
+.type-table th[scope="row"] { min-width: 12em; max-width: 22em; white-space: normal; word-break: keep-all; }
+.type-table__name { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: var(--ink); }
+.type-table__name .dot { width: 10px; height: 10px; flex: none; }
+.type-table__blurb { display: block; margin-top: 2px; font-size: 12px; font-weight: 500; line-height: 1.45; color: var(--muted); }
+.type-table td.num { font-family: var(--font-num); font-size: 16px; font-weight: 600; white-space: nowrap; }
+.type-table td.is-best { font-weight: 900; color: var(--ink); background: var(--surface-card); }
+.type-table__top { font-size: 13px; color: var(--body); white-space: nowrap; }
+@media (max-width: 479px) {
+  .type-table__blurb, .type-table .type-table__top, .type-table .sm-hide { display: none; }
+  .type-table th[scope="row"] { min-width: 7em; }
+}

@@ -147,6 +147,58 @@ export function onColor(token) {
 }
 
 /** 유형 색 토큰. 모르는 유형(null 등)은 "muted-soft". */
+/**
+ * 유형별 요약 표: 유형마다 선수 수, 선수 평균 기록, 한 줄 설명, 대표 선수(소속 확신이 큰 순 2명).
+ * 열마다 가장 두드러진 유형(타자: 가장 높은 값, 평균자책점은 가장 낮은 값)을 굵게 — 표만 보고 "이 유형은 무엇이 다른지" 읽히게.
+ * players = 같은 group·season의 선수 목록, types = players.json types[group], nameOf(p) = 표시 이름.
+ */
+const TYPE_TABLE_COLS = {
+  batter: [
+    ["타율", (s) => s.avg, (v) => fmtRate3(v), "max"],
+    ["출루율", (s) => s.obp, (v) => fmtRate3(v), "max", "sm-hide"],
+    ["홈런", (s) => s.hr, (v) => v.toFixed(1), "max"],
+    ["삼진 비율", (s) => s.k_pct, (v) => fmtPct(v, 1), "max"],
+    ["볼넷 비율", (s) => s.bb_pct, (v) => fmtPct(v, 1), "max"],
+    ["도루", (s) => s.sb, (v) => v.toFixed(1), "max"],
+  ],
+  pitcher: [
+    ["평균자책점", (s) => s.era, (v) => v.toFixed(2), "min"],
+    ["선발 비율", (s) => (fin(s.games) && s.games > 0 ? s.starts / s.games : null), (v) => fmtPct(v, 0), "max"],
+    ["이닝", (s) => s.ip, (v) => v.toFixed(0), "max", "sm-hide"],
+    ["삼진 비율", (s) => s.k_pct, (v) => fmtPct(v, 1), "max"],
+    ["볼넷 비율", (s) => s.bb_pct, (v) => fmtPct(v, 1), "max"],
+  ],
+};
+export function typeSummaryTable(players, group, types, { nameOf = (p) => p.name_ko ?? p.name, caption } = {}) {
+  const cols = TYPE_TABLE_COLS[group] ?? [];
+  const mean = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
+  const rows = types.map((t) => {
+    const mine = players.filter((p) => p.type?.id === t.id);
+    const vals = cols.map(([, get]) => mean(mine.map((p) => get(p.stats ?? {})).filter(fin).map(Number)));
+    const top = [...mine].sort((a, b) => (b.prob ?? 0) - (a.prob ?? 0)).slice(0, 2).map(nameOf);
+    return { t, n: mine.length, vals, top };
+  });
+  const best = cols.map(([, , , dir], j) => {
+    const xs = rows.map((r) => r.vals[j]).filter(fin);
+    return xs.length ? (dir === "min" ? Math.min(...xs) : Math.max(...xs)) : null;
+  });
+  const head = el("tr", {}, [el("th", { scope: "col" }, "유형"), el("th", { scope: "col", class: "num" }, "선수"),
+    ...cols.map(([label, , , , hide]) => el("th", { scope: "col", class: `num${hide ? ` ${hide}` : ""}` }, label)), el("th", { scope: "col", class: "type-table__top" }, "대표 선수")]);
+  const body = rows.map(({ t, n, vals, top }) => el("tr", {}, [
+    el("th", { scope: "row" }, [
+      el("span", { class: "type-table__name" }, [el("span", { class: "dot", style: { background: colorVar(typeColor(group, t.id)) }, "aria-hidden": "true" }), t.name]),
+      t.blurb ? el("span", { class: "type-table__blurb" }, t.blurb) : null,
+    ]),
+    el("td", { class: "num" }, `${n}명`),
+    ...vals.map((v, j) => el("td", { class: `num${fin(v) && v === best[j] ? " is-best" : ""}${cols[j][4] ? ` ${cols[j][4]}` : ""}` }, fin(v) ? cols[j][2](v) : "—")),
+    el("td", { class: "type-table__top" }, top.join(", ") || "—"),
+  ]));
+  return el("div", { class: "table-scroll type-table-wrap" }, el("table", { class: "table type-table" }, [
+    el("caption", { class: "sr-only" }, caption ?? "유형별 선수 수와 평균 기록"),
+    el("thead", {}, head), el("tbody", {}, body),
+  ]));
+}
+
 export function typeColor(group, typeId) {
   return TYPE_COLORS[group]?.[String(typeId)] ?? "muted-soft";
 }
