@@ -15,7 +15,7 @@
 import {
   IS_LOCAL, TEAMS, TYPE_COLORS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInnings, fmtDate, fmtKST,
   teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError, ballSVG, countUp,
-  teamColors, teamChip, teamText, favState, typeSummaryTable, fmtProb, fmtDateShort, fmtScore, factorKey, factorLabel, factorHelp, typeBlurb,
+  teamColors, teamChip, teamText, favState, typeSummaryTable, fmtProb, fmtDateShort, fmtScore, teamLogo, factorKey, factorLabel, factorHelp, typeBlurb,
 } from "./app.js";
 import { barChart, scatter } from "./charts.js";
 
@@ -336,7 +336,7 @@ function renderBug() {
     const c = o.teams[i];
     const tc = teamColors(c);
     return el("span", { class: "bug__team", style: { background: tc.bg, color: tc.fg }, "aria-label": `${teamName(c)} ${o.wins[i]}승` },
-      [teamName(c), el("b", {}, String(o.wins[i]))]);
+      [teamLogo(c, { size: "sm" }), teamName(c), el("b", {}, String(o.wins[i]))]);
   }));
 }
 
@@ -367,7 +367,7 @@ function sideBlock(g, side, prob, large, animate = false) {
   const role = side === "home" ? "홈" : "원정";
   const head = el("div", { class: "side__head" }, [
     el("p", { class: "side__role" }, role),
-    el("h3", { class: "side__team" }, teamName(t.code)),
+    el("h3", { class: "side__team" }, [teamLogo(t.code, { size: large ? "lg" : "md" }), el("span", {}, teamName(t.code))]),
     large ? el("p", { class: "side__full" }, teamName(t.code, { full: true })) : null,
   ]);
   const n = el("span", { class: "side__n" }, String(prob));

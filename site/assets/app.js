@@ -306,6 +306,29 @@ export const OLD_TEAM_NAMES = {
 };
 
 /** 그 시즌 당시의 팀 이름(옛 이름이 있으면 옛 이름). 시즌이 없으면 teamName과 같다. */
+// ---------- 구단 로고 ----------
+// site/assets/logos/<코드>.svg (출처·라이선스: logos/SOURCES.md). 구단 상표이고 위키백과의 "공정 이용" 파일이라
+// 비상업 포트폴리오에서 팀을 알아보게 하는 용도로만 쓴다. 문제가 되면 SHOW_LOGOS = false 한 줄로 모두 끈다(글자 배지로 바뀜).
+export const SHOW_LOGOS = true;
+const LOGO_FILES = new Set(["OB", "LT", "KT", "WO", "SS", "HH", "HT", "LG", "NC"]); // SSG는 SVG가 없어 글자 배지
+
+/**
+ * 구단 로고 배지(흰 바탕 정사각형 안의 로고). 로고 파일이 없거나(SSG), 옛 구단명 시즌(SK 와이번스·넥센 등)이거나,
+ * SHOW_LOGOS가 꺼져 있으면 구단색 글자 배지. 장식이므로 alt는 비우고(이름은 옆 글자가 말한다) title만 단다.
+ */
+export function teamLogo(code, { season, size = "md" } = {}) {
+  const old = OLD_TEAM_NAMES[code];
+  const isOld = old && Number.isFinite(Number(season)) && Number(season) <= old.until;
+  const cls = `tlogo tlogo--${size}`;
+  if (SHOW_LOGOS && LOGO_FILES.has(code) && !isOld) {
+    return el("span", { class: cls, title: teamNameFor(code, season, { full: true }) },
+      el("img", { src: `assets/logos/${code}.svg`, alt: "", loading: "lazy", decoding: "async", width: "40", height: "40" }));
+  }
+  const c = teamColors(code);
+  return el("span", { class: `${cls} tlogo--text`, style: { background: c.bg, color: c.fg }, title: teamNameFor(code, season, { full: true }), "aria-hidden": "true" },
+    teamNameFor(code, season));
+}
+
 export function teamNameFor(code, season, { full = false } = {}) {
   const old = OLD_TEAM_NAMES[code];
   if (old && Number.isFinite(Number(season)) && Number(season) <= old.until) return full ? old.full : old.ko;

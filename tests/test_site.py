@@ -823,3 +823,18 @@ def test_news_worker_hides_key_and_keeps_results_as_is():
     codes = set(re.findall(r"([A-Z]{2}): \"", w.split("TEAM_QUERY = {")[1].split("};")[0]))
     app = (ASSETS / "app.js").read_text(encoding="utf-8")
     assert codes == set(re.findall(r'^  "([A-Z]{2})": \{"ko"', app, re.M))
+
+
+def test_team_logos_are_safe_svgs_with_sources():
+    """구단 로고: app.js LOGO_FILES의 파일이 모두 있고, 순수 SVG(스크립트·이벤트 속성·외부 참조·내장 비트맵 없음)이며 viewBox가 있다.
+    출처·라이선스는 logos/SOURCES.md에 파일마다 적는다. SSG처럼 파일이 없는 구단은 글자 배지로 대신한다."""
+    app = (ASSETS / "app.js").read_text(encoding="utf-8")
+    files = set(re.findall(r'"([A-Z]{2})"', re.search(r"const LOGO_FILES = new Set\(\[([^\]]*)\]\)", app).group(1)))
+    assert files and "SK" not in files
+    sources = (ASSETS / "logos" / "SOURCES.md").read_text(encoding="utf-8")
+    for code in files:
+        svg = (ASSETS / "logos" / f"{code}.svg").read_text(encoding="utf-8")
+        assert "<svg" in svg and "viewBox" in svg, code
+        assert not re.search(r"<script|<foreignObject|\son\w+=|href=\"https?:|data:image", svg, re.I), code
+        assert f"| {code} |" in sources, code  # 출처 표에 그 구단 행이 있다
+    assert "export const SHOW_LOGOS" in app

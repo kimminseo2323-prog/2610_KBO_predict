@@ -58,7 +58,8 @@
 .side__prob { grid-area: prob; display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
 .side__details { grid-area: details; margin-top: var(--sp-12); min-width: 0; }
 .side__role { font-size: 12px; font-weight: 800; letter-spacing: 0.5px; opacity: 0.85; }
-.side__team { font-size: clamp(30px, 20px + 2.6vw, 52px); font-weight: 900; line-height: 1.02; letter-spacing: -2px; overflow-wrap: anywhere; }
+.side__team { display: flex; align-items: center; gap: 12px; font-size: clamp(30px, 20px + 2.6vw, 52px); font-weight: 900; line-height: 1.02; letter-spacing: -2px; overflow-wrap: anywhere; }
+@media (min-width: 768px) { .matchup--lg .side--home .side__team { flex-direction: row-reverse; } }
 .side__full { margin-top: 4px; font-size: 13px; font-weight: 700; opacity: 0.85; }
 .side__num {
   display: block; font-family: var(--font-num); font-style: italic; font-weight: 800;

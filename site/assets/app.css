@@ -200,6 +200,16 @@ details.more li + li { margin-top: 4px; }
 .chart .c-end { font-size: 12px; font-weight: 800; }
 .chart .c-side { font-size: 13px; font-weight: 800; }
 
+/* 구단 로고 배지: 흰 정사각형 안에 로고 (팀 색 면 위에서도, 검정 KT 로고도 보이게). 로고가 없으면 구단색 글자 배지 */
+.tlogo { display: inline-grid; place-items: center; flex: none; background: #fff; overflow: hidden; vertical-align: middle; }
+.tlogo img { width: 86%; height: 86%; object-fit: contain; display: block; }
+.tlogo--sm { width: 24px; height: 24px; }
+.tlogo--md { width: 36px; height: 36px; }
+.tlogo--lg { width: 56px; height: 56px; }
+.tlogo--xl { width: 72px; height: 72px; }
+.tlogo--text { font-size: 10px; font-weight: 900; letter-spacing: -0.3px; line-height: 1; }
+.tlogo--lg.tlogo--text, .tlogo--xl.tlogo--text { font-size: 15px; }
+
 /* 팀 색: 칩(면)과 글자. 우세한 팀의 이름·숫자를 그 팀 색으로 (app.js teamChip / teamText) */
 .tchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-weight: 800; line-height: 1.35; white-space: nowrap; }
 .tchip--sm { padding: 1px 6px; font-size: 12px; }

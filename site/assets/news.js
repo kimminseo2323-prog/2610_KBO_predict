@@ -11,7 +11,7 @@
 //   저장소에 저장하지 않고(브라우저 캐시만), 예측 모델에 쓰지 않고, 광고를 붙이지 않는다.
 // NEWS_PROXY가 비어 있으면(준비 전) 구단마다 네이버 뉴스 검색 결과로 가는 링크만 보여 준다(우리 쪽에서 결과를 받지 않음).
 
-import { TEAMS, NEWS_PROXY, el, fetchJSON, settle, renderNav, renderFooter, teamColors, teamName } from "./app.js";
+import { TEAMS, NEWS_PROXY, el, fetchJSON, settle, renderNav, renderFooter, teamColors, teamName, teamLogo } from "./app.js";
 
 const $ = (id) => document.getElementById(id);
 const FAV_KEY = "kbo-news-favorites";
@@ -109,7 +109,7 @@ function teamCard(code, big) {
   const card = el("article", { class: `news-card${big ? " news-card--big" : ""}${fav ? " is-fav" : ""}`, style: { "--tc": c.bg, "--tc-fg": c.fg }, "aria-label": `${teamName(code, { full: true })} 소식` }, [
     el("header", { class: "news-card__head" }, [
       el("button", { class: "news-card__team", type: "button", onclick: () => selectTab(code) }, [
-        el("b", {}, teamName(code)), el("span", {}, TEAMS[code].full)]),
+        teamLogo(code, { size: big ? "xl" : "lg" }), el("b", {}, teamName(code)), el("span", {}, TEAMS[code].full)]),
       el("button", {
         class: `fav${fav ? " is-on" : ""}`, type: "button", "aria-pressed": String(fav),
         "aria-label": `${teamName(code)} 즐겨찾기 ${fav ? "해제" : "추가"}`, title: fav ? "즐겨찾기 해제" : "즐겨찾기",
@@ -142,7 +142,7 @@ function renderTabs() {
   }, label);
   const teamTab = (code) => {
     const c = teamColors(code);
-    return tab(code, [state.favs.has(code) ? el("span", { class: "news-tab__star", "aria-hidden": "true" }, "★") : null, teamName(code)],
+    return tab(code, [teamLogo(code, { size: "sm" }), state.favs.has(code) ? el("span", { class: "news-tab__star", "aria-hidden": "true" }, "★") : null, teamName(code)],
       { style: { "--tc": c.bg, "--tc-fg": c.fg }, "data-team": code });
   };
   $("news-tabs").replaceChildren(tab("all", "전체"), tab("fav", ["★ 즐겨찾기", el("b", { class: "num" }, String(state.favs.size))]), ...order().map(teamTab));

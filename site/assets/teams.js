@@ -11,7 +11,7 @@
 
 import {
   TEAMS, el, fetchJSON, settle, fin, fmtPct, fmtRate3, fmtDate, teamNameFor, typeColor, renderNav, renderFooter, showError,
-  teamColors, teamChip, fmtProb,
+  teamColors, teamChip, fmtProb, teamLogo,
 } from "./app.js";
 import { lineChart, stackedBar, enableTips } from "./charts.js";
 
@@ -51,6 +51,7 @@ const fullName = (code, season) => teamNameFor(code, season, { full: true });
 function teamCell(code, season) {
   return [
     el("span", { class: "dot team-dot", style: { background: `var(--${TEAMS[code]?.color ?? "muted-soft"})` }, "aria-hidden": "true" }),
+    teamLogo(code, { season, size: "sm" }),
     el("span", { class: "tn-full" }, fullName(code, season)),
     el("span", { class: "tn-short" }, shortName(code, season)),
   ];
