@@ -7,6 +7,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--canvas); color: var(--ink);
   font-family: var(--font-body); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
+  word-break: keep-all; overflow-wrap: anywhere; /* 한글 낱말 중간에서 줄이 바뀌지 않게 ("베팅 조/언이" 같은 끊김) */
 }
 img, svg { max-width: 100%; }
 h1, h2, h3, h4, p, ul, ol, figure, dl, dd { margin: 0; }
@@ -183,7 +184,7 @@ details.more li + li { margin-top: 4px; }
 
 /* ---------- 야구공 (app.js ballSVG) ---------- */
 .ball { display: block; }
-.ball--spin { animation: ball-spin 9s linear infinite; }
+.ball--spin { animation: ball-spin 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 1 both; } /* 경계가 밀릴 때 한 바퀴만 (계속 돌면 시선을 뺏는다) */
 @keyframes ball-spin { to { transform: rotate(360deg); } }
 
 /* ---------- 차트 (charts.js가 그리는 인라인 SVG) ---------- */
@@ -245,7 +246,7 @@ details.more li + li { margin-top: 4px; }
 .evidence { color: var(--body-strong); font-weight: 600; max-width: 70ch; }
 .evidence a { color: var(--ink); text-decoration: underline; font-variant-numeric: tabular-nums; }
 .footer__note { margin-top: var(--sp-8); color: var(--muted); max-width: 70ch; }
-.footer__field { position: absolute; right: 24px; bottom: -70px; width: 260px; height: 260px; color: var(--hairline); pointer-events: none; }
+.footer__field { display: none; } /* 정보 없는 장식이라 숨김 (DESIGN: 장식보다 데이터) */
 @media (max-width: 767px) { .footer__field { right: -60px; bottom: -110px; width: 220px; height: 220px; } }
 
 /* ---------- 움직임 줄이기 ---------- */

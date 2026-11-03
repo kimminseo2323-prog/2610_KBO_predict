@@ -389,6 +389,22 @@ export async function settle(state, key, promise) {
 export const fin = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
 
 /** 0.5195 → "52%". 값이 없으면 "—". */
+/** 시뮬레이션 확률: 0·1 근처는 "<1%" / ">99%" (1만 번 가상 시즌의 0%·100%를 "확정"처럼 보이지 않게). */
+export function fmtProb(v) {
+  if (!fin(v)) return "—";
+  const x = Number(v);
+  if (x < 0.005) return "<1%";
+  if (x > 0.995) return ">99%";
+  return fmtPct(x);
+}
+/** 짧은 날짜 "YYYY-MM-DD" → "11.3" (앞자리 0 없이). 형식이 다르면 그대로. */
+export function fmtDateShort(iso) {
+  const m = /^\d{4}-(\d{2})-(\d{2})/.exec(String(iso ?? ""));
+  return m ? `${+m[1]}.${+m[2]}` : String(iso ?? "—");
+}
+/** 점수 "원정 : 홈" — 사이트 전체 같은 모양. */
+export const fmtScore = (away, home) => `${away ?? "—"} : ${home ?? "—"}`;
+
 export function fmtPct(p, digits = 0) {
   if (!fin(p)) return "—";
   return `${(Number(p) * 100).toFixed(digits)}%`;

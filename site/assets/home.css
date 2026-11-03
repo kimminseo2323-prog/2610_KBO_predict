@@ -20,7 +20,7 @@
 .rewind { width: min(460px, 100%); }
 .rewind__row { display: flex; align-items: center; gap: 6px; }
 .rewind__step { width: 44px; padding: 0; font-size: 22px; }
-.rewind__label { flex: 1; min-width: 0; text-align: center; font-family: var(--font-num); font-style: italic; font-size: 24px; font-weight: 800; white-space: nowrap; }
+.rewind__label { flex: 1; min-width: 0; text-align: center; font-family: var(--font-body); font-style: normal; font-size: 20px; font-weight: 900; letter-spacing: -0.4px; white-space: nowrap; }
 .rewind__hint { margin-top: 2px; font-size: 12px; color: var(--muted); }
 .rewind__range { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 44px; margin: 4px 0 0; background: transparent; cursor: pointer; touch-action: pan-y; }
 .rewind__range::-webkit-slider-runnable-track { height: 4px; background: var(--ink); }
@@ -40,7 +40,7 @@
   position: relative; display: flex; flex-direction: column; overflow: hidden; isolation: isolate;
   color: var(--t-home, var(--on-dark)); background: var(--c-home, var(--teal));
 }
-.stage__meter { order: -1; display: flex; height: 10px; gap: 3px; background: var(--canvas); }
+.stage__meter { display: none; } /* 휴대폰에서 한쪽만 튀어나와 깨져 보였다 — 사선 경계가 같은 긴장감을 준다 */
 .meter__away { background: var(--c-away, var(--pink)); }
 .meter__home { background: var(--c-home, var(--teal)); }
 .stage__top {
@@ -49,20 +49,20 @@
 }
 .stage__top .pill { background: var(--canvas); color: var(--ink); }
 .stage__top .pill--ink { background: var(--ink); color: var(--on-dark); }
-.side { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head prob" "details details"; gap: 0 var(--sp-16); min-width: 0; padding: var(--sp-16) var(--sp-16) var(--sp-24); }
+.side { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head prob" "details details"; gap: 0 var(--sp-16); min-width: 0; padding: var(--sp-12) var(--sp-16) var(--sp-16); }
 .side--away { background: var(--c-away, var(--pink)); color: var(--t-away, var(--ink)); }
 .side--home { color: var(--t-home, var(--on-dark)); padding-top: 34px; }
 /* 모바일: 홈 면이 사선으로 원정 면을 파고든다 */
 .side--home::before { content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 22px; background: var(--c-away, var(--pink)); clip-path: polygon(0 0, 100% 0, 0 100%); }
 .side__head { grid-area: head; min-width: 0; }
 .side__prob { grid-area: prob; display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
-.side__details { grid-area: details; margin-top: var(--sp-16); min-width: 0; }
+.side__details { grid-area: details; margin-top: var(--sp-12); min-width: 0; }
 .side__role { font-size: 12px; font-weight: 800; letter-spacing: 0.5px; opacity: 0.85; }
 .side__team { font-size: clamp(30px, 20px + 2.6vw, 52px); font-weight: 900; line-height: 1.02; letter-spacing: -2px; overflow-wrap: anywhere; }
 .side__full { margin-top: 4px; font-size: 13px; font-weight: 700; opacity: 0.85; }
 .side__num {
   display: block; font-family: var(--font-num); font-style: italic; font-weight: 800;
-  font-size: 84px; line-height: 0.8; letter-spacing: -3px; font-variant-numeric: tabular-nums; white-space: nowrap;
+  font-size: 72px; line-height: 0.8; letter-spacing: -3px; font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .side__num small { font-size: 0.32em; letter-spacing: 0; margin-left: 0.06em; }
 .side__who { margin-top: 10px; font-size: 12px; font-weight: 800; padding: 3px 8px; background: var(--canvas); color: var(--ink); }
@@ -91,10 +91,16 @@
 .matchup--sm .side__chip { padding: 5px 10px; }
 
 /* 취소 경기 */
-.matchup--canceled { padding: var(--sp-16); background: var(--surface-strong); border-top: 0; }
-.matchup--canceled .pill--white { background: var(--canvas); }
-.matchup__canceled-title { margin-top: var(--sp-8); font-size: 22px; font-weight: 900; letter-spacing: -0.6px; }
-.matchups__rest .matchup--canceled { padding: var(--sp-12) var(--sp-16); }
+.matchup--canceled {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-12); flex-wrap: wrap;
+  padding: var(--sp-16) var(--sp-24); border-top: 0;
+  background: repeating-linear-gradient(-45deg, var(--surface-strong) 0 8px, var(--surface-card) 8px 16px);
+  box-shadow: inset 6px 0 0 var(--c-away, var(--ink)), inset -6px 0 0 var(--c-home, var(--ink));
+}
+.matchup__canceled-title { font-size: 22px; font-weight: 900; letter-spacing: -0.6px; background: var(--canvas); padding: 2px 8px; }
+.matchup__canceled-title .vs { color: var(--muted); font-weight: 700; }
+.matchups__rest .matchup--canceled { padding: var(--sp-12) var(--sp-24); }
+.stage__top .pill--nostarter { background: var(--ink); color: var(--on-dark); outline: 2px solid var(--canvas); outline-offset: -2px; }
 
 /* ---------- 데스크톱 슬랩: 사선 경계가 승률로 밀린다 ---------- */
 @media (min-width: 768px) {
@@ -274,3 +280,6 @@
 @media (prefers-reduced-motion: reduce) {
   .live-dot { animation: none; }
 }
+
+/* 터치 기기에서는 키보드 안내가 의미 없다 (M27) */
+@media (hover: none) { .rewind__hint { display: none; } }

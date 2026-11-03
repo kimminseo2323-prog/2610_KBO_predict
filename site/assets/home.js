@@ -15,7 +15,7 @@
 import {
   IS_LOCAL, TEAMS, TYPE_COLORS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInnings, fmtDate, fmtKST,
   teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError, ballSVG, countUp,
-  teamColors, teamChip, teamText, favState, typeSummaryTable, factorKey, factorLabel, factorHelp, typeBlurb,
+  teamColors, teamChip, teamText, favState, typeSummaryTable, fmtProb, fmtDateShort, fmtScore, factorKey, factorLabel, factorHelp, typeBlurb,
 } from "./app.js";
 import { barChart, scatter } from "./charts.js";
 
@@ -52,13 +52,7 @@ function recentForm(v, season) {
   return `최근 승률 ${fmtRate3(v)}`;
 }
 /** 확률 → "%". 0%·100%로 반올림되는 극단값은 "<1%"·">99%"로 (정확히 0·1이면 0%·100%). */
-const prob = (v) => {
-  if (!fin(v)) return "—";
-  const x = Number(v);
-  if (x > 0 && x < 0.005) return "<1%";
-  if (x < 1 && x > 0.995) return ">99%";
-  return fmtPct(x);
-};
+const prob = fmtProb; // 시뮬레이션 확률 표기는 app.js 하나로 (팀 페이지와 같은 "<1%" / ">99%")
 const sign = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%p`;
 const matchLabel = (g) => `${teamName(g.away.code)} vs ${teamName(g.home.code)}`;
 /** 선발 이름: players.json을 읽었으면 한글 이름(player_id로 찾음), 그 전이나 없으면 데이터의 로마자 이름. */
@@ -388,7 +382,7 @@ function sideBlock(g, side, prob, large, animate = false) {
   const chip = el("div", { class: "side__chip" }, [
     s ? el("p", { class: "chip__row" }, [el("span", {}, ["선발 ", el("b", {}, starterName(s))]), typePill(s.type, false)])
       : el("p", { class: "chip__row" }, el("b", {}, "선발 미정")),
-    large && stats ? el("p", { class: "chip__stats num" }, stats) : null,
+    null, // 기록 숫자는 "오늘 선발, 어떤 유형?" 카드 한 곳에만 (같은 숫자 두 번 → 글이 많아 보임)
   ]);
   // 확률이 더 높은 쪽은 is-fav(우세), 낮은 쪽은 is-under(속이 빈 숫자). 반올림해 50 대 50이면 둘 다 표시 없음
   const fav = favState(g.home_win_prob);
@@ -430,18 +424,14 @@ function metaPills(g, large) {
   const left = [];
   const where = [STADIUMS[g.stadium] ?? g.stadium, g.time].filter(Boolean).join(" ");
   if (where) left.push(el("span", { class: "pill pill--white" }, where));
-  const o = state.day.outlook;
-  if (large && o?.type === "series" && o.teams?.includes(g.home.code) && o.teams?.includes(g.away.code)) {
-    const [i0, i1] = seriesOrder(o);
-    left.push(el("span", { class: "pill pill--white" },
-      `${o.name} ${teamName(o.teams[i0])} ${o.wins[i0]}승 · ${teamName(o.teams[i1])} ${o.wins[i1]}승`));
-  }
+  // H12: 선발 정보 없이 낸 예측은 작은 띠에서도 바로 보이게 (확률을 정상 예측과 같은 무게로 읽지 않도록)
+  if (g.starter_known === false) left.push(el("span", { class: "pill pill--ink pill--nostarter" }, "선발 미반영"));
   // 우세 쪽은 그 면의 이름표가 "KT 근소 우세"를 말하므로 상단 칩은 반반일 때만 (우세 칩이 상대 팀 면 위에 놓이지 않게)
   if (large && favState(g.home_win_prob) === "tie") left.push(el("span", { class: "pill pill--white pill--lean" }, "사실상 반반"));
   const right = [];
   const r = g.result;
   if (r) {
-    right.push(el("span", { class: "pill pill--white num" }, `최종 ${r.away_score} : ${r.home_score}`));
+    right.push(el("span", { class: "pill pill--white num" }, fmtScore(r.away_score, r.home_score)));
     right.push(verdictPill(r));
   }
   return [left.length ? el("div", { class: "pills" }, left) : null, right.length ? el("div", { class: "pills" }, right) : null];
@@ -449,11 +439,14 @@ function metaPills(g, large) {
 
 function matchupCard(g, large, settled = false) {
   if (g.status === "CANCELED") {
-    return el("article", { class: `matchup matchup--canceled card${large ? " matchup--lg" : ""}`, "aria-label": `${matchLabel(g)} 취소` }, [
-      el("div", { class: "pills" }, [el("span", { class: "pill pill--ink" }, "취소"),
-        g.status_note ? el("span", { class: "pill pill--white" }, NOTES[g.status_note] ?? g.status_note) : null]),
-      el("h3", { class: "matchup__canceled-title" }, matchLabel(g)),
-      el("p", { class: "card__lead" }, "경기가 열리지 않아 예측하지 않았습니다."),
+    // 빗금 = 경기 없음. 양 끝 팀 색 띠로 어느 경기인지, 도장 하나로 이유만 (같은 말 두 번·설명 문장은 뺀다)
+    const ca = teamColors(g.away.code).bg, chm = teamColors(g.home.code).bg;
+    return el("article", {
+      class: `matchup matchup--canceled card${large ? " matchup--lg" : ""}`, "aria-label": `${matchLabel(g)} 취소`,
+      style: `--c-away: ${ca}; --c-home: ${chm}`,
+    }, [
+      el("h3", { class: "matchup__canceled-title" }, [teamText(g.away.code, teamName(g.away.code)), el("span", { class: "vs" }, " vs "), teamText(g.home.code, teamName(g.home.code))]),
+      el("span", { class: "pill pill--ink" }, g.status_note ? (NOTES[g.status_note] ?? g.status_note) : "취소"),
     ]);
   }
   const p = g.home_win_prob;
@@ -832,7 +825,7 @@ function outlookRace(o, title, body) {
   body.replaceChildren(
     el("p", { class: "card__lead" }, g ? `${matchLabel(g)} 두 팀이 5위 안에 들 확률` : "5위 안에 들 확률"),
     ...(big.length ? [el("div", { class: "race" }, big)] : []), // replaceChildren은 null을 "null" 글자로 넣으므로 펼친다
-    el("details", { class: "inset race__all" }, [el("summary", {}, "10팀 모두 보기"), table]),
+    el("details", { class: "more race__all" }, [el("summary", {}, "10팀 모두 보기"), el("div", { class: "inset" }, table)]),
     el("p", { class: "card__foot" }, `${fmtDate(o.as_of)} 기준으로 남은 경기를 가상으로 1만 번 치러 봤습니다.`),
   );
 }
@@ -860,7 +853,7 @@ function renderRecent() {
     $("recent-lead").textContent = "예측과 실제 결과";
     body.replaceChildren(el("ul", { class: "log" }, ordered(state.day).map((g) => {
       const r = g.result;
-      return item(r ? `${r.away_score}:${r.home_score}` : "—", matchLabel(g),
+      return item(r ? fmtScore(r.away_score, r.home_score) : "—", matchLabel(g),
         r ? ["예측 ", pickChip(g.home_win_prob, g.home.code, g.away.code), " → ", result({ winner: r.winner, home: g.home.code, away: g.away.code, status: "FINAL" })] : NOTES[g.status_note] ?? "취소",
         r ? verdictPill(r) : verdictPill({ status: "CANCELED" }));
     })));
@@ -880,7 +873,7 @@ function renderRecent() {
   body.replaceChildren(el("ul", { class: "log" }, rows.map((h) => {
     const res = winnerText(h);
     const pick = pickChip(h.home_win_prob, h.home, h.away);
-    return item(h.date.slice(5).replace("-", "."), `${teamName(h.away)} vs ${teamName(h.home)}`, res === "경기 전" ? ["예측 ", pick] : ["예측 ", pick, " → ", result(h)], verdictPill(h));
+    return item(fmtDateShort(h.date), `${teamName(h.away)} vs ${teamName(h.home)}`, res === "경기 전" ? ["예측 ", pick] : ["예측 ", pick, " → ", result(h)], verdictPill(h));
   })));
 }
 

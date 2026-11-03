@@ -117,7 +117,7 @@
   border-top: 0; padding: var(--sp-16) var(--sp-24) var(--sp-24); position: relative; overflow: hidden;
 }
 .player-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: var(--c, var(--on-dark)); transition: background 0.3s; }
-.player-card::after { content: ""; position: absolute; right: -40px; top: -40px; width: 180px; height: 180px; border: 18px solid rgba(255, 255, 255, 0.05); transform: rotate(45deg); pointer-events: none; }
+.player-card::after { content: none; } /* 정보 없는 마름모 장식은 뺐다 */
 .pcard__title { font-size: 13px; font-weight: 800; color: #b9bcc3; letter-spacing: 0.3px; }
 .player-card .inset { background: #1d1f23; color: var(--on-dark); --muted: #a7abb3; --focus: var(--on-dark); }
 #card-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--sp-12); margin-top: var(--sp-16); min-width: 0; }
@@ -204,7 +204,7 @@
 
 /* ---------- 반응형 ---------- */
 @media (max-width: 767px) {
-  .controls { padding: var(--sp-12); gap: var(--sp-12) var(--sp-16); }
+  .controls { padding: var(--sp-12) 0; gap: var(--sp-12) var(--sp-16); }
   .ctl--search { flex-basis: 100%; }
   .map-skeleton { height: 300px; }
 }

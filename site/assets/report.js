@@ -801,7 +801,7 @@ function renderLive() {
       el("div", { class: "inset live__summary" }, table("모델 버전별 매일 예측 기록",
         [["모델"], ["예측", "num"], ["결과 나옴", "num"], ["적중", "num"], ["적중률", "num"]], summary, "live-table")),
     ]),
-    el("details", { class: "live__all" }, [
+    el("details", { class: "more live__all" }, [
       el("summary", {}, `전체 기록 보기 (${fmtInt(rows.length)}경기)`),
       el("div", { class: "inset" }, table("매일 예측 전체 기록 (최근 순)",
         [["날짜"], ["대진 (원정 vs 홈)"], ["홈팀 승리 예측", "num"], ["모델"], ["예측 시각"], ["결과"], ["적중", "r"]], full, "live-full")),

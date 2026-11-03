@@ -11,7 +11,7 @@
 
 import {
   TEAMS, el, fetchJSON, settle, fin, fmtPct, fmtRate3, fmtDate, teamNameFor, typeColor, renderNav, renderFooter, showError,
-  teamColors, teamChip,
+  teamColors, teamChip, fmtProb,
 } from "./app.js";
 import { lineChart, stackedBar, enableTips } from "./charts.js";
 
@@ -221,8 +221,8 @@ function renderStandings(rows) {
 
   const dom = rulerDomain(rows);
   const cols = [
-    ["순위", "num rank-col"], ["팀", "team-col"], ["승-패-무", "num"], ["승률", "num win-col"],
-    [[el("span", { class: "tn-full", title: "득점과 실점만으로 계산한 '이만큼은 이겼어야 할' 승률(피타고리안 승률)입니다." }, "득실 기대 승률"), el("span", { class: "tn-short" }, "기대")], "num"],
+    ["순위", "num rank-col"], ["팀", "team-col"], ["승-패-무", "num wlt-col"], ["승률", "num win-col"],
+    [[el("span", { class: "tn-full", title: "득점과 실점만으로 계산한 '이만큼은 이겼어야 할' 승률(피타고리안 승률)입니다." }, "득실 기대 승률"), el("span", { class: "tn-short" }, "기대")], "num pyth-col"],
     ...(hasModel ? [[[el("span", { class: "tn-full" }, "모델 예상 승률"), el("span", { class: "tn-short" }, "모델"), el("span", { class: "th-note" }, `${season} 경기별 예측 확률 평균`)], "num model-col"]] : []),
     [[el("span", { class: "sr-only" }, "한눈에 비교 (눈금)"), rulerHead(dom)], "ruler-col"],
     ["경기", "num hide-sm"], ["홈 승률", "num hide-sm"], ["원정 승률", "num hide-sm"],
@@ -233,9 +233,9 @@ function renderStandings(rows) {
       ...teamCell(r.code, season),
       r.rank <= PLAYOFF_SPOTS ? el("span", { class: "sr-only" }, " (가을야구 진출)") : null,
     ]),
-    el("td", { class: "num nowrap" }, `${r.wins}-${r.losses}-${r.ties}`),
+    el("td", { class: "num nowrap wlt-col" }, `${r.wins}-${r.losses}-${r.ties}`),
     el("td", { class: "num win-col" }, fmtRate3(r.win_pct)),
-    el("td", { class: "num" }, fmtRate3(r.pyth_pct)),
+    el("td", { class: "num pyth-col" }, fmtRate3(r.pyth_pct)),
     hasModel ? el("td", { class: "num model-col" }, fmtRate3(r.model_expected)) : null,
     el("td", { class: "ruler-col" }, rulerRow(r, dom)),
     el("td", { class: "num hide-sm" }, String(r.games ?? "—")),
@@ -455,7 +455,7 @@ function drawRewind() {
   const rw = state.rewind;
   const body = $("rewind-body");
   const days = rw.days;
-  const x = (d) => { const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(d.outlook?.as_of ?? d.date); return m ? `${+m[1]}/${+m[2]}` : d.date; };
+  const x = (d) => { const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(d.outlook?.as_of ?? d.date); return m ? `${+m[1]}.${+m[2]}` : d.date; }; // 짧은 날짜는 사이트 전체 "11.3"
   const lastDay = days.findLast((d) => d.outlook?.teams);
   const final = (code) => lastDay?.outlook?.teams?.[code]?.playoff_prob;
   const codes = Object.keys(TEAMS).filter((c) => days.some((d) => fin(d.outlook?.teams?.[c]?.playoff_prob)));
@@ -465,7 +465,7 @@ function drawRewind() {
     .map((c) => ({
       name: shortName(c, REWIND_SEASON),
       short: shortName(c, REWIND_SEASON),
-      legend: `${shortName(c, REWIND_SEASON)} ${fmtPct(final(c))}`,
+      legend: `${shortName(c, REWIND_SEASON)} ${fmtProb(final(c))}`,
       color: TEAMS[c].color,
       ink: teamColors(c).ink,                       // 오른쪽 끝 이름표 = 그 팀 글자색 (어느 선이 어느 팀인지 범례 없이)
       dash: LINE_DASH[c] ?? false,

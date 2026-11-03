@@ -197,3 +197,14 @@
 
 /* 한글 문장은 낱말 중간에서 줄을 바꾸지 않게 */
 .teams-head .lead, .card__lead, .notes, .rewind__note { word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 휴대폰(H13): 순위표는 순위·팀·승률·모델만 — 승-패-무와 득실 기대 승률은 넓은 화면·툴팁에서. 상대 전적(H9)은 10칸이 한 화면에 */
+@media (max-width: 479px) {
+  .standings .wlt-col, .standings .pyth-col { display: none; }
+  .standings th, .standings td { font-size: 14px; padding-block: 10px; }
+  .standings-scroll { padding-inline: 0; }
+  .h2h { min-width: 0; border-spacing: 2px; }
+  .h2h__cell { min-width: 0; height: 32px; padding: 0; font-size: 13px; }
+  .h2h th { font-size: 10px; }
+  .h2h .h2h__row { padding-right: 4px; font-size: 11px; }
+}
