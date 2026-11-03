@@ -123,7 +123,7 @@
 .report-bento > .r-calibration { grid-column: span 5; }
 .report-bento > .r-importance { grid-column: span 5; }
 .report-bento > .r-variants { grid-column: span 7; }
-.report-bento > .r-clusters, .report-bento > .r-live { grid-column: 1 / -1; }
+.report-bento > .r-clusters, .report-bento > .r-live, .report-bento > .r-backtest, .report-bento > .r-search { grid-column: 1 / -1; }
 
 /* 표 공통: 행 머리(th scope=row)는 본문 글자로 */
 .report-bento .table tbody th {
@@ -216,4 +216,25 @@
   .holdout-table .col-brier { display: none; }
   .ruler__legend li { display: block; }
   .ruler__legend .key { display: inline-block; margin-right: 6px; }
+}
+
+/* ---------- 여러 시즌 시험 / 더 나은 모델은 없었나 ---------- */
+.bt-head { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-16); margin-top: var(--sp-16); }
+.bt-kpi { border-top: 2px solid var(--ink); padding-top: var(--sp-8); }
+.bt-kpi b { display: block; font-family: var(--font-num); font-style: italic; font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -1px; color: var(--ink); }
+.bt-kpi span { display: block; margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--body); }
+.bt-kpi--lead b { font-size: 56px; }
+.bt-chart { margin-top: var(--sp-24); }
+.bt-table, .search-table { margin-top: var(--sp-16); }
+.bt-table tr.is-chosen th, .bt-table tr.is-chosen td { font-weight: 900; color: var(--ink); }
+.bt-table tr.is-chosen th { box-shadow: inset 4px 0 0 var(--ink); padding-left: 12px; }
+.search-steps { list-style: none; padding: 0; margin: var(--sp-16) 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-16); }
+.search-steps li { border-top: 2px solid var(--ink); padding-top: var(--sp-8); }
+.search-steps b { display: block; font-family: var(--font-num); font-style: italic; font-size: 36px; font-weight: 800; line-height: 1; color: var(--ink); }
+.search-steps .step__name { display: block; margin-top: 6px; font-size: 14px; font-weight: 800; color: var(--ink); }
+.search-steps .step__pick { display: block; margin-top: 2px; font-size: 13px; color: var(--body); }
+.search__verdict { margin-top: var(--sp-16); padding: var(--sp-12) var(--sp-16); background: var(--ink); color: var(--on-dark); font-size: 14px; font-weight: 700; line-height: 1.5; }
+@media (max-width: 639px) {
+  .bt-head, .search-steps { grid-template-columns: minmax(0, 1fr); }
+  .bt-kpi b { font-size: 36px; } .bt-kpi--lead b { font-size: 44px; }
 }

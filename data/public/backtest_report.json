@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-03T10:03:31+09:00",
+ "generated_at": "2026-11-03T10:32:11+09:00",
  "protocol": {
   "method": "walk-forward: each season predicted by a model trained only on earlier seasons",
   "seasons": [
@@ -43,7 +43,7 @@
  },
  "candidates": {
   "current": {
-   "label": "지금 모델 (로지스틱 L2, C=1)",
+   "label": "v0.2 설정 (로지스틱 L2, C=1)",
    "members": [
     [
      "logreg",
@@ -176,7 +176,7 @@
      "mcnemar_p_vs_rule_better_win_pct": 1.0,
      "mcnemar_p_vs_rule_lower_starter_era": 0.22924659725971577,
      "mcnemar_p_vs_current": 0.06705179535289083,
-     "logloss_p_vs_current": 0.0393673196318102,
+     "logloss_p_vs_current": 0.039367319631810234,
      "logloss_gain_vs_current": 0.010130907469921513
     }
    }
@@ -197,7 +197,7 @@
    },
    "ensemble": {
     "accuracy": 0.5792426367461431,
-    "log_loss": 0.6785959260291832
+    "log_loss": 0.6785959260291833
    },
    "rule_home_always": {
     "accuracy": 0.5511921458625526
@@ -235,8 +235,8 @@
      "mcnemar_p_vs_rule_better_win_pct": 0.6116873356949429,
      "mcnemar_p_vs_rule_lower_starter_era": 0.33285773410053854,
      "mcnemar_p_vs_current": 0.15606630199376728,
-     "logloss_p_vs_current": 0.2714518895272928,
-     "logloss_gain_vs_current": 0.004748041786419521
+     "logloss_p_vs_current": 0.27145188952729316,
+     "logloss_gain_vs_current": 0.00474804178641941
     }
    }
   },
@@ -256,7 +256,7 @@
    },
    "ensemble": {
     "accuracy": 0.6138613861386139,
-    "log_loss": 0.6734124244514645
+    "log_loss": 0.6734124244514647
    },
    "rule_home_always": {
     "accuracy": 0.5289957567185289
@@ -294,8 +294,8 @@
      "mcnemar_p_vs_rule_better_win_pct": 0.02655554319038484,
      "mcnemar_p_vs_rule_lower_starter_era": 0.006961190928254816,
      "mcnemar_p_vs_current": 0.21805368187049984,
-     "logloss_p_vs_current": 0.9533599160957537,
-     "logloss_gain_vs_current": 0.00024333260947273505
+     "logloss_p_vs_current": 0.9533599160957544,
+     "logloss_gain_vs_current": 0.00024333260947262403
     }
    }
   },
@@ -412,7 +412,7 @@
      "mcnemar_p_vs_rule_better_win_pct": 0.23006418625550473,
      "mcnemar_p_vs_rule_lower_starter_era": 0.6918330937895893,
      "mcnemar_p_vs_current": 0.09291188222054621,
-     "logloss_p_vs_current": 0.006076196133661844,
+     "logloss_p_vs_current": 0.006076196133661896,
      "logloss_gain_vs_current": 0.010193237005826972
     }
    }
@@ -471,7 +471,7 @@
      "mcnemar_p_vs_rule_better_win_pct": 0.18229699690928544,
      "mcnemar_p_vs_rule_lower_starter_era": 0.7800402214898473,
      "mcnemar_p_vs_current": 0.29446978456853307,
-     "logloss_p_vs_current": 0.32615423513813707,
+     "logloss_p_vs_current": 0.3261542351381371,
      "logloss_gain_vs_current": 0.003059974773681695
     }
    }
@@ -530,7 +530,7 @@
      "mcnemar_p_vs_rule_better_win_pct": 0.2777011466280837,
      "mcnemar_p_vs_rule_lower_starter_era": 0.002051767741167509,
      "mcnemar_p_vs_current": 0.4159851975073048,
-     "logloss_p_vs_current": 0.12136882782200376,
+     "logloss_p_vs_current": 0.12136882782200441,
      "logloss_gain_vs_current": 0.004296993349376499
     }
    }
@@ -589,7 +589,7 @@
      "mcnemar_p_vs_rule_better_win_pct": 0.07254166975912607,
      "mcnemar_p_vs_rule_lower_starter_era": 0.14766209721852694,
      "mcnemar_p_vs_current": 0.9006532462520331,
-     "logloss_p_vs_current": 0.48196109274240345,
+     "logloss_p_vs_current": 0.4819610927424039,
      "logloss_gain_vs_current": 0.0018432193526188856
     }
    }
@@ -648,7 +648,7 @@
      "mcnemar_p_vs_rule_better_win_pct": 0.020635275799794302,
      "mcnemar_p_vs_rule_lower_starter_era": 0.07575398776330051,
      "mcnemar_p_vs_current": 1.0,
-     "logloss_p_vs_current": 0.8688212079729503,
+     "logloss_p_vs_current": 0.8688212079729508,
      "logloss_gain_vs_current": 0.0004288633801026176
     }
    }
@@ -719,7 +719,7 @@
      "mcnemar_p_vs_rule_better_win_pct": 0.007660436807354876,
      "mcnemar_p_vs_rule_lower_starter_era": 4.486463132009171e-05,
      "mcnemar_p_vs_current": 0.005279705654886866,
-     "logloss_p_vs_current": 0.00018152383021537657,
+     "logloss_p_vs_current": 0.0001815238302153775,
      "logloss_gain_vs_current": 0.0050862443637593735
     }
    }
@@ -789,7 +789,7 @@
      "mcnemar_p_vs_rule_better_win_pct": 0.0009960881587061702,
      "mcnemar_p_vs_rule_lower_starter_era": 8.245048874759864e-06,
      "mcnemar_p_vs_current": 0.007889551127406273,
-     "logloss_p_vs_current": 0.0002337901408441745,
+     "logloss_p_vs_current": 0.00023379014084417627,
      "logloss_gain_vs_current": 0.004569575360831801
     }
    }
@@ -854,7 +854,7 @@
      "mcnemar_p_vs_rule_better_win_pct": 0.011533208600724541,
      "mcnemar_p_vs_rule_lower_starter_era": 0.0007010316583101901,
      "mcnemar_p_vs_current": 0.014974996776070516,
-     "logloss_p_vs_current": 0.05636284605900414,
+     "logloss_p_vs_current": 0.05636284605900418,
      "logloss_gain_vs_current": 0.003911114236590407
     }
    }
@@ -916,12 +916,12 @@
      "mcnemar_p_vs_rule_better_win_pct": 0.020635275799794302,
      "mcnemar_p_vs_rule_lower_starter_era": 0.07575398776330051,
      "mcnemar_p_vs_current": 1.0,
-     "logloss_p_vs_current": 0.8688212079729503,
+     "logloss_p_vs_current": 0.8688212079729508,
      "logloss_gain_vs_current": 0.0004288633801026176
     }
    }
   }
  },
  "chosen": "l1_elo",
- "elapsed_sec": 11.4
+ "elapsed_sec": 11.5
 }

@@ -53,7 +53,7 @@ RF_BEST = {"n_estimators": 300, "max_depth": 6, "min_samples_leaf": 20, "max_fea
 XGB_BEST = {"learning_rate": 0.03, "n_estimators": 100, "max_depth": 3, "min_child_weight": 1, "subsample": 0.7,
             "colsample_bytree": 1.0, "reg_lambda": 1.0}
 CANDIDATES = {
-    "current": {"label": "지금 모델 (로지스틱 L2, C=1)", "members": [("logreg", {"C": 1.0, "penalty": "l2"})], "elo": False},
+    "current": {"label": "v0.2 설정 (로지스틱 L2, C=1)", "members": [("logreg", {"C": 1.0, "penalty": "l2"})], "elo": False},
     "l1": {"label": "로지스틱 L1, C=0.03", "members": [("logreg", {"C": 0.03, "penalty": "l1"})], "elo": False},
     "l1_elo": {"label": "로지스틱 L1 + Elo", "members": [("logreg", {"C": 0.03, "penalty": "l1"})], "elo": True},
     "ensemble": {"label": "앙상블 (L1 + 랜덤포레스트 + XGBoost 평균)",

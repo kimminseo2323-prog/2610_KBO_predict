@@ -12,11 +12,11 @@ import {
   FACTOR_LABELS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInt, fmtRange, fmtDate, fmtKST,
   teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError,
 } from "./app.js";
-import { barChart, calibrationChart, enableTips } from "./charts.js";
+import { barChart, calibrationChart, enableTips, lineChart } from "./charts.js";
 
 const $ = (id) => document.getElementById(id);
 
-const state = { report: null, history: null, status: null, errors: {} };
+const state = { report: null, history: null, status: null, backtest: null, tuning: null, grid: null, automl: null, errors: {} };
 
 // ---------- 작은 도우미 ----------
 
@@ -98,6 +98,105 @@ function liveFacts() {
 }
 const liveVersion = () => state.status?.model_version ?? state.history?.findLast?.((h) => h.model_version)?.model_version ?? "라이브";
 
+// ---------- 여러 시즌 시험 (backtest_report.json) ----------
+
+const BT_RULE = "lower_starter_era";  // 2026 성적표와 같은 비교 대상 규칙 (선발 평균자책점이 낮은 팀)
+
+function renderBacktest() {
+  const body = $("backtest-body");
+  const b = state.backtest;
+  if (!b) {
+    showError(body, state.errors.backtest, async () => { await settle(state, "backtest", fetchJSON("backtest_report.json")); renderBacktest(); });
+    return;
+  }
+  const all = b.pooled.all, clean = b.pooled.clean, pick = b.chosen;
+  const ruleAll = all[`rule_${BT_RULE}`].accuracy;
+  const t = all.tests[pick];
+  const seasons = Object.keys(b.by_season).sort();
+  $("backtest-lead").textContent = `한 시즌(약 700경기)으로는 작은 차이를 가려내기 어려워, 시즌마다 그 앞 시즌들로만 학습해 ${seasons[0]}~${seasons.at(-1)} ${fmtInt(all.n)}경기를 예측했습니다.`;
+  const kpi = (big, small, lead = false) => el("div", { class: `bt-kpi${lead ? " bt-kpi--lead" : ""}` }, [el("b", {}, big), el("span", {}, small)]);
+  const diff = (all[pick].accuracy - ruleAll) * 100;
+  const head = el("div", { class: "bt-head" }, [
+    kpi(fmtPct(all[pick].accuracy, 1), `지금 모델(${b.candidates[pick].label})의 적중률`, true),
+    kpi(`+${diff.toFixed(1)}%p`, `"${b.rules[BT_RULE]}" 고르기(${fmtPct(ruleAll, 1)})보다`),
+    kpi(pText(t[`mcnemar_p_vs_rule_${BT_RULE}`]), Number(t[`mcnemar_p_vs_rule_${BT_RULE}`]) < ALPHA ? "우연으로 보기 어려운 차이입니다" : "우연과 구분되지 않습니다"),
+  ]);
+  // 시즌별 적중률: 지금 모델(잉크), 예전 모델(회색 점선), 규칙(노랑)
+  const chart = el("div", { class: "bt-chart" });
+  const pts = (key) => seasons.map((s) => ({ x: s, y: key.startsWith("rule_") ? b.by_season[s][key].accuracy : b.by_season[s][key]?.accuracy }));
+  const series = [
+    { name: b.candidates[pick].label, short: "지금 모델", legend: `지금 모델 (${b.candidates[pick].label})`, color: "ink", points: pts(pick) },
+    { name: b.candidates.current.label, short: "예전 모델", legend: `예전 모델 v0.2 (${b.candidates.current.label})`, color: "#8d929a", dash: true, points: pts("current") },
+    { name: b.rules[BT_RULE], short: "규칙", legend: `${b.rules[BT_RULE]} 고르기`, color: "ochre", points: pts(`rule_${BT_RULE}`) },
+  ];
+  const rows = Object.keys(b.candidates).map((n) => {
+    const tt = all.tests[n];
+    return el("tr", { class: n === pick ? "is-chosen" : null }, [
+      el("th", { scope: "row" }, [b.candidates[n].label, n === pick ? el("span", { class: "pill pill--sm pill--ink holdout__tag" }, "지금 모델") : n === "current" ? el("span", { class: "pill pill--sm pill--muted holdout__tag" }, "예전 v0.2") : null]),
+      el("td", { class: "num" }, fmtPct(all[n].accuracy, 1)),
+      el("td", { class: "num" }, fmtPct(clean[n].accuracy, 1)),
+      el("td", { class: "num" }, fmtPct(b.pooled.test[n].accuracy, 1)),
+      el("td", { class: "num" }, n === "current" ? "—" : pval(tt.mcnemar_p_vs_current)),
+    ]);
+  });
+  rows.push(el("tr", { class: "is-baseline" }, [el("th", { scope: "row" }, `규칙: ${b.rules[BT_RULE]}`),
+    el("td", { class: "num" }, fmtPct(ruleAll, 1)), el("td", { class: "num" }, fmtPct(clean[`rule_${BT_RULE}`].accuracy, 1)),
+    el("td", { class: "num" }, fmtPct(b.pooled.test[`rule_${BT_RULE}`].accuracy, 1)), el("td", { class: "num muted" }, "—")]));
+  body.replaceChildren(
+    head, chart,
+    el("div", { class: "inset bt-table" }, table(`여러 시즌 시험: 후보 ${Object.keys(b.candidates).length}개와 규칙`,
+      [["후보"], [`${seasons[0]}~${seasons.at(-1)}`, "num"], ["설정 고를 때 안 쓴 시즌", "num"], [`${b.pooled.test.seasons[0]}만`, "num"], ["예전 모델과 차이 p", "num"]],
+      rows, "holdout-table")),
+    el("details", { class: "more" }, [el("summary", {}, "이 시험을 믿어도 되나"), el("ul", {}, [
+      el("li", {}, `각 시즌은 그 시즌보다 앞선 기록으로만 학습한 모델이 예측했습니다. 미래 경기를 본 모델은 없습니다.`),
+      el("li", {}, `어느 후보를 쓸지는 계산하기 전에 정한 규칙으로 골랐습니다: ${b.protocol.dev_seasons[0]}~${b.protocol.dev_seasons.at(-1)} 시즌의 확률 오차(log loss)가 가장 작은 후보. ${b.pooled.test.seasons[0]} 시즌은 고른 뒤 채점만 했습니다.`),
+      el("li", {}, `L1·앙상블의 설정은 2021~2025 시즌으로 골랐기 때문에 그 시즌 성적은 조금 유리합니다. 그래서 어떤 설정을 고를 때도 쓰지 않은 시즌(${clean.seasons.join(", ")})만 모은 열을 따로 적었습니다.`),
+      el("li", {}, `이 시험은 ${b.pooled.test.seasons[0]} 한 시즌 결과(유의하지 않음)를 본 뒤에 더한 것입니다. 숨기지 않으려고 성적표 맨 위의 한 시즌 결과도 그대로 둡니다.`),
+      el("li", {}, `Elo 전력 점수: 경기 결과로 팀 점수를 매 경기 고칩니다(한 경기 ${b.protocol.elo.k}점 비중, 홈 +${b.protocol.elo.home}점, 새 시즌엔 평균 쪽으로 1/3 되돌림). 이 값들은 미리 정했고 성적을 보며 바꾸지 않았습니다.`),
+    ])]),
+  );
+  lineChart(chart, series, { yFormat: (v) => fmtPct(v, 0), height: 260, endLabels: true, label: "시즌별 적중률: 지금 모델, 예전 모델, 규칙" });
+}
+
+// ---------- 더 나은 모델은 없었나 (tuning_report · tuning_grid_report · automl_report) ----------
+
+const FAMILY_KO = { logreg: "로지스틱 회귀", random_forest: "랜덤포레스트", extra_trees: "엑스트라 트리", hist_gb: "히스토그램 부스팅",
+  lightgbm: "LightGBM", xgboost: "XGBoost", lrl1: "로지스틱 회귀 L1", lrl2: "로지스틱 회귀 L2", rf: "랜덤포레스트", lgbm: "LightGBM",
+  extra_tree: "엑스트라 트리", kneighbor: "k-최근접 이웃" };
+const famName = (f, params) => `${FAMILY_KO[f] ?? f}${f === "logreg" && params?.penalty ? ` ${String(params.penalty).toUpperCase()}` : ""}`;
+
+function renderSearch() {
+  const body = $("search-body");
+  const { tuning: rnd, grid, automl: auto } = state;
+  if (!rnd || !grid || !auto) {
+    body.replaceChildren(el("p", { class: "empty" }, "튜닝 결과 파일을 불러오지 못했습니다."));
+    return;
+  }
+  const sum = (o) => Object.values(o ?? {}).reduce((s, v) => s + Number(v), 0);
+  const step = (big, name, pickText) => el("li", {}, [el("b", {}, big), el("span", { class: "step__name" }, name), el("span", { class: "step__pick" }, pickText)]);
+  const rr = rnd.recommended, gr = grid.recommended;
+  const steps = el("ul", { class: "search-steps" }, [
+    step(`${fmtInt(sum(rnd.n_configs))}개`, "랜덤 서치 (알고리즘 6가지)", `고른 것: ${famName(rr.family, rr.params)}${rr.params?.C ? ` C=${rr.params.C}` : ""}`),
+    step(`${fmtInt(sum(grid.n_configs))}개`, "그리드 서치 (같은 범위 전부)", `고른 것: ${famName(gr.family, gr.params)}`),
+    step(`${Math.round(auto.search.time_budget_sec / 60)}분`, `오토머신러닝 (알고리즘 ${auto.protocol.estimators.length}가지)`, `고른 것: ${famName(auto.search.best_estimator)}${auto.search.best_config?.C ? ` C=${Number(auto.search.best_config.C).toFixed(3)}` : ""}`),
+  ]);
+  const row = (name, f) => el("tr", {}, [el("th", { scope: "row" }, name), el("td", { class: "num" }, fmtPct(f.test.accuracy, 1)), el("td", { class: "num" }, num(f.test.log_loss))]);
+  body.replaceChildren(
+    steps,
+    el("div", { class: "inset search-table" }, table("세 가지 방법이 고른 모델의 2026 시험 성적 (피처 26개, Elo 없음)",
+      [["방법 · 고른 모델"], ["2026 적중률", "num"], ["log loss", "num"]],
+      [row(`랜덤 서치 · ${famName(rr.family, rr.params)}`, rnd.finalists[0]), row(`그리드 서치 · ${famName(gr.family, gr.params)}`, grid.finalists[0]),
+        row(`오토머신러닝 · ${famName(auto.search.best_estimator)}`, auto.automl_final), row("예전 모델 v0.2", grid.current)], "holdout-table")),
+    el("p", { class: "search__verdict" }, "세 방법의 성적은 서로 비슷했고, 랜덤 서치와 오토머신러닝이 따로 같은 답(L1 로지스틱 회귀, C 약 0.03)을 골랐습니다. 그 설정에 Elo 전력 점수를 더한 것이 지금 모델(v0.3)입니다."),
+    el("details", { class: "more" }, [el("summary", {}, "세 방법의 차이"), el("ul", {}, [
+      el("li", {}, "랜덤 서치: 정해 둔 값 범위에서 알고리즘마다 설정 40개를 무작위로 뽑아 2021~2025 시즌으로 채점했습니다(로지스틱 회귀는 14개 전부)."),
+      el("li", {}, "그리드 서치: 같은 범위의 조합을 하나도 빼지 않고 모두 채점했습니다. 랜덤 서치가 놓친 더 좋은 설정이 있는지 확인하려는 것입니다."),
+      el("li", {}, "오토머신러닝(FLAML): 사람이 정한 범위 밖까지 알고리즘과 설정을 스스로 찾게 했습니다. 2025 시즌 점수를 직접 보며 골랐기 때문에 그 점수는 실제보다 좋게 나오기 쉬워, 비교는 2026 시험 점수로 합니다."),
+      el("li", {}, "세 방법 모두 2026 시즌은 고르는 데 쓰지 않았습니다. 이 표는 Elo를 넣기 전(피처 26개) 결과입니다."),
+    ])]),
+  );
+}
+
 function table(caption, cols, rows, cls = "") {
   return el("div", { class: "table-scroll" }, el("table", { class: `table ${cls}`.trim() }, [
     el("caption", { class: "sr-only" }, caption),
@@ -113,10 +212,14 @@ const loadHistory = () => settle(state, "history", fetchCSV("history.csv", { fre
 
 async function init() {
   renderNav("report.html");
-  await Promise.all([loadReport(), loadHistory(), settle(state, "status", fetchJSON("status.json", { fresh: true }))]);
+  await Promise.all([loadReport(), loadHistory(), settle(state, "status", fetchJSON("status.json", { fresh: true })),
+    settle(state, "backtest", fetchJSON("backtest_report.json")), settle(state, "tuning", fetchJSON("tuning_report.json")),
+    settle(state, "grid", fetchJSON("tuning_grid_report.json")), settle(state, "automl", fetchJSON("automl_report.json"))]);
   renderFooter(state.status);
   renderReport();
   renderLive();
+  renderBacktest();
+  renderSearch();
 }
 
 /** model_report.json으로 그리는 부분 전부(배지 + 카드 ①~⑤). 읽기 실패면 ①에 오류 상자 + 다시 불러오기. */
@@ -288,7 +391,7 @@ function renderStage() {
   const calib = CALIB[r.models?.[sel]?.calibration] ?? r.models?.[sel]?.calibration;
 
   const top = el("p", { class: "stage__top stage__caption" },
-    `${season} 정규시즌 ${fmtInt(m.n)}경기로 시험했습니다. 학습 ${fmtRange(r.train_seasons)}, 검증 ${r.val_season ?? "—"}, 모델 ${algoName(sel)}${calib ? `(${calib} 보정)` : ""}.`);
+    `${season} 정규시즌 ${fmtInt(m.n)}경기로 시험했습니다. 학습 ${fmtRange(r.train_seasons)}, 검증 ${r.val_season ?? "—"}, 모델 ${algoName(sel)}${calib && r.models?.[sel]?.calibration !== "none" ? `(${calib} 보정)` : ""}.`);
 
   // 왼쪽(핑크): 좋은 숫자
   const goodHead = diffNum === null ? "비교하지 못했습니다" : diffNum > 0 ? "기준선보다 높습니다" : diffNum < 0 ? "기준선보다 낮습니다" : "기준선과 같습니다";
@@ -314,7 +417,7 @@ function renderStage() {
     : [`라이브 ${liveVersion()}`, `${fmtInt(live.c)} / ${fmtInt(live.n)}경기 적중`, live.n < LIVE_SHORT ? "표본 너무 적음" : "표본 쌓이는 중"];
   const limit = el("div", { class: "side side--limit" }, [
     el("div", { class: "side__head" }, [
-      el("p", { class: "side__role" }, "한계"),
+      el("p", { class: "side__role" }, ok ? "검증" : "한계"),  // 유의하면 "한계"가 아니라 검증 결과
       el("h3", { class: "side__team" }, limitHead),
     ]),
     el("p", { class: "side__prob" }, [
@@ -378,7 +481,7 @@ function renderStage() {
   }
 
   box.replaceChildren(el("article", { class: "stage", "aria-label": `${season} 홀드아웃: ${baseName(sig.vs)} 규칙보다 ${diffNum === null ? "—" : signedPP(diffNum)}%p, ${limitHead}` }, [
-    top, good, limit, el("span", { class: "stage__vs", "aria-hidden": "true" }, "그러나"), ruler,
+    top, good, limit, el("span", { class: "stage__vs", "aria-hidden": "true" }, ok ? "그리고" : "그러나"), ruler,
   ]));
   if (ci && fin(m.accuracy)) {
     accuracyRuler(rulerHost, [
