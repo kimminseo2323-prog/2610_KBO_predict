@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-11-04T15:07:35+09:00",
+  "generated_at": "2026-11-04T21:53:26+09:00",
   "date": "2026-11-04",
   "mode": "live",
   "model_version": "v0.3",
-  "commit_sha": "cb3d3051247035e26b89b94f0930b3af4ddb71bb",
-  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/41783401255",
+  "commit_sha": "394b34d63009b27f205c6e18677d2582d113e098",
+  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/41833099279",
   "games": [
     {
       "game_id": 14057,
@@ -12,7 +12,7 @@
       "time": "18:30",
       "stadium": "Suwon",
       "round": "postseason",
-      "status": "SCHEDULED",
+      "status": "LIVE",
       "home": {
         "code": "KT",
         "name": "KT",
