@@ -213,6 +213,7 @@ b.wi-side__num { color: var(--body); }
 .wi-delta { margin-top: var(--sp-12); font-size: 14px; color: var(--body); }
 .wi-delta b { font-family: var(--font-num); font-size: 18px; color: var(--ink); }
 .wi-note { margin-top: 6px; font-size: 13px; color: var(--muted); }
+.wi-note--ask { color: var(--ink); font-weight: 700; }
 .wi-foot { margin-top: var(--sp-12); }
 @media (max-width: 479px) {
   .wi-picks { grid-template-columns: minmax(0, 1fr); }

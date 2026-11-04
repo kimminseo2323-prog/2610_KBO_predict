@@ -783,6 +783,10 @@ function renderWhatif() {
     const p = whatifProb(model, block.base, now.home?.line ?? null, now.away?.line ?? null);
     const p0 = whatifProb(model, block.base, cand("home", ann.home)?.line ?? null, cand("away", ann.away)?.line ?? null);
     const same = state.wiPick.home === ann.home && state.wiPick.away === ann.away;
+    const noAnn = ann.home == null || ann.away == null; // 선발 발표 전 (한쪽이라도)
+    // 모델은 두 팀 선발 기록이 모두 있을 때만 선발 요인을 쓴다 — 한쪽만 고르면 확률이 그대로라 이유를 알려 준다
+    const missing = ["away", "home"].filter((s) => state.wiPick[s] == null);
+    const noLine = ["away", "home"].filter((s) => state.wiPick[s] != null && !now[s]?.line);
     const fav = favState(p);
     const pct = (v) => `${Math.round(v * 1000) / 10}%`;
     const d = (p - p0) * 100;
@@ -797,27 +801,37 @@ function renderWhatif() {
         el("i", { style: { flexGrow: String(Math.max(0.02, p)), background: teamColors(g.home.code).bg } }),
       ]),
       el("p", { class: "wi-delta" }, same
-        ? `${word} 선발 그대로입니다. 위 경기 카드의 확률과 같습니다.`
-        : [`${word} 선발일 때보다 ${teamName(g.home.code)} 승리 확률이 `, el("b", {}, `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}%p`), ` ${d >= 0 ? "올라갑니다" : "내려갑니다"}.`]),
-      ...(!now.home?.line || !now.away?.line // replaceChildren은 null을 "null" 글자로 넣으므로 펼친다
-        ? [el("p", { class: "wi-note" }, "고른 선발 중 작년·올해 기록이 없는 투수가 있어, 선발 기록 없이 계산했습니다.")] : []),
+        ? (noAnn ? "아직 선발 발표 전이라 선발 기록 없이 계산한 확률입니다. 위 경기 카드의 확률과 같습니다."
+          : `${word} 선발 그대로입니다. 위 경기 카드의 확률과 같습니다.`)
+        : Math.abs(d) < 0.05
+          ? `${noAnn ? "발표 전" : `${word} 선발`} 확률과 같습니다.`
+          : [`${noAnn ? "선발 발표 전" : `${word} 선발일 때`}보다 ${teamName(g.home.code)} 승리 확률이 `, el("b", {}, `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}%p`), ` ${d >= 0 ? "올라갑니다" : "내려갑니다"}.`]),
+      // replaceChildren은 null을 "null" 글자로 넣으므로 펼친다
+      ...(missing.length === 1
+        ? [el("p", { class: "wi-note wi-note--ask" }, `모델은 두 팀 선발을 모두 알 때만 선발 기록을 씁니다. ${teamName(g[missing[0]].code)} 선발도 골라 보세요.`)]
+        : noLine.length
+          ? [el("p", { class: "wi-note" }, `${noLine.map((s) => nameOf(now[s])).join(", ")}은(는) 작년·올해 기록이 없어 선발 기록 없이 계산했습니다.`)] : []),
     );
   };
 
   const picker = (side) => {
     const code = g[side].code;
-    const sel = el("select", { class: "wi-select", id: `wi-${side}`, onchange: (e) => { state.wiPick[side] = Number(e.target.value); draw(); } },
-      block.candidates[side].map((c) => {
+    const onchange = (e) => { state.wiPick[side] = e.target.value === "" ? null : Number(e.target.value); draw(); };
+    // 선발 발표 전이면 맨 위에 "발표 전" 칸을 두고 기본으로 고른다 (그래야 화면의 선택과 계산이 같다)
+    const none = ann[side] == null
+      ? [el("option", { value: "", selected: state.wiPick[side] == null ? "" : null }, "발표 전 (선발 모름)")] : [];
+    const sel = el("select", { class: "wi-select", id: `wi-${side}`, onchange }, [...none,
+      ...block.candidates[side].map((c) => {
         const tag = c.player_id === ann[side] ? ` (${word} 선발)` : c.starts ? ` (선발 ${c.starts}경기)` : "";
         return el("option", { value: String(c.player_id), selected: c.player_id === state.wiPick[side] ? "" : null }, `${nameOf(c)}${tag}`);
-      }));
+      })]);
     return el("label", { class: "wi-pick" }, [
       el("span", { class: "wi-pick__label" }, [teamLogo(code, { size: "sm" }), `${teamName(code)} ${side === "home" ? "홈" : "원정"} 선발`]), sel]);
   };
   const reset = el("button", { class: "btn btn--secondary wi-reset", type: "button", onclick: () => {
     state.wiPick = { gameId: g.game_id, away: ann.away, home: ann.home };
     renderWhatif();
-  } }, `${word} 선발로 되돌리기`);
+  } }, ann.home == null || ann.away == null ? "처음 상태로 되돌리기" : `${word} 선발로 되돌리기`);
 
   $("whatif-lead").textContent = `${matchLabel(g)}. 두 팀 선발을 이 시즌 선발로 나온 다른 투수로 골라 보면 모델이 승리 확률을 다시 계산합니다.`;
   body.replaceChildren(
