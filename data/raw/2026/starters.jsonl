@@ -3,4 +3,4 @@
 {"away": null, "date": "2026-11-01", "fetched_at": "2026-10-31T00:11:35+09:00", "game_id": 14054, "home": null}
 {"away": {"name": "Choi Won-tae", "player_id": 1096}, "date": "2026-11-03", "fetched_at": "2026-11-03T03:14:07+09:00", "game_id": 14056, "home": {"name": "Davis Daniel", "player_id": 3102}}
 {"away": {"name": "Chris Paddack", "player_id": 3097}, "date": "2026-11-04", "fetched_at": "2026-11-04T12:37:25+09:00", "game_id": 14057, "home": {"name": "Ko Young-pyo", "player_id": 1142}}
-{"away": null, "date": "2026-11-06", "fetched_at": "2026-11-05T00:22:54+09:00", "game_id": 14058, "home": null}
+{"away": {"name": "So Hyeong-jun", "player_id": 1990}, "date": "2026-11-06", "fetched_at": "2026-11-05T15:36:41+09:00", "game_id": 14058, "home": {"name": "Ariel Jurado", "player_id": 2474}}
