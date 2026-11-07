@@ -1,31 +1,22 @@
 {
-  "generated_at": "2026-11-07T23:51:49+09:00",
-  "date": "2026-11-07",
+  "generated_at": "2026-11-08T00:14:12+09:00",
+  "date": "2026-11-08",
   "mode": "live",
   "model_version": "v0.3",
-  "commit_sha": "3159db31b96b8e93dd3ff8010176be2522b9d219",
-  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/42383545563",
+  "commit_sha": "6570cbd6ccfeda9defabde7bbaaaf88b65393781",
+  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/42385360512",
   "games": [
     {
-      "game_id": 14059,
-      "date": "2026-11-07",
+      "game_id": 14060,
+      "date": "2026-11-08",
       "time": "14:00",
       "stadium": "Daegu",
       "round": "postseason",
-      "status": "FINAL",
+      "status": "SCHEDULED",
       "home": {
         "code": "SS",
         "name": "삼성",
-        "starter": {
-          "player_id": 2935,
-          "name": "Jang Chan-hee",
-          "era": 4.5,
-          "k9": 6.75,
-          "bb9": 3.43,
-          "ip": 76.0,
-          "starts": 9,
-          "type": null
-        },
+        "starter": null,
         "win_pct_season": 0.589,
         "last10": 0.4,
         "run_diff": 0.96
@@ -33,53 +24,41 @@
       "away": {
         "code": "KT",
         "name": "KT",
-        "starter": {
-          "player_id": 2782,
-          "name": "Logan Allen",
-          "era": 3.59,
-          "k9": 8.06,
-          "bb9": 2.62,
-          "ip": 92.7,
-          "starts": 17,
-          "type": {
-            "id": 0,
-            "name": "선발형"
-          }
-        },
+        "starter": null,
         "win_pct_season": 0.647,
         "last10": 1.0,
         "run_diff": 1.22
       },
-      "home_win_prob": 0.4278,
+      "home_win_prob": 0.4998,
       "factors": [
         {
           "name": "Elo 전력 점수 차이",
-          "contribution_pp": -3.2
-        },
-        {
-          "name": "선발 누적 이닝 차이",
-          "contribution_pp": -3.1
-        },
-        {
-          "name": "선발 FIP 차이",
-          "contribution_pp": -2.4
+          "contribution_pp": -3.3
         },
         {
           "name": "기본 홈 어드밴티지",
           "contribution_pp": 2.3
         },
         {
+          "name": "타선 삼진 비율 차이",
+          "contribution_pp": 0.6
+        },
+        {
+          "name": "타선 홈런 비율 차이",
+          "contribution_pp": 0.4
+        },
+        {
           "name": "선발 9이닝당 삼진 차이",
-          "contribution_pp": -1.4
+          "contribution_pp": 0.0
         }
       ],
-      "starter_known": true,
+      "starter_known": false,
       "status_note": null
     }
   ],
   "outlook": {
     "type": "series",
-    "as_of": "2026-11-07",
+    "as_of": "2026-11-08",
     "name": "한국시리즈",
     "best_of": 7,
     "teams": [
@@ -92,16 +71,16 @@
     ],
     "wins": [
       1,
-      2
+      3
     ],
     "win_prob": [
-      0.3318,
-      0.6682
+      0.1143,
+      0.8857
     ],
-    "most_common_result": "2-4",
-    "goes_distance_prob": 0.3848,
-    "games_remaining_max": 4,
-    "today_game_prob_source": "win_model (starter-inclusive)",
-    "next_game_date": "2026-11-07"
+    "most_common_result": "1-4",
+    "goes_distance_prob": 0.2258,
+    "games_remaining_max": 3,
+    "today_game_prob_source": "team_model",
+    "next_game_date": "2026-11-08"
   }
 }
