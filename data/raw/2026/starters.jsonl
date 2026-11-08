@@ -6,3 +6,4 @@
 {"away": {"name": "So Hyeong-jun", "player_id": 1990}, "date": "2026-11-06", "fetched_at": "2026-11-05T15:36:41+09:00", "game_id": 14058, "home": {"name": "Ariel Jurado", "player_id": 2474}}
 {"away": {"name": "Logan Allen", "player_id": 2782}, "date": "2026-11-07", "fetched_at": "2026-11-07T00:52:53+09:00", "game_id": 14059, "home": {"name": "Jang Chan-hee", "player_id": 2935}}
 {"away": null, "date": "2026-11-08", "fetched_at": "2026-11-08T00:14:12+09:00", "game_id": 14060, "home": null}
+{"away": null, "date": "2026-11-10", "fetched_at": "2026-11-09T00:04:03+09:00", "game_id": 14061, "home": null}
