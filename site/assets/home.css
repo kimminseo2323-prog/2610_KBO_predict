@@ -386,3 +386,7 @@ b.wi-side__num { color: var(--body); }
 
 /* 터치 기기에서는 키보드 안내가 의미 없다 (M27) */
 @media (hover: none) { .rewind__hint { display: none; } }
+
+/* 다시 보기: 시즌 고르기 */
+.replay-season { display: inline-flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; font-weight: 800; color: var(--ink); }
+.replay-season__select { min-height: 36px; padding: 0 10px; border: 0; outline: 2px solid var(--ink); outline-offset: -2px; background: var(--canvas); color: var(--ink); font: inherit; font-weight: 700; }

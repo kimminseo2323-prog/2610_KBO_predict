@@ -481,7 +481,23 @@ def test_home_rewind_mode_markup():
     assert 'IS_LOCAL ? params.get("fixture") : null' in code
     # 선발 이름은 players.json을 읽은 뒤 player_id → 한글 이름으로 바꿔 다시 그린다(매치업·선발 카드)
     assert "koreanNames(state.players)" in code and code.count("starterName(s)") >= 2
-    assert 'REWIND = "rewind/2026"' in code and '`${REWIND}/index.json`' in code
+    assert "const REWIND = `rewind/${REPLAY_SEASON}`" in code and '`${REWIND}/index.json`' in code
+
+
+def test_replay_page_is_a_seasons_subpage():
+    """지난 시즌 > 경기일 다시 보기(replay.html): 같은 home.js를 data-page="replay"로 쓰고, 메뉴에서는 '지난 시즌'이 현재 위치.
+    시즌 고르기(?season=), 이번 시즌의 예전 ?date= 주소는 replay.html로 옮긴다. 이번 시즌 페이지는 비시즌에도 되감기로 바뀌지 않는다."""
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup((SITE / "replay.html").read_text(encoding="utf-8"), "html.parser")
+    assert soup.body.get("data-page") == "replay"
+    assert soup.find("a", attrs={"aria-current": "page"})["href"] == "seasons.html"
+    assert soup.find("select", id="replay-season") is not None and soup.find(id="rewind-range") is not None
+    assert check_site.NAV_PARENT == {"replay.html": "seasons.html"} and "replay.html" in check_site.PAGES
+    js = (ASSETS / "home.js").read_text(encoding="utf-8")
+    assert 'location.replace(`replay.html?season=' in js and 'document.body?.dataset.page === "replay"' in js
+    assert "!liveAvailable() && state.index) await openRewind" not in js          # 이번 시즌은 자동으로 되감기로 가지 않는다
+    seasons = (ASSETS / "seasons.js").read_text(encoding="utf-8")
+    assert "href: `replay.html?season=${rec.season}`" in seasons
 
 
 # ---------- 모델 성적표 (report.html) ----------

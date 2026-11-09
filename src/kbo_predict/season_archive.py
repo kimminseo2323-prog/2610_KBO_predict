@@ -28,6 +28,7 @@ from .simulate import load_postseason
 
 SEASONS = list(range(2015, 2027))
 KS_WINS = 4  # 한국시리즈 7전 4선승
+REWIND_FROM = 2018  # 경기일 다시 보기가 있는 첫 시즌 — 2018~2025는 그 앞 시즌들로만 학습한 모델(build_rewind --walk-forward), 2026은 report-2026
 ROUND_NAMES = ["한국시리즈", "플레이오프", "준플레이오프", "와일드카드"]  # 뒤에서부터
 
 
@@ -130,7 +131,7 @@ def season_record(season: int, backtest: dict | None = None) -> dict:
     return {"season": season, "champion": champ,
             "runner_up": (ks["teams"][1] if champ == ks["teams"][0] else ks["teams"][0]) if champ else None,
             "standings": table, "postseason": series, "model": model,
-            "rewind": season == 2026}  # 경기일 다시 보기(예측 + 결과)가 있는 시즌
+            "rewind": season >= REWIND_FROM}  # 경기일 다시 보기(예측 + 결과)가 있는 시즌
 
 
 def schedule(season: int) -> list[dict]:
@@ -157,7 +158,8 @@ def write_index(out: Path) -> list[dict]:
         ks = rec["postseason"][-1]
         rows.append({"season": rec["season"], "champion": rec["champion"], "runner_up": rec["runner_up"],
                      "final_wins": ks["wins"], "final_teams": ks["teams"]})
-    _write(out / "index.json", {"seasons": rows}, compact=False)
+    rewind = sorted(int(p.parent.name) for p in (out.parent / "rewind").glob("[0-9][0-9][0-9][0-9]/index.json"))
+    _write(out / "index.json", {"seasons": rows, "rewind_seasons": rewind}, compact=False)
     return rows
 
 
@@ -183,7 +185,8 @@ def main(argv=None) -> int:
     bt = json.loads(Path(args.backtest).read_text(encoding="utf-8")) if Path(args.backtest).exists() else None
     for s in SEASONS:
         _write(out / f"{s}.json", season_record(s, bt))
-    _write(out / f"schedule_{SEASONS[-1]}.json", schedule(SEASONS[-1]))
+    for s in SEASONS:  # 지난 시즌의 경기일 다시 보기도 그날 기준 순위표·다가오는 경기를 계산한다
+        _write(out / f"schedule_{s}.json", schedule(s))
     index = write_index(out)
     print(f"[season_archive] {len(index)} seasons → {out}")
     return 0

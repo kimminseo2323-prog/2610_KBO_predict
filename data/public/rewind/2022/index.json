@@ -1,0 +1,972 @@
+{
+ "season": 2022,
+ "model_version": "walk-2022",
+ "generated_at": "2026-11-09T23:09:42+09:00",
+ "commit_sha": "073df0e01919418a541f2537cefab59b5f0a6743",
+ "dates": [
+  {
+   "date": "2022-04-02",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-03",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-05",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-06",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-07",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-08",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-09",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-10",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-12",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-13",
+   "games": 5,
+   "correct": 3,
+   "decided": 3
+  },
+  {
+   "date": "2022-04-14",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-15",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-16",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-17",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-19",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-20",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-21",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-22",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-23",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-24",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-26",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-27",
+   "games": 5,
+   "correct": 3,
+   "decided": 4
+  },
+  {
+   "date": "2022-04-28",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-29",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-04-30",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-01",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-03",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-04",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-05",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-06",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-07",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-08",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-10",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-11",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-12",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-13",
+   "games": 5,
+   "correct": 1,
+   "decided": 4
+  },
+  {
+   "date": "2022-05-14",
+   "games": 5,
+   "correct": 5,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-15",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-17",
+   "games": 5,
+   "correct": 2,
+   "decided": 4
+  },
+  {
+   "date": "2022-05-18",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-19",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-20",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-21",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-22",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-24",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-25",
+   "games": 4,
+   "correct": 1,
+   "decided": 4
+  },
+  {
+   "date": "2022-05-26",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-27",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-28",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-29",
+   "games": 5,
+   "correct": 0,
+   "decided": 5
+  },
+  {
+   "date": "2022-05-31",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-01",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-02",
+   "games": 5,
+   "correct": 3,
+   "decided": 4
+  },
+  {
+   "date": "2022-06-03",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-04",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-05",
+   "games": 5,
+   "correct": 1,
+   "decided": 1
+  },
+  {
+   "date": "2022-06-07",
+   "games": 5,
+   "correct": 4,
+   "decided": 4
+  },
+  {
+   "date": "2022-06-08",
+   "games": 5,
+   "correct": 1,
+   "decided": 3
+  },
+  {
+   "date": "2022-06-09",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-10",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-11",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-12",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-14",
+   "games": 5,
+   "correct": 3,
+   "decided": 3
+  },
+  {
+   "date": "2022-06-15",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-16",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-17",
+   "games": 5,
+   "correct": 3,
+   "decided": 4
+  },
+  {
+   "date": "2022-06-18",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-19",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-21",
+   "games": 5,
+   "correct": 5,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-22",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-23",
+   "games": 5,
+   "correct": 2,
+   "decided": 2
+  },
+  {
+   "date": "2022-06-24",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-25",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-26",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-06-28",
+   "games": 5,
+   "correct": 2,
+   "decided": 4
+  },
+  {
+   "date": "2022-06-29",
+   "games": 5,
+   "correct": 3,
+   "decided": 3
+  },
+  {
+   "date": "2022-06-30",
+   "games": 5,
+   "correct": 2,
+   "decided": 3
+  },
+  {
+   "date": "2022-07-01",
+   "games": 5,
+   "correct": 4,
+   "decided": 4
+  },
+  {
+   "date": "2022-07-02",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-03",
+   "games": 5,
+   "correct": 5,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-05",
+   "games": 5,
+   "correct": 4,
+   "decided": 4
+  },
+  {
+   "date": "2022-07-06",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-07",
+   "games": 5,
+   "correct": 2,
+   "decided": 4
+  },
+  {
+   "date": "2022-07-08",
+   "games": 5,
+   "correct": 5,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-09",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-10",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-12",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-13",
+   "games": 5,
+   "correct": 1,
+   "decided": 2
+  },
+  {
+   "date": "2022-07-14",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-22",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-23",
+   "games": 5,
+   "correct": 3,
+   "decided": 4
+  },
+  {
+   "date": "2022-07-24",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-26",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-27",
+   "games": 5,
+   "correct": 5,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-28",
+   "games": 5,
+   "correct": 2,
+   "decided": 4
+  },
+  {
+   "date": "2022-07-29",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-07-30",
+   "games": 5,
+   "correct": 4,
+   "decided": 4
+  },
+  {
+   "date": "2022-07-31",
+   "games": 5,
+   "correct": 0,
+   "decided": 1
+  },
+  {
+   "date": "2022-08-02",
+   "games": 5,
+   "correct": 1,
+   "decided": 3
+  },
+  {
+   "date": "2022-08-03",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-04",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-05",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-06",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-07",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-10",
+   "games": 5,
+   "correct": 2,
+   "decided": 4
+  },
+  {
+   "date": "2022-08-11",
+   "games": 5,
+   "correct": 2,
+   "decided": 3
+  },
+  {
+   "date": "2022-08-12",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-13",
+   "games": 5,
+   "correct": 4,
+   "decided": 4
+  },
+  {
+   "date": "2022-08-14",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-16",
+   "games": 5,
+   "correct": 2,
+   "decided": 2
+  },
+  {
+   "date": "2022-08-17",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-18",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-19",
+   "games": 5,
+   "correct": 1,
+   "decided": 3
+  },
+  {
+   "date": "2022-08-20",
+   "games": 5,
+   "correct": 1,
+   "decided": 4
+  },
+  {
+   "date": "2022-08-21",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-23",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-24",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-25",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-26",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-27",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-28",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-08-30",
+   "games": 5,
+   "correct": 0,
+   "decided": 1
+  },
+  {
+   "date": "2022-08-31",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-01",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-02",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-03",
+   "games": 5,
+   "correct": 1,
+   "decided": 4
+  },
+  {
+   "date": "2022-09-04",
+   "games": 5,
+   "correct": 1,
+   "decided": 3
+  },
+  {
+   "date": "2022-09-06",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-07",
+   "games": 5,
+   "correct": 2,
+   "decided": 4
+  },
+  {
+   "date": "2022-09-08",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-09",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-10",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-11",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-13",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-14",
+   "games": 5,
+   "correct": 1,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-15",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-16",
+   "games": 5,
+   "correct": 0,
+   "decided": 4
+  },
+  {
+   "date": "2022-09-17",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-18",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-20",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-21",
+   "games": 5,
+   "correct": 3,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-22",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-23",
+   "games": 5,
+   "correct": 4,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-24",
+   "games": 4,
+   "correct": 3,
+   "decided": 4
+  },
+  {
+   "date": "2022-09-25",
+   "games": 4,
+   "correct": 3,
+   "decided": 4
+  },
+  {
+   "date": "2022-09-27",
+   "games": 3,
+   "correct": 2,
+   "decided": 3
+  },
+  {
+   "date": "2022-09-28",
+   "games": 3,
+   "correct": 3,
+   "decided": 3
+  },
+  {
+   "date": "2022-09-29",
+   "games": 5,
+   "correct": 2,
+   "decided": 5
+  },
+  {
+   "date": "2022-09-30",
+   "games": 4,
+   "correct": 4,
+   "decided": 4
+  },
+  {
+   "date": "2022-10-01",
+   "games": 3,
+   "correct": 2,
+   "decided": 3
+  },
+  {
+   "date": "2022-10-02",
+   "games": 3,
+   "correct": 2,
+   "decided": 3
+  },
+  {
+   "date": "2022-10-03",
+   "games": 4,
+   "correct": 0,
+   "decided": 2
+  },
+  {
+   "date": "2022-10-04",
+   "games": 2,
+   "correct": 1,
+   "decided": 2
+  },
+  {
+   "date": "2022-10-05",
+   "games": 4,
+   "correct": 2,
+   "decided": 4
+  },
+  {
+   "date": "2022-10-06",
+   "games": 4,
+   "correct": 3,
+   "decided": 4
+  },
+  {
+   "date": "2022-10-07",
+   "games": 3,
+   "correct": 1,
+   "decided": 3
+  },
+  {
+   "date": "2022-10-08",
+   "games": 5,
+   "correct": 5,
+   "decided": 5
+  },
+  {
+   "date": "2022-10-09",
+   "games": 1,
+   "correct": 0,
+   "decided": 0
+  },
+  {
+   "date": "2022-10-10",
+   "games": 1,
+   "correct": 1,
+   "decided": 1
+  },
+  {
+   "date": "2022-10-11",
+   "games": 1,
+   "correct": 0,
+   "decided": 1
+  }
+ ],
+ "accuracy": 0.5573,
+ "n_decided": 707,
+ "note": "correct = (unrounded P(home win) >= 0.5) == home won, same rule as train_win._correct; draws and canceled games are not decided",
+ "whatif_model": null
+}

@@ -127,8 +127,8 @@ function renderSeason(rec) {
       : el("p", { class: "season__model-num muted" }, "이 시즌은 앞선 학습 시즌이 부족해 시험하지 않았습니다(시험은 2018년부터)."),
     el("p", { class: "season__model-note" }, rec.season === 2026
       ? "지금 공개 중인 모델과 같은 설정입니다. 정규시즌 경기일마다 그날의 예측과 결과를 다시 볼 수 있습니다."
-      : "그 시즌보다 앞선 시즌들로만 학습한 지금 모델(v0.3) 설정으로 그 시즌을 미리 예측했다면의 성적입니다."),
-    ...(rec.rewind ? [el("a", { class: "btn", href: "index.html?date=2026-10-12" }, "2026 경기일 다시 보기")] : []),
+      : `그 시즌보다 앞선 시즌들로만 학습한 지금 모델(v0.3) 설정으로 그 시즌을 미리 예측했다면의 성적입니다.${rec.rewind ? " 경기일마다 그날의 예측과 결과를 다시 볼 수 있습니다." : ""}`),
+    ...(rec.rewind ? [el("a", { class: "btn", href: `replay.html?season=${rec.season}` }, `${rec.season} 경기일 다시 보기`)] : []),
   ]);
 
   box.replaceChildren(

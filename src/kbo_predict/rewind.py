@@ -106,7 +106,7 @@ def _result(game: dict, p_raw: float) -> dict:
 
 def day_payload(season: int, on: str, *, games: list[dict], boxscores: dict[int, dict], bundle: dict,
                 team_bundle: dict | None = None, starter_types: dict[int, dict] | None = None, meta: dict,
-                state: LeagueState | None = None, ps_config=None) -> dict:
+                state: LeagueState | None = None, ps_config=None, with_whatif: bool = True) -> dict:
     """on 날짜의 되감기 파일 내용.
     games = 그 시즌 경기 전부(raw_store.load_games), boxscores = 그 시즌 박스스코어(raw_store.load_boxscores).
     bundle = 예측 모델(report-2026), team_bundle = 전망에 쓸 모델 — 없으면 bundle(2026-11-09부터 기본, outlook_eval.py).
@@ -133,7 +133,7 @@ def day_payload(season: int, on: str, *, games: list[dict], boxscores: dict[int,
     # 선발 바꿔 보기: 경기마다 선발과 상관없는 피처 값 + 후보 선발 기록 (모델 숫자는 index.json의 whatif_model)
     wi = [whatif.game_block(g, state, starter_ids(boxscores.get(g["game_id"])), games, boxscores, regular_only=True)
           for g in sorted((g for g in day_rows(games, season) if g["date"] == on and g["status"] == "FINAL"),
-                          key=lambda g: g["game_id"])] if whatif.model_params(bundle) else []
+                          key=lambda g: g["game_id"])] if with_whatif and whatif.model_params(bundle) else []
     return {
         "generated_at": meta.get("generated_at"),
         "date": on,
@@ -165,7 +165,7 @@ def write_day(path: Path, payload: dict) -> None:
 
 def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict | None = None, meta: dict,
                  dates: list[str] | None = None, starter_types: dict[int, dict] | None = None,
-                 ps_config=None) -> dict:
+                 ps_config=None, with_whatif: bool = True) -> dict:
     """season의 되감기 파일을 out_dir/{season}/{date}.json으로 쓰고 out_dir/{season}/index.json을 돌려준다.
     대상 날짜 = 정규시즌 FINAL·CANCELED 경기가 하나라도 있는 날 전부 (dates를 주면 그중 그 날짜만).
     상태는 개막 직전 상태 하나를 날짜순으로 이어 쌓는다: 그날 피처·전망을 모두 계산한 뒤 그날 경기를 반영.
@@ -197,7 +197,8 @@ def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict | None
         day_games = list(grp)
         if wanted is None or on in wanted:
             payload = day_payload(season, on, games=games, boxscores=boxes, bundle=bundle, team_bundle=team_bundle,
-                                  starter_types=starter_types, meta=meta, state=state, ps_config=ps_config)
+                                  starter_types=starter_types, meta=meta, state=state, ps_config=ps_config,
+                                  with_whatif=with_whatif)
             write_day(season_dir / f"{on}.json", payload)
             entries[on] = _index_entry(payload)
             if wanted is not None and wanted <= entries.keys():
@@ -219,7 +220,7 @@ def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict | None
         "accuracy": round(n_correct / n_decided, 4) if n_decided else None,
         "n_decided": n_decided,
         "note": INDEX_NOTE,
-        "whatif_model": whatif.model_params(bundle),  # 선발 바꿔 보기용 모델 숫자 (로지스틱 회귀일 때만, 아니면 None)
+        "whatif_model": whatif.model_params(bundle) if with_whatif else None,  # 선발 바꿔 보기용 모델 숫자 (없으면 None)
     }
     _write_json(index_path, index, indent=1)
     return index

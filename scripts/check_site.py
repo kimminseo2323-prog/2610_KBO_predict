@@ -39,7 +39,8 @@ PAGES_URL = "https://kimminseo2323-prog.github.io/2610_KBO_predict"  # 사이트
 NEWS_LINK = "https://search.naver.com/search.naver"
 NEWS_PROXY_RE = re.compile(r"^https://[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev$")
 # REPO_URL·RAW_BASE는 site/assets/app.js의 같은 이름 상수와 같다 (tests/test_site.py가 확인).
-PAGES = ["index.html", "teams.html", "players.html", "report.html", "news.html", "seasons.html"]
+PAGES = ["index.html", "teams.html", "players.html", "report.html", "news.html", "seasons.html", "replay.html"]
+NAV_PARENT = {"replay.html": "seasons.html"}  # 메뉴에 없는 하위 페이지 → 메뉴에서 현재 위치로 표시할 페이지
 NAV = [("news.html", "소식"), ("index.html", "이번 시즌"), ("seasons.html", "지난 시즌"), ("teams.html", "팀"), ("players.html", "선수"), ("report.html", "모델 성적표")]
 # 허용하는 외부 리소스: https + 호스트 정확히 일치 + (jsDelivr는) 경로 접두사. 그 밖의 외부 리소스는 모두 금지.
 ALLOWED = {
@@ -378,8 +379,8 @@ def check_page(site: Path, page: str) -> list[Row]:
         current = [a["href"] for a in links if a.get("aria-current") == "page"]
         if got != NAV:
             fail("nav", f"내부 링크 {got} != {NAV}")
-        elif current != [page]:
-            fail("nav", f'aria-current="page"가 {current} (기대: {page})')
+        elif current != [NAV_PARENT.get(page, page)]:
+            fail("nav", f'aria-current="page"가 {current} (기대: {NAV_PARENT.get(page, page)})')
         else:
             rows.append(Row("nav", page, "OK", f"링크 {len(NAV)}개 순서·aria-current"))
     gh = [a for a in soup.find_all("a", href=True) if a["href"].rstrip("/") == REPO_URL]

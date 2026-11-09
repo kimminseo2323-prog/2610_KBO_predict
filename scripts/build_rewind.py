@@ -2,6 +2,7 @@
 
     python -X utf8 scripts/build_rewind.py --season 2026
     python -X utf8 scripts/build_rewind.py --season 2026 --dates 2026-05-01,2026-05-02   # 일부 날짜만 다시
+    python -X utf8 scripts/build_rewind.py --season 2021 --walk-forward     # 지난 시즌: 그 앞 시즌들로만 학습한 v0.3 설정
 
 예측 모델 = 평가용 고정 모델 models/report-2026.pkl (2015~2024 학습, 2026은 시험 시즌),
 전망(가을야구 확률) = 같은 report-2026 (미래 경기는 선발 '모름' — outlook_eval.py, 2026-11-09). 선발 유형 표시는 models/clusters.pkl(없으면 생략).
@@ -24,7 +25,8 @@ for p in (ROOT / "src", ROOT):  # `python scripts/build_rewind.py`로 실행해�
 from kbo_predict import KST  # noqa: E402
 from kbo_predict.rewind import build_season  # noqa: E402
 from kbo_predict.simulate import load_postseason  # noqa: E402
-from kbo_predict.train_win import _commit_sha, load_bundle  # noqa: E402
+from kbo_predict.features import load_features  # noqa: E402
+from kbo_predict.train_win import WIN_LR, _commit_sha, fit_model, load_bundle  # noqa: E402
 from scripts.run_pipeline import CLUSTERS_PKL, starter_types  # noqa: E402
 
 # 기본 경로는 저장소 루트(ROOT) 기준 — 어느 폴더에서 실행해도 같은 파일을 읽고 쓴다 (데이터 폴더는 KBO_DATA_DIR, 기본 data/)
@@ -41,6 +43,11 @@ def main(argv=None) -> dict:
     ap.add_argument("--model", type=Path, default=REPORT_PKL)
     ap.add_argument("--outlook-model", type=Path, default=None, help="전망에 쓸 다른 모델 (기본: --model과 같은 모델)")
     ap.add_argument("--clusters", type=Path, default=CLUSTERS_DEFAULT, help="선발 유형 군집 파일 (없으면 유형 생략)")
+    ap.add_argument("--walk-forward", action="store_true",
+                    help="지난 시즌용: --model 대신 그 시즌보다 앞선 시즌들로만 v0.3 설정(L1 + Elo)을 학습해 쓴다 "
+                         "(여러 시즌 시험 backtest.py의 l1_elo와 같은 모델 — 그 시즌 적중률이 backtest_report와 같다). "
+                         "선발 바꿔 보기 데이터는 넣지 않는다(크기).")
+    ap.add_argument("--features", type=Path, default=ROOT / "data" / "processed" / "features.parquet")
     args = ap.parse_args(argv)
 
     t0 = time.perf_counter()
@@ -56,9 +63,18 @@ def main(argv=None) -> dict:
     # --dates ""처럼 비어 있어도 시즌 전체로 바뀌지 않게: 옵션을 줬으면 목록(빈 목록이면 build_season이 거절)
     dates = [d.strip() for d in args.dates.split(",") if d.strip()] if args.dates is not None else None
     # 날짜 검사에 걸리면 build_season이 아무것도 쓰기 전에 ValueError를 낸다 (그대로 올라가 exit 1)
-    index = build_season(args.season, out_dir=args.out_dir, bundle=load_bundle(args.model),
+    if args.walk_forward:
+        df = load_features(args.features)
+        train = df[df["season"] < args.season]
+        if train["season"].nunique() < 3:
+            raise SystemExit(f"[rewind] --walk-forward needs at least 3 earlier seasons (have {train['season'].nunique()})")
+        bundle = fit_model(train, kind="lr", lr_params=WIN_LR, version=f"walk-{args.season}",
+                           seasons=sorted(int(s) for s in train["season"].unique()))
+    else:
+        bundle = load_bundle(args.model)
+    index = build_season(args.season, out_dir=args.out_dir, bundle=bundle,
                          team_bundle=load_bundle(args.outlook_model) if args.outlook_model else None, meta=meta, dates=dates,
-                         starter_types=sp_types, ps_config=load_postseason(args.season))
+                         starter_types=sp_types, ps_config=load_postseason(args.season), with_whatif=not args.walk_forward)
     season_dir = args.out_dir / str(args.season)
     size = sum(p.stat().st_size for p in season_dir.glob("*.json"))
     n_correct = sum(d["correct"] for d in index["dates"])

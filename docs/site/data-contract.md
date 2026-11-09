@@ -171,7 +171,7 @@
 
 | 파일 | 키 | 설명 |
 | --- | --- | --- |
-| `seasons/index.json` | `seasons[].season`, `seasons[].champion`, `seasons[].runner_up`, `seasons[].final_teams[]`, `seasons[].final_wins[]` | 우승 팀이 정해진 시즌만(진행 중인 시즌은 빠짐). 지난 시즌 페이지의 연도 버튼 |
+| `seasons/index.json` | `seasons[].season`, `seasons[].champion`, `seasons[].runner_up`, `seasons[].final_teams[]`, `seasons[].final_wins[]`, `rewind_seasons[]` | 우승 팀이 정해진 시즌만(진행 중인 시즌은 빠짐) — 지난 시즌 페이지의 연도 버튼. `rewind_seasons`: 경기일 다시 보기가 있는 시즌(`rewind/{season}/index.json`이 있는 시즌, 2018~) — 다시 보기의 시즌 고르기 |
 | `seasons/{season}.json` | `season`, `champion`, `runner_up`, `rewind`, `standings[]`(`rank`, `code`, `w`, `l`, `d`, `pct`, `gb`, `run_diff`, `last10[]`, `streak`), `postseason[]`(`name`, `teams[]`, `head_start[]`, `wins[]`, `winner`, `games[]`: `game_id`, `date`, `time`, `stadium`, `home`, `away`, `status`, `home_score`, `away_score`, `winner`), `model`(`accuracy`, `n`, `rule_accuracy`, `note` 또는 null) | 정규시즌 최종 순위, 가을야구 시리즈(정규시즌 순위 높은 팀이 `teams[0]`, 와일드카드는 `head_start [1, 0]`), 우승 팀(한국시리즈 4승 전에는 null), 그 시즌 모델 성적(여러 시즌 시험, 2018~) |
 | `seasons/schedule_{season}.json` | `[].game_id`, `[].date`, `[].time`, `[].stadium`, `[].home`, `[].away`, `[].status`, `[].home_score`, `[].away_score`, `[].regular` | 그 시즌 모든 경기(약 60 KB). 이번 시즌 페이지가 보고 있는 날짜 기준 순위표와 앞으로 7일 일정을 브라우저에서 계산. 매일 바뀌어 캐시를 피해 읽음 |
 
@@ -216,7 +216,7 @@
 | 홈 | 매치업 카드: 선발 | `latest.json` | `games[].home.starter.name`, `games[].home.starter.era`, `games[].home.starter.k9`, `games[].home.starter.bb9`, `games[].home.starter.type.name`, `games[].away.starter.name`, `games[].away.starter.era`, `games[].away.starter.k9`, `games[].away.starter.bb9`, `games[].away.starter.type`, `games[].starter_known` |
 | 홈 | 순위표 · 다가오는 경기 | `seasons/schedule_{season}.json` | `[].date`, `[].time`, `[].stadium`, `[].home`, `[].away`, `[].status`, `[].home_score`, `[].away_score`, `[].regular` |
 | 홈 | 시즌 종료 카드 · 맨 위 띠 우승 팀 | `status.json` | `season_result.name`, `season_result.champion`, `season_result.teams[]`, `season_result.wins[]` |
-| 지난 시즌 | 연도 버튼 | `seasons/index.json` | `seasons[].season`, `seasons[].champion` |
+| 지난 시즌 | 연도 버튼 · 다시 보기 시즌 고르기 | `seasons/index.json` | `seasons[].season`, `seasons[].champion`, `rewind_seasons[]` |
 | 지난 시즌 | 우승 배너 · 한국시리즈 경기별 · 우승까지의 길 · 최종 순위 · 모델 성적 | `seasons/{season}.json` | `season`, `champion`, `runner_up`, `rewind`, `postseason[].name`, `postseason[].teams[]`, `postseason[].head_start[]`, `postseason[].wins[]`, `postseason[].winner`, `postseason[].games[].game_id`, `postseason[].games[].date`, `postseason[].games[].stadium`, `postseason[].games[].home`, `postseason[].games[].away`, `postseason[].games[].status`, `postseason[].games[].home_score`, `postseason[].games[].away_score`, `postseason[].games[].winner`, `standings[].rank`, `standings[].code`, `standings[].w`, `standings[].l`, `standings[].d`, `standings[].pct`, `standings[].gb`, `standings[].run_diff`, `model.accuracy`, `model.n`, `model.rule_accuracy` |
 | 지난 시즌 | 한국시리즈 공개 예측 (2026) | `history.csv` | `date`, `game_id`, `home_win_prob`, `correct` |
 | 홈 | 선발을 바꾸면?(라이브) | `whatif.json` | `date`, `model.features[]`, `model.median[]`, `model.mean[]`, `model.scale[]`, `model.coef[]`, `model.intercept`, `model.calibration.method`, `games[].game_id`, `games[].base`, `games[].announced.home`, `games[].announced.away`, `games[].candidates.home[].player_id`, `games[].candidates.home[].name`, `games[].candidates.home[].starts`, `games[].candidates.home[].line`, `games[].candidates.away[].player_id` |

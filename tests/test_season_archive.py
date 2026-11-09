@@ -64,3 +64,18 @@ def test_standings_tiebreak_and_games_back():
     table = sa.standings(2026, raw_store.load_games(2026))
     assert [r["rank"] for r in table] == list(range(1, 11)) and table[0]["gb"] == 0.0
     assert table[0]["code"] == "KT" and table[1]["code"] == "SS" and table[1]["gb"] == 8.0
+
+
+def test_index_lists_rewind_seasons_and_replays_match_backtest():
+    """경기일 다시 보기가 있는 시즌(2018~2026). 2018~2025 되감기는 그 앞 시즌들로만 학습한 v0.3 설정이라
+    시즌 적중률이 여러 시즌 시험(backtest_report.json의 l1_elo)과 같다."""
+    idx = json.loads((ROOT / "data" / "public" / "seasons" / "index.json").read_text(encoding="utf-8"))
+    assert idx["rewind_seasons"] == list(range(2018, 2027))
+    bt = json.loads((ROOT / "data" / "public" / "backtest_report.json").read_text(encoding="utf-8"))
+    for s in range(2018, 2026):
+        r = json.loads((ROOT / "data" / "public" / "rewind" / str(s) / "index.json").read_text(encoding="utf-8"))
+        assert r["model_version"] == f"walk-{s}" and r["whatif_model"] is None
+        assert r["n_decided"] == bt["by_season"][str(s)]["n"]
+        assert r["accuracy"] == round(bt["by_season"][str(s)]["l1_elo"]["accuracy"], 4)
+    for s in range(2015, 2027):
+        assert (ROOT / "data" / "public" / "seasons" / f"schedule_{s}.json").exists()

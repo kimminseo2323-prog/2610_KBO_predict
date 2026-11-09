@@ -21,10 +21,15 @@ import { barChart, scatter } from "./charts.js";
 import { whatifProb } from "./whatif.js";
 
 const $ = (id) => document.getElementById(id);
+// 같은 모듈이 두 페이지를 그린다: index.html(이번 시즌 — 오늘·가장 최근 예측)과 replay.html(지난 시즌 > 경기일 다시 보기).
+const PAGE = document.body?.dataset.page === "replay" ? "replay" : "live";
+const LATEST_REWIND = 2026;   // 시즌을 고르지 않았을 때 여는 다시 보기 시즌
 const params = new URLSearchParams(location.search);
+// 다시 보기 시즌: ?season= (없으면 ?date=의 연도, 그것도 없으면 LATEST_REWIND)
+const REPLAY_SEASON = Number(params.get("season")) || Number(String(params.get("date") ?? "").slice(0, 4)) || LATEST_REWIND;
+const REWIND = `rewind/${REPLAY_SEASON}`;
 const FIXTURE = IS_LOCAL ? params.get("fixture") : null;     // "edge" | "offseason" | null
 const FIXTURE_BASE = "../tests/fixtures/site";
-const REWIND = "rewind/2026";
 
 const state = {
   status: null, latest: null, index: null, history: null, report: null, players: null,
@@ -114,7 +119,12 @@ const liveAvailable = () => state.status?.mode !== "rewind" && (state.latest?.ga
 // ---------- 시작 ----------
 
 async function init() {
-  renderNav("index.html");
+  // 예전 주소(index.html?date=…)는 다시 보기 페이지로 옮긴다
+  if (PAGE === "live" && params.get("date")) {
+    location.replace(`replay.html?season=${String(params.get("date")).slice(0, 4)}&date=${params.get("date")}`);
+    return;
+  }
+  renderNav(PAGE === "replay" ? "seasons.html" : "index.html");
   $("matchups").setAttribute("aria-busy", "true");
   await loadCore();
   if (state.index && !state.index.dates?.length) { // 목차가 비었으면 되감기를 쓸 수 없다
@@ -144,14 +154,20 @@ async function init() {
   }
 
   const want = params.get("date");
-  if (want && state.index) {
-    const i = dateIndexFor(want);
-    if (state.index.dates[i].date !== want) state.snappedFrom = want; // 경기 없는 날 → 그 앞(없으면 첫) 경기일
-    await openRewind(i);
+  if (PAGE === "replay") {
+    renderSeasonPicker();
+    if (!state.index) { showError($("matchups"), state.errors.index ?? `${REPLAY_SEASON} 시즌 다시 보기 데이터가 없습니다.`, init); bindControls(); return; }
+    let i = state.index.dates.length - 1;
+    if (want) {
+      i = dateIndexFor(want);
+      if (state.index.dates[i].date !== want) state.snappedFrom = want; // 경기 없는 날 → 그 앞(없으면 첫) 경기일
+    }
+    await openRewind(i, { writeURL: Boolean(want) });
+  } else if (state.latest?.games?.length) {
+    showLive(); // 이번 시즌: 오늘 예측, 경기가 없으면(비시즌·휴식일) 가장 최근 예측 — 지난 경기일은 replay.html에서
+  } else {
+    $("matchups").replaceChildren(el("p", { class: "empty" }, "아직 이번 시즌 예측이 없습니다. 지난 시즌에서 경기일을 다시 볼 수 있습니다."));
   }
-  // 비시즌 자동 되감기는 주소를 바꾸지 않는다(사용자가 고르거나 ?date=로 열었을 때만 ?date=를 쓴다)
-  else if (!liveAvailable() && state.index) await openRewind(state.index.dates.length - 1, { writeURL: false });
-  else showLive();
   bindControls();
   loadPlayersLater();
 }
@@ -252,12 +268,18 @@ function bindControls() {
   range.addEventListener("change", () => { clearTimeout(timer); openRewind(Number(range.value)); });
   $("rewind-prev").addEventListener("click", () => openRewind(state.dateIdx - 1));
   $("rewind-next").addEventListener("click", () => openRewind(state.dateIdx + 1));
+  if (PAGE === "live") { // 이번 시즌: 다시 보기는 지난 시즌 아래 페이지로
+    $("rewind-toggle").addEventListener("click", () => { location.href = `replay.html?season=${endedSeason() ?? LATEST_REWIND}`; });
+  }
+  if (PAGE === "replay") $("to-live").addEventListener("click", () => { location.href = "index.html"; });
+  if (PAGE === "replay") $("replay-season")?.addEventListener("change", (e) => { location.href = `replay.html?season=${e.target.value}`; });
+  if (PAGE === "live") return;
   $("rewind-toggle").addEventListener("click", async () => {
     if (!state.index) return openRewind(0); // 목차가 없으면 그 이유와 다시 불러오기를 보여 준다
     await openRewind(state.rewindVisited ? state.dateIdx : state.index.dates.length - 1);
     if (state.mode === "rewind") $("rewind-range").focus();
   });
-  $("to-live").addEventListener("click", () => { showLive(); $("rewind-toggle").focus(); });
+
 }
 
 /** 슬라이더·날짜 글자·전/후 버튼을 idx(기본: 지금 보이는 날짜)에 맞춘다. */
@@ -279,18 +301,19 @@ function renderDateBar() {
   $("live-chip").hidden = rewind;
   $("rewind-bar").hidden = !rewind;
   $("rewind-toggle").setAttribute("aria-expanded", String(rewind));
-  $("to-live").hidden = !liveAvailable();
+  $("to-live").hidden = PAGE !== "replay"; // 다시 보기에서만 "이번 시즌으로"
+  $("rewind-toggle").textContent = "지난 경기일 다시 보기";
   const hint = $("rewind-hint");
-  if (rewind && !liveAvailable()) {
+  if (rewind && PAGE !== "replay" && !liveAvailable()) {
     const next = state.status?.next_game_date;
     const r = state.status?.season_result; // 한국시리즈가 끝났으면 우승 팀과 전적
     const won = r ? r.wins[r.teams.indexOf(r.champion)] : null;
     hint.textContent = next && next >= todayKST()
       ? `지금은 오늘 예측이 없습니다. 다음 경기는 ${fmtDate(next)}입니다.`
       : r ? `${endedSeason() ?? ""} 시즌이 끝났습니다(${r.name} 우승 ${teamName(r.champion)}). 정규시즌 경기일을 골라 그날의 예측과 결과를 다시 볼 수 있습니다.`.trim()
-        : "지금은 비시즌이라 오늘 예측이 없습니다. 2026 시즌 경기일을 골라 보세요.";
+        : `${REPLAY_SEASON} 시즌 경기일을 골라 보세요.`;
   } else {
-    hint.textContent = "2026 시즌 경기일만 이동합니다. 화살표 키로도 움직일 수 있습니다.";
+    hint.textContent = `${REPLAY_SEASON} 시즌 경기일만 이동합니다. 화살표 키로도 움직일 수 있습니다.`;
   }
   if (!rewind && state.day) {
     const fresh = state.day.date === todayKST();
@@ -317,7 +340,7 @@ function renderHead() {
     state.snappedFrom = null; // 처음 한 번만 알린다
     $("day-title").textContent = `${fmtDate(day.date)} 다시 보기`;
     $("day-lead").textContent = snapped + (d && d.decided
-      ? `이날 ${d.decided}경기 중 ${d.correct}경기를 적중했습니다. 2026 시즌 전체 적중률은 ${fmtPct(state.index.accuracy, 1)}입니다.`
+      ? `이날 ${d.decided}경기 중 ${d.correct}경기를 적중했습니다. ${REPLAY_SEASON} 시즌 전체 적중률은 ${fmtPct(state.index.accuracy, 1)}입니다.${REPLAY_SEASON < LATEST_REWIND ? ` (${REPLAY_SEASON}보다 앞선 시즌으로만 학습한 모델)` : ""}`
       : "이날은 적중을 따질 경기가 없습니다.");
   }
   renderBug();
@@ -335,7 +358,7 @@ function renderBug() {
   if (!slot) return;
   const o = state.day?.outlook;
   const champ = state.status?.season_result?.champion;
-  if (state.mode !== "live" && champ) { // 시즌이 끝났으면 맨 위 띠에 우승 팀
+  if (PAGE === "live" && champ) { // 시즌이 끝났으면(이번 시즌 페이지) 맨 위 띠에 우승 팀 — 마지막 날의 시리즈 전적 대신
     const tc = teamColors(champ);
     const yr = endedSeason() ?? "";
     slot.replaceChildren(el("span", { class: "bug__lbl" }, `${yr} 우승`.trim()),
@@ -360,6 +383,7 @@ const endedSeason = () => Number(String(state.latest?.date ?? "").slice(0, 4)) |
 
 function renderSeason() {
   const box = $("season");
+  if (PAGE === "replay") { box.hidden = true; return; }
   const r = state.status?.season_result;
   const yr = endedSeason();
   if (!r || !yr) { box.hidden = true; return; }
@@ -379,6 +403,15 @@ function renderSeason() {
       el("a", { class: "btn", href: `seasons.html?season=${yr}` }, `지난 시즌에서 ${yr} 다시 보기`),
     ]),
   ]));
+}
+
+/** 다시 보기: 시즌 고르기(seasons/index.json의 rewind_seasons). */
+async function renderSeasonPicker() {
+  const sel = $("replay-season");
+  if (!sel) return;
+  let seasons = [REPLAY_SEASON];
+  try { seasons = (await fetchJSON("seasons/index.json", { fresh: true })).rewind_seasons ?? seasons; } catch { /* 목록이 없으면 지금 시즌만 */ }
+  sel.replaceChildren(...seasons.slice().reverse().map((y) => el("option", { value: String(y), selected: y === REPLAY_SEASON ? "" : null }, `${y}`)));
 }
 
 // ---------- 순위표 · 다가오는 경기 (이번 시즌) ----------
@@ -615,7 +648,7 @@ function renderMatchups() {
   if (!games.length) {
     box.replaceChildren(el("div", { class: "card" }, [
       el("p", { class: "card__title" }, "이날은 경기가 없습니다."),
-      el("p", { class: "card__lead" }, "위에서 2026 시즌의 다른 날짜를 골라 보세요."),
+      el("p", { class: "card__lead" }, `위에서 ${REPLAY_SEASON} 시즌의 다른 날짜를 골라 보세요.`),
     ]));
     return;
   }
@@ -732,9 +765,9 @@ function monthBars(index) {
       ]),
       el("span", { class: "months__m" }, `${r.m}월`),
     ]))),
-    el("figcaption", { class: "months__cap" }, "2026 월별 적중률"),
+    el("figcaption", { class: "months__cap" }, `${REPLAY_SEASON} 월별 적중률`),
     el("table", { class: "sr-only" }, [
-      el("caption", {}, "2026 월별 적중률"),
+      el("caption", {}, `${REPLAY_SEASON} 월별 적중률`),
       el("tr", {}, [el("th", { scope: "col" }, "월"), el("th", { scope: "col" }, "적중률"), el("th", { scope: "col" }, "경기 수")]),
       ...rows.map((r) => el("tr", {}, [el("td", {}, `${r.m}월`), el("td", {}, fmtPct(r.acc, 1)), el("td", {}, String(r.n))])),
     ]),
