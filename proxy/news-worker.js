@@ -9,7 +9,7 @@
 // - 이 결과를 저장소에 커밋하거나 예측 모델(AI)에 넣지 않는다. 광고를 붙이지 않는다.
 // - 키는 민서 계정으로 발급한 것만 쓴다(키 공유 금지, 약관 7.2).
 //
-// 요청: GET /news?team=KT&display=3&start=1   (team = 사이트 팀 코드 또는 ALL(리그 전체), display = 1~10, start = 1~100 — "더 보기")
+// 요청: GET /news?team=KT&display=3&start=1&sort=sim   (team = 사이트 팀 코드 또는 ALL(리그 전체), display = 1~10, start = 1~100 — "더 보기")
 // 응답: { team, query, lastBuildDate, total, items: [{ title, originallink, link, description, pubDate }] }  ← 네이버 응답 그대로
 // 비밀 변수(wrangler secret put): NAVER_KEY_ID, NAVER_KEY   /   일반 변수: ALLOWED_ORIGINS (쉼표로 구분, 선택)
 // NAVER API HUB 검색(뉴스). 네이버 개발자 센터의 검색 API는 2026-07-31부터 신규 신청이 막히고 API HUB에서만 신청할 수 있다
@@ -54,9 +54,11 @@ export default {
     if (!query) return json({ error: "unknown team" }, 400, cors);
     const display = Math.min(10, Math.max(1, Number.parseInt(url.searchParams.get("display") ?? "3", 10) || 3));
     const start = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get("start") ?? "1", 10) || 1));
+    // 정렬: sim(정확도순, 기본 — 날짜순은 본문에 구단 이름이 한 번만 나와도 섞여 들어와 구단 기사 비율이 낮다) 또는 date(최신순)
+    const sort = url.searchParams.get("sort") === "date" ? "date" : "sim";
     if (!env.NAVER_KEY_ID || !env.NAVER_KEY) return json({ error: "api key not configured" }, 500, cors);
 
-    const api = `${API}?${new URLSearchParams({ query, display: String(display), start: String(start), sort: "date" })}`;
+    const api = `${API}?${new URLSearchParams({ query, display: String(display), start: String(start), sort })}`;
     let res;
     try {
       res = await fetch(api, { headers: HEADERS(env) });
@@ -66,7 +68,7 @@ export default {
     if (!res.ok) return json({ error: `upstream ${res.status}` }, 502, cors);
     const data = await res.json();
     // 네이버가 준 값을 그대로 (순서·내용 변경 없음). 팀 코드와 검색어만 덧붙인다.
-    return json({ team, query, lastBuildDate: data.lastBuildDate, total: data.total, items: data.items ?? [] }, 200,
+    return json({ team, query, sort, lastBuildDate: data.lastBuildDate, total: data.total, items: data.items ?? [] }, 200,
       { ...cors, "Cache-Control": "private, max-age=600" });
   },
 };

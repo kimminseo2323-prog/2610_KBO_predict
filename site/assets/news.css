@@ -54,3 +54,13 @@
 .news-item__meta { margin-top: 4px; font-size: 12px; color: var(--muted); }
 
 .news-about { margin-top: var(--sp-24); }
+
+/* 전체 탭 맨 위: 리그 전체 최신 소식 */
+.league-news { margin-bottom: var(--sp-24); padding: var(--sp-16) var(--sp-16) var(--sp-12); background: var(--canvas); outline: 2px solid var(--ink); outline-offset: -2px; }
+.league-news__title { font-size: 18px; font-weight: 800; color: var(--ink); }
+.league-news .news-list { columns: 2; column-gap: var(--sp-24); }
+.league-news .news-item { break-inside: avoid; }
+.league-news .news-card__src { margin-top: var(--sp-8); }
+@media (max-width: 767px) { .league-news .news-list { columns: 1; } }
+/* 구단 탭: 더 보기 */
+.news-more { margin-top: var(--sp-12); }

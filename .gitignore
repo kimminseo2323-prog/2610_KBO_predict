@@ -31,3 +31,6 @@ data/processed/
 
 # 5단계: 로컬 미리보기 전용 페이지 (커밋하지 않음)
 site/_preview.html
+
+# Cloudflare wrangler 로컬 캐시
+proxy/.wrangler/

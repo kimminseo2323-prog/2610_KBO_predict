@@ -809,6 +809,7 @@ def test_news_page_tabs_favorites_and_attribution():
     assert 'localStorage.getItem(FAV_KEY)' in js and js.count("try {") >= 2      # 저장소를 못 써도 페이지는 돈다
     assert '"네이버 검색결과"' in js and "originallink || it.link" in js and 'rel: "noopener"' in js
     assert "if (!NEWS_PROXY)" in js and "search.naver.com/search.naver?where=news" in js
+    assert 'loadNews("ALL", 10, { sort: "date" })' in js and "moreButton(" in js       # 리그 전체 소식, 구단 탭 더 보기
     assert 'fetchJSON("teams.json")' in js and "history.replaceState" in js and "aria-pressed" in js
     app = (ASSETS / "app.js").read_text(encoding="utf-8")
     assert re.search(r'export const NEWS_PROXY = "(https://[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev)?";', app)
@@ -819,7 +820,7 @@ def test_news_worker_hides_key_and_keeps_results_as_is():
     w = (ROOT / "proxy" / "news-worker.js").read_text(encoding="utf-8")
     assert "env.NAVER_KEY_ID" in w and "env.NAVER_KEY" in w and "caches." not in w
     assert '"Cache-Control": "private, max-age=600"' in w and "https://kimminseo2323-prog.github.io" in w
-    assert 'sort: "date"' in w and "items: data.items" in w
+    assert "sort })" in w and '=== "date" ? "date" : "sim"' in w and "items: data.items" in w   # 구단 = 정확도순(기본), 리그 = 최신순
     codes = set(re.findall(r"([A-Z]{2}): \"", w.split("TEAM_QUERY = {")[1].split("};")[0]))
     app = (ASSETS / "app.js").read_text(encoding="utf-8")
     assert codes == set(re.findall(r'^  "([A-Z]{2})": \{"ko"', app, re.M))

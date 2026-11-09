@@ -1,8 +1,10 @@
 // KBO Predict — 소식. news.html 전용 모듈.
 //
 // 화면: 구단 탭(전체 · 즐겨찾기 · 10개 구단) → 구단 카드들 → "이 소식은 어디서 오나요" 접기 → 푸터.
-// - 전체: 10개 구단 카드(즐겨찾기한 구단이 앞, 그 뒤는 2026 순위 순). 카드마다 최신 기사 3개.
-// - 구단 탭(?team=KT): 그 구단 카드 하나를 크게, 최신 기사 10개.
+// - 전체: 맨 위 리그 전체 최신 소식 10개(최신순), 그 아래 10개 구단 카드(즐겨찾기한 구단이 앞, 그 뒤는 2026 순위 순) — 카드마다 3개.
+// - 구단 탭(?team=KT): 그 구단 카드 하나를 크게, 기사 10개 + "더 보기"(10개씩, 최대 100개).
+// - 구단 기사는 네이버 "정확도순"(sort=sim)으로 받는다: "최신순"은 본문에 구단 이름이 한 번만 나와도 섞여 들어와
+//   제목에 그 구단이 나오는 기사가 10개 중 2개뿐이었다(정확도순 9개, 2026-11-09 측정). 리그 전체 소식은 최신순.
 // - 즐겨찾기: 별 버튼으로 켜고 끈다. 이 브라우저의 localStorage에만 둔다(없어도 페이지는 그대로 돈다).
 //
 // 기사 목록: NEWS_PROXY(app.js)가 비어 있지 않으면 `${NEWS_PROXY}/news?team=KT&display=n`을 볼 때마다 부른다.
@@ -16,6 +18,8 @@ import { TEAMS, NEWS_PROXY, el, fetchJSON, settle, renderNav, renderFooter, team
 const $ = (id) => document.getElementById(id);
 const FAV_KEY = "kbo-news-favorites";
 const state = { status: null, teams: null, errors: {}, tab: "all", favs: new Set(), news: new Map() };
+const PAGE = 10;        // 구단 탭에서 한 번에 받는 기사 수
+const MAX_START = 91;   // 프록시가 허용하는 마지막 시작 위치(start ≤ 100) → 최대 100개
 
 // ---------- 즐겨찾기 (이 브라우저에만) ----------
 
@@ -52,10 +56,11 @@ function order() {
 
 const searchURL = (code) => `https://search.naver.com/search.naver?where=news&sort=1&query=${encodeURIComponent(TEAMS[code].full)}`;
 
-async function loadNews(code, display) {
-  const key = `${code}:${display}`;
+async function loadNews(code, display, { start = 1, sort = "sim" } = {}) {
+  const key = `${code}:${display}:${start}:${sort}`;
   if (state.news.has(key)) return state.news.get(key);
-  const p = fetch(`${NEWS_PROXY}/news?team=${encodeURIComponent(code)}&display=${display}`)
+  const q = new URLSearchParams({ team: code, display: String(display), start: String(start), sort });
+  const p = fetch(`${NEWS_PROXY}/news?${q}`)
     .then((res) => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); });
   state.news.set(key, p);
   p.catch(() => state.news.delete(key)); // 실패하면 다음에 다시 시도
@@ -87,17 +92,52 @@ function ago(pubDate) {
 }
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 
+function newsItem(it) {
+  const href = it.originallink || it.link;
+  return el("li", { class: "news-item" }, [
+    el("a", { class: "news-item__title", href, target: "_blank", rel: "noopener" }, richText(it.title)),
+    ...(it.description ? [el("p", { class: "news-item__desc" }, richText(it.description))] : []),
+    el("p", { class: "news-item__meta" }, [host(href) || "원문", " ", ago(it.pubDate)]),
+  ]);
+}
+
 function newsList(code, data) {
   const items = data?.items ?? [];
   if (!items.length) return el("p", { class: "empty" }, "지금은 이 구단 기사가 검색되지 않습니다.");
-  return el("ol", { class: "news-list" }, items.map((it) => {
-    const href = it.originallink || it.link;
-    return el("li", { class: "news-item" }, [
-      el("a", { class: "news-item__title", href, target: "_blank", rel: "noopener" }, richText(it.title)),
-      it.description ? el("p", { class: "news-item__desc" }, richText(it.description)) : null,
-      el("p", { class: "news-item__meta" }, [host(href) || "원문", " ", ago(it.pubDate)]),
-    ]);
-  }));
+  return el("ol", { class: "news-list" }, items.map(newsItem));
+}
+
+/** 구단 탭: 10개씩 더 받아 같은 목록 뒤에 잇는다(네이버가 준 순서 그대로). */
+function moreButton(code, list, next) {
+  const btn = el("button", { class: "btn btn--secondary news-more", type: "button" }, "기사 더 보기");
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "불러오는 중…";
+    try {
+      const data = await loadNews(code, PAGE, { start: next });
+      const items = data?.items ?? [];
+      list.append(...items.map(newsItem));
+      if (items.length < PAGE || next + PAGE > MAX_START) btn.remove();
+      else { btn.replaceWith(moreButton(code, list, next + PAGE)); }
+    } catch {
+      btn.disabled = false;
+      btn.textContent = "다시 시도";
+    }
+  });
+  return btn;
+}
+
+/** 전체 탭 맨 위: KBO 리그 전체 최신 소식(최신순). */
+function leagueSection() {
+  const body = el("div", { class: "league-news__body" }, el("div", { class: "skeleton", style: "height:160px" }));
+  loadNews("ALL", 10, { sort: "date" })
+    .then((data) => body.replaceChildren(newsList("ALL", data)))
+    .catch(() => body.replaceChildren(el("p", { class: "empty" }, "리그 소식을 불러오지 못했습니다.")));
+  return el("section", { class: "league-news", "aria-labelledby": "league-news-title" }, [
+    el("h3", { class: "league-news__title", id: "league-news-title" }, "KBO 리그 최신 소식"),
+    body,
+    el("p", { class: "news-card__src" }, "네이버 검색결과 · 최신순"),
+  ]);
 }
 
 // ---------- 카드 ----------
@@ -126,8 +166,12 @@ function teamCard(code, big) {
     body.append(el("p", { class: "news-card__note" }, "기사 목록 연결을 준비하고 있습니다. 아래 링크로 최신 기사를 볼 수 있습니다."));
   } else {
     body.append(el("div", { class: "skeleton", style: "height:96px" }));
-    loadNews(code, big ? 10 : 3)
-      .then((data) => body.replaceChildren(newsList(code, data)))
+    loadNews(code, big ? PAGE : 3)
+      .then((data) => {
+        const list = newsList(code, data);
+        body.replaceChildren(list);
+        if (big && list.tagName === "OL" && (data?.items?.length ?? 0) === PAGE) body.append(moreButton(code, list, PAGE + 1));
+      })
       .catch(() => body.replaceChildren(el("p", { class: "empty" }, "기사 목록을 불러오지 못했습니다. 아래 링크로 볼 수 있습니다.")));
   }
   return card;
@@ -164,7 +208,7 @@ function render() {
   const title = $("news-title"), lead = $("news-board-lead");
   if (TEAMS[state.tab]) {
     title.textContent = `${teamName(state.tab, { full: true })} 소식`;
-    lead.textContent = NEWS_PROXY ? "최신 기사 10개를 네이버 검색 결과 그대로 보여 줍니다." : "";
+    lead.textContent = NEWS_PROXY ? "이 구단과 관련이 큰 기사부터 네이버 검색 결과 그대로 보여 줍니다(정확도순). 아래에서 10개씩 더 볼 수 있습니다." : "";
     body.replaceChildren(el("div", { class: "news-grid news-grid--one" }, teamCard(state.tab, true)));
     return;
   }
@@ -178,7 +222,7 @@ function render() {
   }
   title.textContent = "전체 구단";
   lead.textContent = state.favs.size ? "즐겨찾기한 구단이 앞에 옵니다. 그다음은 2026 정규시즌 순위 순입니다." : "2026 정규시즌 순위 순입니다. ☆을 누르면 그 구단이 맨 앞에 옵니다.";
-  body.replaceChildren(el("div", { class: "news-grid" }, order().map((c) => teamCard(c, false))));
+  body.replaceChildren(...(NEWS_PROXY ? [leagueSection()] : []), el("div", { class: "news-grid" }, order().map((c) => teamCard(c, false))));
 }
 
 async function init() {
