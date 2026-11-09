@@ -123,7 +123,7 @@
 .report-bento > .r-calibration { grid-column: span 5; }
 .report-bento > .r-importance { grid-column: span 5; }
 .report-bento > .r-variants { grid-column: span 7; }
-.report-bento > .r-clusters, .report-bento > .r-live, .report-bento > .r-backtest, .report-bento > .r-search { grid-column: 1 / -1; }
+.report-bento > .r-clusters, .report-bento > .r-live, .report-bento > .r-backtest, .report-bento > .r-search, .report-bento > .r-postseason { grid-column: 1 / -1; }
 
 /* 표 공통: 행 머리(th scope=row)는 본문 글자로 */
 .report-bento .table tbody th {
@@ -226,6 +226,17 @@
 .bt-kpi--lead b { font-size: 56px; }
 .bt-chart { margin-top: var(--sp-24); }
 .bt-table, .search-table { margin-top: var(--sp-16); }
+/* 가을야구 성적 */
+.ps-table, .ps-games { margin-top: var(--sp-16); }
+.ps-games td .tchip { white-space: nowrap; }
+.ps-hit { font-weight: 900; color: var(--ink); }
+.ps-miss { color: var(--muted); }
+.ps-verdict { margin-top: var(--sp-16); font-size: 15px; line-height: 1.6; color: var(--body); }
+.ps-verdict b { color: var(--ink); }
+@media (max-width: 479px) {
+  .ps-games .col-series { display: none; } /* 휴대폰: 시리즈 열을 빼고 날짜·경기·두 예측만 */
+  .ps-games td .tchip { display: inline-block; margin-bottom: 2px; }
+}
 .bt-table tr.is-chosen th, .bt-table tr.is-chosen td { font-weight: 900; color: var(--ink); }
 .bt-table tr.is-chosen th { box-shadow: inset 4px 0 0 var(--ink); padding-left: 12px; }
 .search-steps { list-style: none; padding: 0; margin: var(--sp-16) 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-16); }

@@ -1,0 +1,1552 @@
+{
+ "generated_at": "2026-11-09T15:18:38+09:00",
+ "seasons": [
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ],
+ "protocol": {
+  "dev_seasons": [
+   2018,
+   2019,
+   2020,
+   2021,
+   2022,
+   2023,
+   2024,
+   2025
+  ],
+  "test_season": 2026,
+  "alpha": 0.05,
+  "adopt_rule": "in_state를 쓰려면 2018~2025 포스트시즌 log loss가 frozen보다 낮고 대응표본 t 검정 p < 0.05",
+  "rule_declared": "2026-11-09 (2026 가을야구 결과와 예비 계산을 본 뒤)"
+ },
+ "candidates": {
+  "frozen": "지금 방식 (v0.3, 정규시즌 끝 전력으로 고정)",
+  "in_state": "가을야구 결과 반영 (v0.3, 가을 경기로 전력 갱신)",
+  "team": "시리즈 전망용 팀 모델 (선발·Elo 없음)"
+ },
+ "rules": {
+  "home": "항상 홈팀",
+  "better_record": "정규시즌 승률이 높은 팀"
+ },
+ "by_season": {
+  "2018": {
+   "n": 16,
+   "home_win_rate": 0.625,
+   "frozen": {
+    "accuracy": 0.625,
+    "log_loss": 0.6999
+   },
+   "in_state": {
+    "accuracy": 0.6875,
+    "log_loss": 0.7003
+   },
+   "team": {
+    "accuracy": 0.4375,
+    "log_loss": 0.6872
+   },
+   "rule_home": {
+    "accuracy": 0.625
+   },
+   "rule_better_record": {
+    "accuracy": 0.4375
+   }
+  },
+  "2019": {
+   "n": 12,
+   "home_win_rate": 0.5833,
+   "frozen": {
+    "accuracy": 0.6667,
+    "log_loss": 0.6498
+   },
+   "in_state": {
+    "accuracy": 0.6667,
+    "log_loss": 0.649
+   },
+   "team": {
+    "accuracy": 0.5833,
+    "log_loss": 0.6745
+   },
+   "rule_home": {
+    "accuracy": 0.5833
+   },
+   "rule_better_record": {
+    "accuracy": 0.6667
+   }
+  },
+  "2020": {
+   "n": 13,
+   "home_win_rate": 0.5385,
+   "frozen": {
+    "accuracy": 0.5385,
+    "log_loss": 0.6805
+   },
+   "in_state": {
+    "accuracy": 0.6154,
+    "log_loss": 0.6808
+   },
+   "team": {
+    "accuracy": 0.6154,
+    "log_loss": 0.6771
+   },
+   "rule_home": {
+    "accuracy": 0.5385
+   },
+   "rule_better_record": {
+    "accuracy": 0.5385
+   }
+  },
+  "2021": {
+   "n": 12,
+   "home_win_rate": 0.3333,
+   "frozen": {
+    "accuracy": 0.5833,
+    "log_loss": 0.7056
+   },
+   "in_state": {
+    "accuracy": 0.5,
+    "log_loss": 0.711
+   },
+   "team": {
+    "accuracy": 0.3333,
+    "log_loss": 0.7048
+   },
+   "rule_home": {
+    "accuracy": 0.3333
+   },
+   "rule_better_record": {
+    "accuracy": 0.5
+   }
+  },
+  "2022": {
+   "n": 16,
+   "home_win_rate": 0.6875,
+   "frozen": {
+    "accuracy": 0.5625,
+    "log_loss": 0.6633
+   },
+   "in_state": {
+    "accuracy": 0.5625,
+    "log_loss": 0.6638
+   },
+   "team": {
+    "accuracy": 0.6875,
+    "log_loss": 0.6575
+   },
+   "rule_home": {
+    "accuracy": 0.6875
+   },
+   "rule_better_record": {
+    "accuracy": 0.5625
+   }
+  },
+  "2023": {
+   "n": 14,
+   "home_win_rate": 0.3571,
+   "frozen": {
+    "accuracy": 0.5,
+    "log_loss": 0.7134
+   },
+   "in_state": {
+    "accuracy": 0.5,
+    "log_loss": 0.7124
+   },
+   "team": {
+    "accuracy": 0.4286,
+    "log_loss": 0.7608
+   },
+   "rule_home": {
+    "accuracy": 0.3571
+   },
+   "rule_better_record": {
+    "accuracy": 0.5714
+   }
+  },
+  "2024": {
+   "n": 16,
+   "home_win_rate": 0.625,
+   "frozen": {
+    "accuracy": 0.6875,
+    "log_loss": 0.6429
+   },
+   "in_state": {
+    "accuracy": 0.6875,
+    "log_loss": 0.6461
+   },
+   "team": {
+    "accuracy": 0.625,
+    "log_loss": 0.6827
+   },
+   "rule_home": {
+    "accuracy": 0.625
+   },
+   "rule_better_record": {
+    "accuracy": 0.625
+   }
+  },
+  "2025": {
+   "n": 16,
+   "home_win_rate": 0.625,
+   "frozen": {
+    "accuracy": 0.5625,
+    "log_loss": 0.6622
+   },
+   "in_state": {
+    "accuracy": 0.5625,
+    "log_loss": 0.6623
+   },
+   "team": {
+    "accuracy": 0.6875,
+    "log_loss": 0.6398
+   },
+   "rule_home": {
+    "accuracy": 0.625
+   },
+   "rule_better_record": {
+    "accuracy": 0.5625
+   }
+  },
+  "2026": {
+   "n": 14,
+   "home_win_rate": 0.7143,
+   "frozen": {
+    "accuracy": 0.3571,
+    "log_loss": 0.7003
+   },
+   "in_state": {
+    "accuracy": 0.3571,
+    "log_loss": 0.7005
+   },
+   "team": {
+    "accuracy": 0.5714,
+    "log_loss": 0.6709
+   },
+   "rule_home": {
+    "accuracy": 0.7143
+   },
+   "rule_better_record": {
+    "accuracy": 0.5714
+   }
+  }
+ },
+ "pooled": {
+  "dev": {
+   "n": 115,
+   "home_win_rate": 0.5565,
+   "frozen": {
+    "accuracy": 0.5913,
+    "log_loss": 0.6764
+   },
+   "in_state": {
+    "accuracy": 0.6,
+    "log_loss": 0.6774
+   },
+   "team": {
+    "accuracy": 0.5565,
+    "log_loss": 0.6842
+   },
+   "rule_home": {
+    "accuracy": 0.5565
+   },
+   "rule_better_record": {
+    "accuracy": 0.5565
+   },
+   "tests": {
+    "in_state_vs_frozen": {
+     "logloss_gain": -0.001,
+     "logloss_p": 0.4298,
+     "mcnemar_p": 1.0
+    },
+    "team_vs_frozen": {
+     "logloss_gain": -0.0077,
+     "logloss_p": 0.4584,
+     "mcnemar_p": 0.5235
+    },
+    "frozen_vs_rule_better_record": {
+     "mcnemar_p": 0.6271
+    }
+   }
+  },
+  "test": {
+   "n": 14,
+   "home_win_rate": 0.7143,
+   "frozen": {
+    "accuracy": 0.3571,
+    "log_loss": 0.7003
+   },
+   "in_state": {
+    "accuracy": 0.3571,
+    "log_loss": 0.7005
+   },
+   "team": {
+    "accuracy": 0.5714,
+    "log_loss": 0.6709
+   },
+   "rule_home": {
+    "accuracy": 0.7143
+   },
+   "rule_better_record": {
+    "accuracy": 0.5714
+   },
+   "tests": {
+    "in_state_vs_frozen": {
+     "logloss_gain": -0.0001,
+     "logloss_p": 0.981,
+     "mcnemar_p": 1.0
+    },
+    "team_vs_frozen": {
+     "logloss_gain": 0.0295,
+     "logloss_p": 0.3913,
+     "mcnemar_p": 0.5078
+    },
+    "frozen_vs_rule_better_record": {
+     "mcnemar_p": 0.375
+    }
+   }
+  },
+  "all": {
+   "n": 129,
+   "home_win_rate": 0.5736,
+   "frozen": {
+    "accuracy": 0.5659,
+    "log_loss": 0.679
+   },
+   "in_state": {
+    "accuracy": 0.5736,
+    "log_loss": 0.6799
+   },
+   "team": {
+    "accuracy": 0.5581,
+    "log_loss": 0.6827
+   },
+   "rule_home": {
+    "accuracy": 0.5736
+   },
+   "rule_better_record": {
+    "accuracy": 0.5581
+   },
+   "tests": {
+    "in_state_vs_frozen": {
+     "logloss_gain": -0.0009,
+     "logloss_p": 0.4759,
+     "mcnemar_p": 1.0
+    },
+    "team_vs_frozen": {
+     "logloss_gain": -0.0037,
+     "logloss_p": 0.7127,
+     "mcnemar_p": 1.0
+    },
+    "frozen_vs_rule_better_record": {
+     "mcnemar_p": 1.0
+    }
+   }
+  }
+ },
+ "decision": {
+  "adopt_in_state": false,
+  "reason": "개발 시즌 log loss가 낮아지지 않았다 — 지금 방식을 유지"
+ },
+ "games_2026": [
+  {
+   "date": "2026-10-14",
+   "game_id": 14040,
+   "series": "와일드카드",
+   "home": "LG",
+   "away": "OB",
+   "score": [
+    1,
+    4
+   ],
+   "y": 1,
+   "frozen": 0.4812,
+   "in_state": 0.4812,
+   "team": 0.5629,
+   "rule_home": 1,
+   "rule_better_record": 1
+  },
+  {
+   "date": "2026-10-17",
+   "game_id": 14042,
+   "series": "준플레이오프",
+   "home": "HT",
+   "away": "LG",
+   "score": [
+    1,
+    5
+   ],
+   "y": 1,
+   "frozen": 0.5664,
+   "in_state": 0.5674,
+   "team": 0.4985,
+   "rule_home": 1,
+   "rule_better_record": 1
+  },
+  {
+   "date": "2026-10-18",
+   "game_id": 14043,
+   "series": "준플레이오프",
+   "home": "HT",
+   "away": "LG",
+   "score": [
+    3,
+    6
+   ],
+   "y": 1,
+   "frozen": 0.5832,
+   "in_state": 0.5856,
+   "team": 0.4985,
+   "rule_home": 1,
+   "rule_better_record": 1
+  },
+  {
+   "date": "2026-10-20",
+   "game_id": 14044,
+   "series": "준플레이오프",
+   "home": "LG",
+   "away": "HT",
+   "score": [
+    13,
+    1
+   ],
+   "y": 0,
+   "frozen": 0.5674,
+   "in_state": 0.5558,
+   "team": 0.5652,
+   "rule_home": 1,
+   "rule_better_record": 0
+  },
+  {
+   "date": "2026-10-26",
+   "game_id": 14048,
+   "series": "플레이오프",
+   "home": "SS",
+   "away": "HT",
+   "score": [
+    5,
+    1
+   ],
+   "y": 0,
+   "frozen": 0.5283,
+   "in_state": 0.5212,
+   "team": 0.5667,
+   "rule_home": 1,
+   "rule_better_record": 1
+  },
+  {
+   "date": "2026-10-27",
+   "game_id": 14052,
+   "series": "플레이오프",
+   "home": "SS",
+   "away": "HT",
+   "score": [
+    3,
+    8
+   ],
+   "y": 1,
+   "frozen": 0.4919,
+   "in_state": 0.4781,
+   "team": 0.5667,
+   "rule_home": 1,
+   "rule_better_record": 1
+  },
+  {
+   "date": "2026-10-29",
+   "game_id": 14050,
+   "series": "플레이오프",
+   "home": "HT",
+   "away": "SS",
+   "score": [
+    6,
+    4
+   ],
+   "y": 0,
+   "frozen": 0.4579,
+   "in_state": 0.4778,
+   "team": 0.495,
+   "rule_home": 1,
+   "rule_better_record": 0
+  },
+  {
+   "date": "2026-10-30",
+   "game_id": 14053,
+   "series": "플레이오프",
+   "home": "HT",
+   "away": "SS",
+   "score": [
+    2,
+    4
+   ],
+   "y": 1,
+   "frozen": 0.5158,
+   "in_state": 0.5271,
+   "team": 0.495,
+   "rule_home": 1,
+   "rule_better_record": 0
+  },
+  {
+   "date": "2026-11-01",
+   "game_id": 14054,
+   "series": "플레이오프",
+   "home": "SS",
+   "away": "HT",
+   "score": [
+    1,
+    6
+   ],
+   "y": 1,
+   "frozen": 0.4919,
+   "in_state": 0.4821,
+   "team": 0.5667,
+   "rule_home": 1,
+   "rule_better_record": 1
+  },
+  {
+   "date": "2026-11-03",
+   "game_id": 14056,
+   "series": "한국시리즈",
+   "home": "KT",
+   "away": "SS",
+   "score": [
+    7,
+    8
+   ],
+   "y": 1,
+   "frozen": 0.5893,
+   "in_state": 0.5883,
+   "team": 0.5172,
+   "rule_home": 1,
+   "rule_better_record": 1
+  },
+  {
+   "date": "2026-11-04",
+   "game_id": 14057,
+   "series": "한국시리즈",
+   "home": "KT",
+   "away": "SS",
+   "score": [
+    3,
+    2
+   ],
+   "y": 0,
+   "frozen": 0.5665,
+   "in_state": 0.576,
+   "team": 0.5172,
+   "rule_home": 1,
+   "rule_better_record": 1
+  },
+  {
+   "date": "2026-11-06",
+   "game_id": 14058,
+   "series": "한국시리즈",
+   "home": "SS",
+   "away": "KT",
+   "score": [
+    1,
+    5
+   ],
+   "y": 1,
+   "frozen": 0.484,
+   "in_state": 0.4847,
+   "team": 0.5404,
+   "rule_home": 1,
+   "rule_better_record": 0
+  },
+  {
+   "date": "2026-11-07",
+   "game_id": 14059,
+   "series": "한국시리즈",
+   "home": "SS",
+   "away": "KT",
+   "score": [
+    5,
+    10
+   ],
+   "y": 1,
+   "frozen": 0.439,
+   "in_state": 0.4437,
+   "team": 0.5404,
+   "rule_home": 1,
+   "rule_better_record": 0
+  },
+  {
+   "date": "2026-11-08",
+   "game_id": 14060,
+   "series": "한국시리즈",
+   "home": "SS",
+   "away": "KT",
+   "score": [
+    1,
+    12
+   ],
+   "y": 1,
+   "frozen": 0.4636,
+   "in_state": 0.4761,
+   "team": 0.5404,
+   "rule_home": 1,
+   "rule_better_record": 0
+  }
+ ],
+ "series": [
+  {
+   "season": 2018,
+   "name": "1번째 시리즈",
+   "teams": [
+    "WO",
+    "HT"
+   ],
+   "first_date": "2018-10-16",
+   "wins": [
+    1,
+    0
+   ],
+   "winner": "WO",
+   "p_first": {
+    "frozen": 0.457,
+    "in_state": 0.457,
+    "team": 0.3954
+   },
+   "picks": {
+    "frozen": "HT",
+    "in_state": "HT",
+    "team": "HT",
+    "rule_better_record": "WO"
+   }
+  },
+  {
+   "season": 2018,
+   "name": "2번째 시리즈",
+   "teams": [
+    "HH",
+    "WO"
+   ],
+   "first_date": "2018-10-19",
+   "wins": [
+    1,
+    3
+   ],
+   "winner": "WO",
+   "p_first": {
+    "frozen": 0.4837,
+    "in_state": 0.483,
+    "team": 0.4876
+   },
+   "picks": {
+    "frozen": "WO",
+    "in_state": "WO",
+    "team": "WO",
+    "rule_better_record": "HH"
+   }
+  },
+  {
+   "season": 2018,
+   "name": "3번째 시리즈",
+   "teams": [
+    "SK",
+    "WO"
+   ],
+   "first_date": "2018-10-27",
+   "wins": [
+    3,
+    2
+   ],
+   "winner": "SK",
+   "p_first": {
+    "frozen": 0.5362,
+    "in_state": 0.5347,
+    "team": 0.5964
+   },
+   "picks": {
+    "frozen": "SK",
+    "in_state": "SK",
+    "team": "SK",
+    "rule_better_record": "SK"
+   }
+  },
+  {
+   "season": 2018,
+   "name": "4번째 시리즈",
+   "teams": [
+    "OB",
+    "SK"
+   ],
+   "first_date": "2018-11-04",
+   "wins": [
+    2,
+    4
+   ],
+   "winner": "SK",
+   "p_first": {
+    "frozen": 0.5224,
+    "in_state": 0.5206,
+    "team": 0.5297
+   },
+   "picks": {
+    "frozen": "OB",
+    "in_state": "OB",
+    "team": "OB",
+    "rule_better_record": "OB"
+   }
+  },
+  {
+   "season": 2019,
+   "name": "1번째 시리즈",
+   "teams": [
+    "LG",
+    "NC"
+   ],
+   "first_date": "2019-10-03",
+   "wins": [
+    1,
+    0
+   ],
+   "winner": "LG",
+   "p_first": {
+    "frozen": 0.5049,
+    "in_state": 0.5049,
+    "team": 0.5269
+   },
+   "picks": {
+    "frozen": "LG",
+    "in_state": "LG",
+    "team": "LG",
+    "rule_better_record": "LG"
+   }
+  },
+  {
+   "season": 2019,
+   "name": "2번째 시리즈",
+   "teams": [
+    "WO",
+    "LG"
+   ],
+   "first_date": "2019-10-06",
+   "wins": [
+    3,
+    1
+   ],
+   "winner": "WO",
+   "p_first": {
+    "frozen": 0.5279,
+    "in_state": 0.5268,
+    "team": 0.5375
+   },
+   "picks": {
+    "frozen": "WO",
+    "in_state": "WO",
+    "team": "WO",
+    "rule_better_record": "WO"
+   }
+  },
+  {
+   "season": 2019,
+   "name": "3번째 시리즈",
+   "teams": [
+    "SK",
+    "WO"
+   ],
+   "first_date": "2019-10-14",
+   "wins": [
+    0,
+    3
+   ],
+   "winner": "WO",
+   "p_first": {
+    "frozen": 0.4994,
+    "in_state": 0.4974,
+    "team": 0.5359
+   },
+   "picks": {
+    "frozen": "WO",
+    "in_state": "WO",
+    "team": "SK",
+    "rule_better_record": "SK"
+   }
+  },
+  {
+   "season": 2019,
+   "name": "4번째 시리즈",
+   "teams": [
+    "OB",
+    "WO"
+   ],
+   "first_date": "2019-10-22",
+   "wins": [
+    4,
+    0
+   ],
+   "winner": "OB",
+   "p_first": {
+    "frozen": 0.5158,
+    "in_state": 0.5097,
+    "team": 0.5186
+   },
+   "picks": {
+    "frozen": "OB",
+    "in_state": "OB",
+    "team": "OB",
+    "rule_better_record": "OB"
+   }
+  },
+  {
+   "season": 2020,
+   "name": "1번째 시리즈",
+   "teams": [
+    "LG",
+    "WO"
+   ],
+   "first_date": "2020-11-02",
+   "wins": [
+    1,
+    0
+   ],
+   "winner": "LG",
+   "p_first": {
+    "frozen": 0.5063,
+    "in_state": 0.5063,
+    "team": 0.5183
+   },
+   "picks": {
+    "frozen": "LG",
+    "in_state": "LG",
+    "team": "LG",
+    "rule_better_record": "LG"
+   }
+  },
+  {
+   "season": 2020,
+   "name": "2번째 시리즈",
+   "teams": [
+    "LG",
+    "OB"
+   ],
+   "first_date": "2020-11-04",
+   "wins": [
+    0,
+    2
+   ],
+   "winner": "OB",
+   "p_first": {
+    "frozen": 0.4813,
+    "in_state": 0.4833,
+    "team": 0.4569
+   },
+   "picks": {
+    "frozen": "OB",
+    "in_state": "OB",
+    "team": "OB",
+    "rule_better_record": "LG"
+   }
+  },
+  {
+   "season": 2020,
+   "name": "3번째 시리즈",
+   "teams": [
+    "KT",
+    "OB"
+   ],
+   "first_date": "2020-11-09",
+   "wins": [
+    1,
+    3
+   ],
+   "winner": "OB",
+   "p_first": {
+    "frozen": 0.4764,
+    "in_state": 0.4721,
+    "team": 0.3797
+   },
+   "picks": {
+    "frozen": "OB",
+    "in_state": "OB",
+    "team": "OB",
+    "rule_better_record": "KT"
+   }
+  },
+  {
+   "season": 2020,
+   "name": "4번째 시리즈",
+   "teams": [
+    "NC",
+    "OB"
+   ],
+   "first_date": "2020-11-17",
+   "wins": [
+    4,
+    2
+   ],
+   "winner": "NC",
+   "p_first": {
+    "frozen": 0.4824,
+    "in_state": 0.4748,
+    "team": 0.4158
+   },
+   "picks": {
+    "frozen": "OB",
+    "in_state": "OB",
+    "team": "OB",
+    "rule_better_record": "NC"
+   }
+  },
+  {
+   "season": 2021,
+   "name": "1번째 시리즈",
+   "teams": [
+    "KT",
+    "SS"
+   ],
+   "first_date": "2021-10-31",
+   "wins": [
+    1,
+    0
+   ],
+   "winner": "KT",
+   "p_first": {
+    "frozen": 0.4835,
+    "in_state": 0.4835,
+    "team": 0.5203
+   },
+   "picks": {
+    "frozen": "SS",
+    "in_state": "SS",
+    "team": "KT",
+    "rule_better_record": "KT"
+   }
+  },
+  {
+   "season": 2021,
+   "name": "2번째 시리즈",
+   "teams": [
+    "OB",
+    "WO"
+   ],
+   "first_date": "2021-11-01",
+   "wins": [
+    1,
+    1
+   ],
+   "winner": "WO",
+   "p_first": {
+    "frozen": 0.5086,
+    "in_state": 0.5086,
+    "team": 0.5074
+   },
+   "picks": {
+    "frozen": "OB",
+    "in_state": "OB",
+    "team": "OB",
+    "rule_better_record": "OB"
+   }
+  },
+  {
+   "season": 2021,
+   "name": "3번째 시리즈",
+   "teams": [
+    "LG",
+    "OB"
+   ],
+   "first_date": "2021-11-04",
+   "wins": [
+    1,
+    2
+   ],
+   "winner": "OB",
+   "p_first": {
+    "frozen": 0.5031,
+    "in_state": 0.5172,
+    "team": 0.5155
+   },
+   "picks": {
+    "frozen": "LG",
+    "in_state": "LG",
+    "team": "LG",
+    "rule_better_record": "LG"
+   }
+  },
+  {
+   "season": 2021,
+   "name": "4번째 시리즈",
+   "teams": [
+    "SS",
+    "OB"
+   ],
+   "first_date": "2021-11-09",
+   "wins": [
+    0,
+    2
+   ],
+   "winner": "OB",
+   "p_first": {
+    "frozen": 0.5072,
+    "in_state": 0.5123,
+    "team": 0.4973
+   },
+   "picks": {
+    "frozen": "SS",
+    "in_state": "SS",
+    "team": "OB",
+    "rule_better_record": "SS"
+   }
+  },
+  {
+   "season": 2021,
+   "name": "5번째 시리즈",
+   "teams": [
+    "KT",
+    "OB"
+   ],
+   "first_date": "2021-11-14",
+   "wins": [
+    4,
+    0
+   ],
+   "winner": "KT",
+   "p_first": {
+    "frozen": 0.4947,
+    "in_state": 0.4906,
+    "team": 0.5167
+   },
+   "picks": {
+    "frozen": "OB",
+    "in_state": "OB",
+    "team": "KT",
+    "rule_better_record": "KT"
+   }
+  },
+  {
+   "season": 2022,
+   "name": "1번째 시리즈",
+   "teams": [
+    "KT",
+    "HT"
+   ],
+   "first_date": "2022-10-13",
+   "wins": [
+    1,
+    0
+   ],
+   "winner": "KT",
+   "p_first": {
+    "frozen": 0.506,
+    "in_state": 0.506,
+    "team": 0.4519
+   },
+   "picks": {
+    "frozen": "KT",
+    "in_state": "KT",
+    "team": "HT",
+    "rule_better_record": "KT"
+   }
+  },
+  {
+   "season": 2022,
+   "name": "2번째 시리즈",
+   "teams": [
+    "KT",
+    "WO"
+   ],
+   "first_date": "2022-10-16",
+   "wins": [
+    2,
+    3
+   ],
+   "winner": "WO",
+   "p_first": {
+    "frozen": 0.4919,
+    "in_state": 0.491,
+    "team": 0.4417
+   },
+   "picks": {
+    "frozen": "WO",
+    "in_state": "WO",
+    "team": "WO",
+    "rule_better_record": "KT"
+   }
+  },
+  {
+   "season": 2022,
+   "name": "3번째 시리즈",
+   "teams": [
+    "LG",
+    "WO"
+   ],
+   "first_date": "2022-10-24",
+   "wins": [
+    1,
+    3
+   ],
+   "winner": "WO",
+   "p_first": {
+    "frozen": 0.5245,
+    "in_state": 0.5243,
+    "team": 0.4997
+   },
+   "picks": {
+    "frozen": "LG",
+    "in_state": "LG",
+    "team": "WO",
+    "rule_better_record": "LG"
+   }
+  },
+  {
+   "season": 2022,
+   "name": "4번째 시리즈",
+   "teams": [
+    "SK",
+    "WO"
+   ],
+   "first_date": "2022-11-01",
+   "wins": [
+    4,
+    2
+   ],
+   "winner": "SK",
+   "p_first": {
+    "frozen": 0.5177,
+    "in_state": 0.5108,
+    "team": 0.524
+   },
+   "picks": {
+    "frozen": "SK",
+    "in_state": "SK",
+    "team": "SK",
+    "rule_better_record": "SK"
+   }
+  },
+  {
+   "season": 2023,
+   "name": "1번째 시리즈",
+   "teams": [
+    "NC",
+    "OB"
+   ],
+   "first_date": "2023-10-19",
+   "wins": [
+    1,
+    0
+   ],
+   "winner": "NC",
+   "p_first": {
+    "frozen": 0.5016,
+    "in_state": 0.5016,
+    "team": 0.508
+   },
+   "picks": {
+    "frozen": "NC",
+    "in_state": "NC",
+    "team": "NC",
+    "rule_better_record": "NC"
+   }
+  },
+  {
+   "season": 2023,
+   "name": "2번째 시리즈",
+   "teams": [
+    "SK",
+    "NC"
+   ],
+   "first_date": "2023-10-22",
+   "wins": [
+    0,
+    3
+   ],
+   "winner": "NC",
+   "p_first": {
+    "frozen": 0.5243,
+    "in_state": 0.526,
+    "team": 0.529
+   },
+   "picks": {
+    "frozen": "SK",
+    "in_state": "SK",
+    "team": "SK",
+    "rule_better_record": "SK"
+   }
+  },
+  {
+   "season": 2023,
+   "name": "3번째 시리즈",
+   "teams": [
+    "KT",
+    "NC"
+   ],
+   "first_date": "2023-10-30",
+   "wins": [
+    3,
+    2
+   ],
+   "winner": "KT",
+   "p_first": {
+    "frozen": 0.5549,
+    "in_state": 0.5455,
+    "team": 0.6614
+   },
+   "picks": {
+    "frozen": "KT",
+    "in_state": "KT",
+    "team": "KT",
+    "rule_better_record": "KT"
+   }
+  },
+  {
+   "season": 2023,
+   "name": "4번째 시리즈",
+   "teams": [
+    "LG",
+    "KT"
+   ],
+   "first_date": "2023-11-07",
+   "wins": [
+    4,
+    1
+   ],
+   "winner": "LG",
+   "p_first": {
+    "frozen": 0.5021,
+    "in_state": 0.5018,
+    "team": 0.4328
+   },
+   "picks": {
+    "frozen": "LG",
+    "in_state": "LG",
+    "team": "KT",
+    "rule_better_record": "LG"
+   }
+  },
+  {
+   "season": 2024,
+   "name": "1번째 시리즈",
+   "teams": [
+    "OB",
+    "KT"
+   ],
+   "first_date": "2024-10-02",
+   "wins": [
+    0,
+    2
+   ],
+   "winner": "KT",
+   "p_first": {
+    "frozen": 0.4922,
+    "in_state": 0.4922,
+    "team": 0.4553
+   },
+   "picks": {
+    "frozen": "KT",
+    "in_state": "KT",
+    "team": "KT",
+    "rule_better_record": "OB"
+   }
+  },
+  {
+   "season": 2024,
+   "name": "2번째 시리즈",
+   "teams": [
+    "LG",
+    "KT"
+   ],
+   "first_date": "2024-10-05",
+   "wins": [
+    3,
+    2
+   ],
+   "winner": "LG",
+   "p_first": {
+    "frozen": 0.5025,
+    "in_state": 0.5029,
+    "team": 0.4977
+   },
+   "picks": {
+    "frozen": "LG",
+    "in_state": "LG",
+    "team": "KT",
+    "rule_better_record": "LG"
+   }
+  },
+  {
+   "season": 2024,
+   "name": "3번째 시리즈",
+   "teams": [
+    "SS",
+    "LG"
+   ],
+   "first_date": "2024-10-13",
+   "wins": [
+    3,
+    1
+   ],
+   "winner": "SS",
+   "p_first": {
+    "frozen": 0.4949,
+    "in_state": 0.4949,
+    "team": 0.4626
+   },
+   "picks": {
+    "frozen": "LG",
+    "in_state": "LG",
+    "team": "LG",
+    "rule_better_record": "SS"
+   }
+  },
+  {
+   "season": 2024,
+   "name": "4번째 시리즈",
+   "teams": [
+    "HT",
+    "SS"
+   ],
+   "first_date": "2024-10-23",
+   "wins": [
+    4,
+    1
+   ],
+   "winner": "HT",
+   "p_first": {
+    "frozen": 0.5084,
+    "in_state": 0.5031,
+    "team": 0.4778
+   },
+   "picks": {
+    "frozen": "HT",
+    "in_state": "HT",
+    "team": "SS",
+    "rule_better_record": "HT"
+   }
+  },
+  {
+   "season": 2025,
+   "name": "1번째 시리즈",
+   "teams": [
+    "SS",
+    "NC"
+   ],
+   "first_date": "2025-10-06",
+   "wins": [
+    1,
+    1
+   ],
+   "winner": "NC",
+   "p_first": {
+    "frozen": 0.5198,
+    "in_state": 0.5198,
+    "team": 0.559
+   },
+   "picks": {
+    "frozen": "SS",
+    "in_state": "SS",
+    "team": "SS",
+    "rule_better_record": "SS"
+   }
+  },
+  {
+   "season": 2025,
+   "name": "2번째 시리즈",
+   "teams": [
+    "SK",
+    "SS"
+   ],
+   "first_date": "2025-10-09",
+   "wins": [
+    1,
+    3
+   ],
+   "winner": "SS",
+   "p_first": {
+    "frozen": 0.4859,
+    "in_state": 0.4897,
+    "team": 0.4686
+   },
+   "picks": {
+    "frozen": "SS",
+    "in_state": "SS",
+    "team": "SS",
+    "rule_better_record": "SK"
+   }
+  },
+  {
+   "season": 2025,
+   "name": "3번째 시리즈",
+   "teams": [
+    "HH",
+    "SS"
+   ],
+   "first_date": "2025-10-18",
+   "wins": [
+    3,
+    2
+   ],
+   "winner": "HH",
+   "p_first": {
+    "frozen": 0.5218,
+    "in_state": 0.5177,
+    "team": 0.5268
+   },
+   "picks": {
+    "frozen": "HH",
+    "in_state": "HH",
+    "team": "HH",
+    "rule_better_record": "HH"
+   }
+  },
+  {
+   "season": 2025,
+   "name": "4번째 시리즈",
+   "teams": [
+    "LG",
+    "HH"
+   ],
+   "first_date": "2025-10-26",
+   "wins": [
+    4,
+    1
+   ],
+   "winner": "LG",
+   "p_first": {
+    "frozen": 0.5621,
+    "in_state": 0.5628,
+    "team": 0.5891
+   },
+   "picks": {
+    "frozen": "LG",
+    "in_state": "LG",
+    "team": "LG",
+    "rule_better_record": "LG"
+   }
+  },
+  {
+   "season": 2026,
+   "name": "와일드카드",
+   "teams": [
+    "LG",
+    "OB"
+   ],
+   "first_date": "2026-10-14",
+   "wins": [
+    1,
+    0
+   ],
+   "winner": "LG",
+   "p_first": {
+    "frozen": 0.5135,
+    "in_state": 0.5135,
+    "team": 0.5309
+   },
+   "picks": {
+    "frozen": "LG",
+    "in_state": "LG",
+    "team": "LG",
+    "rule_better_record": "LG"
+   }
+  },
+  {
+   "season": 2026,
+   "name": "준플레이오프",
+   "teams": [
+    "HT",
+    "LG"
+   ],
+   "first_date": "2026-10-17",
+   "wins": [
+    3,
+    0
+   ],
+   "winner": "HT",
+   "p_first": {
+    "frozen": 0.5081,
+    "in_state": 0.5091,
+    "team": 0.4666
+   },
+   "picks": {
+    "frozen": "HT",
+    "in_state": "HT",
+    "team": "LG",
+    "rule_better_record": "HT"
+   }
+  },
+  {
+   "season": 2026,
+   "name": "플레이오프",
+   "teams": [
+    "SS",
+    "HT"
+   ],
+   "first_date": "2026-10-26",
+   "wins": [
+    3,
+    2
+   ],
+   "winner": "SS",
+   "p_first": {
+    "frozen": 0.511,
+    "in_state": 0.5043,
+    "team": 0.5359
+   },
+   "picks": {
+    "frozen": "SS",
+    "in_state": "SS",
+    "team": "SS",
+    "rule_better_record": "SS"
+   }
+  },
+  {
+   "season": 2026,
+   "name": "한국시리즈",
+   "teams": [
+    "KT",
+    "SS"
+   ],
+   "first_date": "2026-11-03",
+   "wins": [
+    1,
+    4
+   ],
+   "winner": "SS",
+   "p_first": {
+    "frozen": 0.519,
+    "in_state": 0.5186,
+    "team": 0.4884
+   },
+   "picks": {
+    "frozen": "KT",
+    "in_state": "KT",
+    "team": "SS",
+    "rule_better_record": "KT"
+   }
+  }
+ ],
+ "series_summary": {
+  "dev": {
+   "n": 33,
+   "frozen": 21,
+   "in_state": 21,
+   "team": 20,
+   "rule_better_record": 19
+  },
+  "test": {
+   "n": 4,
+   "frozen": 3,
+   "in_state": 3,
+   "team": 3,
+   "rule_better_record": 3
+  },
+  "all": {
+   "n": 37,
+   "frozen": 24,
+   "in_state": 24,
+   "team": 23,
+   "rule_better_record": 22
+  }
+ },
+ "live_2026": {
+  "n": 8,
+  "correct": 4,
+  "first_date": "2026-10-29"
+ },
+ "elapsed_sec": 5.5
+}

@@ -11,15 +11,18 @@
 import {
   FACTOR_LABELS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInt, fmtRange, fmtDate, fmtKST,
   teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError, factorLabel, factorHelp, membershipText,
+  teamChip, fmtDateShort,
 } from "./app.js";
 import { barChart, calibrationChart, enableTips, lineChart } from "./charts.js";
 
 const $ = (id) => document.getElementById(id);
 
-const state = { report: null, history: null, status: null, backtest: null, tuning: null, grid: null, automl: null, errors: {} };
+const state = { report: null, history: null, status: null, backtest: null, tuning: null, grid: null, automl: null, postseason: null, errors: {} };
 
 // ---------- 작은 도우미 ----------
 
+/** 배열 합 (없으면 0) — 주성분 설명 분산처럼 몇 개를 더할 때. */
+const sum = (arr) => (arr ?? []).reduce((s, v) => s + Number(v), 0);
 /** 소수 d자리. 값이 없으면 "—". */
 const num = (v, d = 3) => (fin(v) ? Number(v).toFixed(d) : "—");
 /** p값: 0.001 미만은 "< .001", 그 밖은 ".046". */
@@ -165,6 +168,76 @@ function renderBacktest() {
   lineChart(chart, series, { yFormat: (v) => fmtPct(v, 0), height: 260, endLabels: true, label: "시즌별 적중률: 지금 모델, 예전 모델, 규칙" });
 }
 
+// ---------- 가을야구 성적 (postseason_report.json) ----------
+
+function renderPostseason() {
+  const body = $("postseason-body");
+  const r = state.postseason;
+  if (!r) {
+    showError(body, state.errors.postseason, async () => { await settle(state, "postseason", fetchJSON("postseason_report.json")); renderPostseason(); });
+    return;
+  }
+  const dev = r.pooled.dev, test = r.pooled.test, live = r.live_2026, ss = r.series_summary.all;
+  const d0 = r.protocol.dev_seasons[0], d1 = r.protocol.dev_seasons.at(-1), ts = r.protocol.test_season;
+  $("postseason-lead").textContent = `정규시즌 경기로만 배운 모델이 가을야구에서도 통하는지, ${d0}~${ts} 포스트시즌 ${fmtInt(r.pooled.all.n)}경기만 따로 모아 쟀습니다. 시즌마다 그보다 앞선 시즌들로만 배운 모델입니다.`;
+  const kpi = (big, small, lead = false) => el("div", { class: `bt-kpi${lead ? " bt-kpi--lead" : ""}` }, [el("b", {}, big), el("span", {}, small)]);
+  const hits = (n) => Math.round(test.frozen.accuracy * test.n);
+  const head = el("div", { class: "bt-head" }, [
+    kpi(fmtPct(dev.frozen.accuracy, 1), `${d0}~${d1} 가을야구 ${dev.n}경기 적중률 (정규시즌과 비슷)`, true),
+    kpi(`${hits()} / ${test.n}`, `${ts} 가을야구 적중 (다시 계산)`),
+    kpi(`${live.correct} / ${live.n}`, `${ts} 사이트에 실제로 공개한 예측 (${fmtDate(live.first_date)}부터)`),
+  ]);
+  const sub = (main, s) => [main, el("span", { class: "th-sub" }, s)];
+  const row = (key, label, tag) => el("tr", { class: key === "frozen" ? "is-chosen" : null }, [
+    el("th", { scope: "row" }, [label, tag ? el("span", { class: "pill pill--sm pill--ink holdout__tag" }, tag) : null]),
+    el("td", { class: "num" }, fmtPct(dev[key].accuracy, 1)),
+    el("td", { class: "num" }, num(dev[key].log_loss, 4)),
+    el("td", { class: "num" }, fmtPct(test[key].accuracy, 1)),
+    el("td", { class: "num" }, `${ss[key]} / ${ss.n}`),
+  ]);
+  const ruleRow = (key) => el("tr", { class: "is-baseline" }, [el("th", { scope: "row" }, `규칙: ${r.rules[key]}`),
+    el("td", { class: "num" }, fmtPct(dev[`rule_${key}`].accuracy, 1)), el("td", { class: "num muted" }, "—"),
+    el("td", { class: "num" }, fmtPct(test[`rule_${key}`].accuracy, 1)),
+    el("td", { class: "num" }, key === "better_record" ? `${ss.rule_better_record} / ${ss.n}` : "—")]);
+  const cmp = el("div", { class: "inset ps-table" }, table("가을야구 성적: 방식 셋과 규칙 둘",
+    [["방식"], [`${d0}~${d1} 적중률`, "num"], [sub("확률 오차", "log loss"), "num"], [`${ts} 적중률`, "num"], [sub("시리즈 승자", "시작 전 예상"), "num"]],
+    [row("frozen", r.candidates.frozen, "지금 방식"), row("in_state", r.candidates.in_state), row("team", r.candidates.team),
+      ruleRow("better_record"), ruleRow("home")], "holdout-table"));
+
+  // 2026 가을야구 경기별: 지금 방식과 팀 모델이 고른 팀, 결과
+  const pick = (g, p) => {
+    const code = p >= 0.5 ? g.home : g.away;
+    const won = (g.y === 1) === (p >= 0.5);
+    return el("td", {}, [teamChip(code, `${teamName(code)} ${Math.round(Math.max(p, 1 - p) * 100)}%`, "tchip--sm"), " ",
+      el("span", { class: won ? "ps-hit" : "ps-miss" }, won ? "적중" : "미적중")]);
+  };
+  const games = el("div", { class: "inset ps-games" }, table(`${ts} 가을야구 경기별 예측`,
+    [["날짜"], ["시리즈", "col-series"], ["경기 (원정 : 홈)"], ["지금 방식"], ["팀 모델"]],
+    r.games_2026.map((g) => el("tr", {}, [
+      el("td", { class: "num" }, fmtDateShort(g.date)), el("td", { class: "col-series" }, g.series),
+      el("td", {}, `${teamName(g.away)} ${g.score[0]} : ${g.score[1]} ${teamName(g.home)}`),
+      pick(g, g.frozen), pick(g, g.team),
+    ])), "holdout-table"));
+
+  const ks = r.series.filter((s) => s.season === ts).at(-1);
+  const tIn = dev.tests.in_state_vs_frozen, tTeam = dev.tests.team_vs_frozen;
+  const verdict = el("p", { class: "ps-verdict" }, [
+    `${ts} ${ks.name} 전에 지금 방식은 ${teamName(ks.teams[0])} 쪽을 ${Math.round(ks.p_first.frozen * 100)}%로, 시리즈 전망에 쓰는 팀 모델은 ${teamName(ks.teams[1])} 쪽을 ${Math.round((1 - ks.p_first.team) * 100)}%로 봤습니다. 결과는 ${teamName(ks.winner)} ${Math.max(...ks.wins)}승 ${Math.min(...ks.wins)}패였습니다. `,
+    `하지만 ${d0}~${d1} 가을야구 ${dev.n}경기에서는 지금 방식(${fmtPct(dev.frozen.accuracy, 1)})이 팀 모델(${fmtPct(dev.team.accuracy, 1)})보다 많이 맞혔고, 차이는 우연과 구분되지 않습니다(${pText(tTeam.mcnemar_p)}). `,
+    el("b", {}, r.decision.adopt_in_state ? "가을야구 결과를 반영하는 방식으로 바꿉니다." : "그래서 지금 방식을 유지합니다."),
+    ` 가을야구 결과를 전력에 넣어 가며 예측하는 방식도 확률 오차가 줄지 않았습니다(${pText(tIn.logloss_p)}).`,
+  ]);
+  body.replaceChildren(head, cmp, verdict, games,
+    el("details", { class: "more" }, [el("summary", {}, "왜 두 계산이 엇갈렸고, 이 시험은 믿을 만한가요?"), el("ul", {}, [
+      el("li", {}, "경기별 예측(지금 방식)은 Elo 전력 점수를 크게 봅니다. Elo는 여러 시즌 경기 결과로 쌓은 점수라 정규시즌을 압도한 팀을 꾸준히 높게 봅니다. 시리즈 전망의 팀 모델은 Elo와 선발을 쓰지 않고 최근 흐름·안방 승률 같은 팀 기록만 봅니다. 그래서 두 계산이 다른 팀을 고를 수 있습니다."),
+      el("li", {}, "가을야구는 한 해 12~16경기뿐이라 여러 해를 합쳐도 약 115경기입니다. 몇 %p 차이는 우연과 구분하기 어렵고, 한 시리즈의 결과로 어느 방식이 낫다고 말할 수 없습니다."),
+      el("li", {}, "가을야구 결과를 반영하는 방식에서 휴식일 차이는 지금 방식과 같은 값을 썼습니다. 한국시리즈 직행 팀은 20일 넘게 쉬는데, 정규시즌에는 이런 휴식이 없어 모델이 그 값을 지나치게 크게 해석했기 때문입니다(처음 계산에서 직행 팀 우세가 79%까지 커졌습니다)."),
+      el("li", {}, `채택 규칙(${d0}~${d1} 확률 오차가 낮고 p < ${ALPHA})은 ${ts} 가을야구 결과를 본 뒤에 정했습니다. 그 사실을 숨기지 않으려고 여기 적습니다.`),
+      el("li", {}, `"다시 계산"은 그 시즌보다 앞선 시즌들로만 배운 모델의 결과이고, "실제로 공개한 예측"은 그때 사이트에 올린 기록입니다. 매일 예측은 ${fmtDate(live.first_date)}부터라 앞선 경기는 공개 기록이 없습니다.`),
+    ])]),
+  );
+}
+
 // ---------- 더 나은 모델은 없었나 (tuning_report · tuning_grid_report · automl_report) ----------
 
 const FAMILY_KO = { logreg: "로지스틱 회귀", random_forest: "랜덤포레스트", extra_trees: "엑스트라 트리", hist_gb: "히스토그램 부스팅",
@@ -222,11 +295,13 @@ async function init() {
   renderNav("report.html");
   await Promise.all([loadReport(), loadHistory(), settle(state, "status", fetchJSON("status.json", { fresh: true })),
     settle(state, "backtest", fetchJSON("backtest_report.json")), settle(state, "tuning", fetchJSON("tuning_report.json")),
-    settle(state, "grid", fetchJSON("tuning_grid_report.json")), settle(state, "automl", fetchJSON("automl_report.json"))]);
+    settle(state, "grid", fetchJSON("tuning_grid_report.json")), settle(state, "automl", fetchJSON("automl_report.json")),
+    settle(state, "postseason", fetchJSON("postseason_report.json"))]);
   renderFooter(state.status);
   renderReport();
   renderLive();
   renderBacktest();
+  renderPostseason();
   renderSearch();
   bindGlossary();
 }

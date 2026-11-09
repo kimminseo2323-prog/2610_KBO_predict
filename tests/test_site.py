@@ -485,7 +485,7 @@ def test_home_rewind_mode_markup():
 
 # ---------- 모델 성적표 (report.html) ----------
 
-REPORT_SECTIONS = ["holdout", "calibration", "backtest", "model-search", "importance", "variants", "cluster-quality", "live-record"]  # 순서 고정
+REPORT_SECTIONS = ["holdout", "calibration", "backtest", "postseason", "model-search", "importance", "variants", "cluster-quality", "live-record"]  # 순서 고정
 
 
 def _report_soup():

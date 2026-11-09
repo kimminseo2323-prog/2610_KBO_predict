@@ -228,6 +228,24 @@ scripts/check_parity.py  ← 커밋된 산출물을 원본 데이터만으로 �
 - 정직하게 적는 것: L1·앙상블 설정은 2021~2025 교차검증으로 골랐으므로 그 시즌 성적은 조금 유리합니다(그래서 "설정 선택에 안 쓴 시즌" 열을 따로 둡니다). 이 시험은 v0.2의 2026 결과를 본 뒤에 더했습니다. Elo 설정(K=6, 홈 +20, 1/3 되돌림)은 미리 정했고 튜닝하지 않았습니다.
 - 2026 칸이 성적표(61.0%)와 조금 다른 이유: 여러 시즌 시험의 2026 예측은 2015~2025로 학습하고, 성적표는 2015~2024로 학습해 2025를 검증에 씁니다.
 
+### 가을야구 성적 (2026-11, `postseason_eval.py`, 노트북 09)
+
+2026 가을야구에서 v0.3은 14경기 중 5경기만 맞혔습니다(한국시리즈 1차전만 맞히고 2~5차전 4연속 실패, 삼성 4승 1패 우승). 그래서 정규시즌 모델이 가을에도 통하는지 **포스트시즌 경기만** 따로 모아 같은 walk-forward로 다시 쟀습니다(2018~2026 129경기, 시리즈 37개). 결과는 [`data/public/postseason_report.json`](data/public/postseason_report.json).
+
+| 방식 | 2018~2025 (115경기) | log loss | 2026 (14경기) | 시리즈 승자 (시작 전 예상, 37개) |
+|---|---|---|---|---|
+| **지금 방식** (v0.3, 정규시즌 끝 전력으로 고정) | **59.1%** | **0.6764** | 35.7% | 24 |
+| 가을야구 결과 반영 (가을 경기로 전력 갱신, 휴식일 차이만 고정) | 60.0% | 0.6774 | 35.7% | 24 |
+| 시리즈 전망용 팀 모델 (선발·Elo 없음) | 55.6% | 0.6842 | 57.1% | 23 |
+| 규칙: 정규시즌 승률이 높은 팀 | 55.6% | — | 57.1% | 22 |
+| 규칙: 항상 홈팀 | 55.6% | — | 71.4% | — |
+
+- **가을에 모델이 따로 망가지지는 않습니다.** 2018~2025 가을 59.1%는 정규시즌(57.9%)과 비슷합니다. 다만 115경기라 규칙·팀 모델과의 차이는 우연과 구분되지 않습니다(McNemar p = 0.63, 0.52).
+- **2026 부진**은 모델이 거의 반반(43~59%)으로 본 경기에서 이변이 이어진 결과입니다. 모델 확률대로라면 14경기 중 5경기 이하가 나올 확률은 약 12%, 한국시리즈 2~5차전을 모두 틀릴 확률은 약 4%입니다.
+- **한국시리즈 전 두 계산이 엇갈린 이유**: 경기 예측(승패 모델)은 Elo 전력 점수(KT +63)를 크게 봐 KT 우세(KT 홈 54%), 시리즈 전망(팀 모델, Elo 없음)은 최근 흐름·안방 승률 쪽 요인이 삼성으로 기울어 삼성 우승 51~52%였습니다. 이번엔 시리즈 전망이 맞았지만, 여러 시즌으로는 어느 쪽이 낫다고 할 수 없습니다.
+- **가을야구 결과 반영은 채택하지 않았습니다.** 채택 규칙(2018~2025 log loss가 낮고 p < 0.05)을 넘지 못했습니다(log loss 0.001 나빠짐, p = 0.43). 처음 예비 계산에서는 좋아 보였는데, 원인은 **휴식일 함정**이었습니다 — 가을 경기로 상태를 갱신하면 한국시리즈 직행 팀의 휴식일이 20일을 넘어, 학습 범위(차이 대부분 −2~+2일) 밖의 값이 확률을 77~79%까지 끌어올렸습니다. 휴식일 차이만 고정하자 개선이 사라졌습니다.
+- 정직하게 적는 것: 채택 규칙은 2026 가을 결과와 예비 계산을 본 뒤에 정했습니다. 사이트에 실제로 공개한 2026 가을 예측은 10/29부터 8경기 중 4경기 적중입니다(다시 계산한 값과 학습 범위가 달라 조금 다름).
+
 ### 요인 분해
 
 사이트의 "승률을 가른 요인" 카드용으로, 경기마다 확률을 피처별 기여로 나눕니다.
@@ -363,6 +381,10 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 - 얼린 시즌(2015~2026)의 박스스코어는 일일 작업이 다시 받지 않습니다(빠진 박스스코어 재수집은 얼리지 않은 시즌만). 그래서 얼린 산출물의 parity가 매일 수집 때문에 깨지지 않습니다.
 - 첫 일일 실행: [Actions run](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40533547898). Linux(ubuntu)에서 테스트와 parity가 모두 통과한 첫 ci 실행: [Actions run](https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/40882643905). 주간 재학습의 첫 정기 실행은 2026-11-02(월)입니다.
 
+**운영 규칙 (2026-11-09 추가)**
+- **경기 시작 뒤에는 예측을 고정합니다.** 원천 사이트가 경기 중에도 '예정'으로 두고 GitHub 예약 실행이 몇 시간씩 늦어, 11/6·11/7 경기 예측이 시작 뒤(19:43, 14:51)에 다시 기록된 일이 있었습니다. 이제 경기 시작 시각(`datetime_utc`)이 지난 경기는 직전 `latest.json` 항목을 그대로 쓰고 `history.csv`를 갱신하지 않습니다.
+- **승부가 난 시리즈의 남은 경기는 없는 것으로 봅니다.** 한국시리즈가 4승 1패로 끝났는데 원천 사이트가 6·7차전을 '예정'으로 남겨, 열리지 않을 6차전을 예측하고 사이트가 계속 라이브로 열렸습니다. 이제 그런 경기는 예측·기록·`status.json` 계산에서 빼고(`simulate.unneeded_games`), 시즌이 끝나면 `status.json`의 `season_result`로 사이트가 "한국시리즈 우승은 삼성(4승 1패)"을 보여 줍니다.
+
 ### 전망 카드 (`outlook`)
 
 `latest.json`과 되감기 파일마다 `outlook` 블록이 하나 있고, 시기에 따라 `type`이 셋 중 하나입니다. 모두 `as_of`(기준 날짜)를 가집니다.
@@ -454,7 +476,8 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 | [`players.json`](data/public/players.json) | 선수-시즌 2,918개(타자 1,327 + 투수 1,591, 2015~2026). 메타(`generated_at`, `commit_sha`, `model_version: "clusters-2026b"`, `fit_seasons`, `note`)와 `types`(그룹별 유형 `id`·`name`·`blurb`), `players[]`: `group`, `season`, `player_id`, `name`(로마자), `name_ko`, `team`, `pos`, `type {id, name}`, `prob`, `membership`(유형별 소속 확률), `x`·`y`(PCA 2D 좌표), `stats`(타자: 타석·타율·출루율·홈런·도루·K%·BB%·ISO·BABIP / 투수: 등판·선발·이닝·ERA·K%·BB%·HR%·BABIP), `similar`(유사 선수 5명 — 서로 다른 선수, 선수마다 가장 비슷한 시즌 하나; `player_id`·`season`·`similarity`만 — 이름은 같은 파일에서 찾음). 압축 JSON 1.77 MB (gzip -9 기준 약 270 KB) |
 | [`teams.json`](data/public/teams.json) | 팀-시즌 120개(10구단 × 2015~2026). `season`, `code`, `name`, `games`, `wins`·`losses`·`ties`, `win_pct`(무승부 제외), `home_pct`, `away_pct`, `pyth_pct`(피타고리안), `model_expected`(report-2026 모델의 홀드아웃 예측 평균, 2026만 — 2015~2025는 학습·검증 시즌이라 null), `roster_types`(타자는 타석, 투수는 아웃 수로 가중한 유형 비중), `vs`(상대 팀별 승률) |
 | [`history.csv`](data/public/history.csv) | 과거 예측과 결과 기록: date, game_id, home, away, home_win_prob, model_version, predicted_at, status, winner, correct. 2026-10-29부터 쌓는 중 (모델 버전별로 나눠 셈) |
-| [`status.json`](data/public/status.json) | 파이프라인 상태: generated_at, run_url, commit_sha, mode, next_game_date, games_today, model_version, collect_errors (경기가 없는 날도 갱신). `mode`는 오늘부터 14일 안에 취소되지 않은 경기가 있으면 `live`, 없으면 `rewind`(비시즌 — 사이트가 되감기를 보여 줌) |
+| [`postseason_report.json`](data/public/postseason_report.json) | 가을야구 성적(`postseason_eval.py`): 2018~2026 포스트시즌 경기별 세 방식 확률, 시즌별·합친 적중률·log loss·검정, 시리즈 37개의 시작 전 예상과 승자, 채택 결정, 2026 공개 기록. 사람이 다시 돌릴 때만 바뀜 |
+| [`status.json`](data/public/status.json) | 파이프라인 상태: generated_at, run_url, commit_sha, mode, next_game_date, games_today, model_version, collect_errors, season_result(한국시리즈가 끝나면 `{name, champion, teams, wins}`, 아니면 null) (경기가 없는 날도 갱신). `mode`는 오늘부터 14일 안에 취소되지 않은 경기가 있으면 `live`, 없으면 `rewind`(비시즌 — 사이트가 되감기를 보여 줌) |
 
 수집에 실패한 경기가 있으면(`collect_errors`가 비어 있지 않으면) 일일 워크플로가 `collect-failure` 라벨의 GitHub 이슈를 새로 열거나 기존 이슈에 코멘트합니다([`scripts/collect_errors.py`](scripts/collect_errors.py)). 공개 파일·`games.jsonl`·`starters.jsonl`은 임시 파일에 쓴 뒤 바꿔 넣으므로(원자적 쓰기), 실행이 중간에 죽어도 반쯤 쓴 파일이 남지 않습니다.
 
@@ -518,6 +541,7 @@ config/postseason.yaml                           포스트시즌 대진표 (사�
 | 06 | [모델 후보 튜닝](notebooks/06_모델_후보_튜닝.ipynb) | `tune.py` | 완료 (전체 탐색 결과를 읽고 결승을 다시 계산해 같은지 확인, 약 50초) |
 | 07 | [그리드 서치와 오토ML](notebooks/07_그리드서치와_오토ML.ipynb) | `automl.py` | 완료 (그리드·FLAML 결과를 읽고 결승을 다시 계산해 같은지 확인, 약 40초) |
 | 08 | [여러 시즌 시험](notebooks/08_여러_시즌_시험.ipynb) | `backtest.py` | 완료 (2018~2026 시즌별 학습·예측을 다시 계산해 결과 파일과 같은지 확인) |
+| 09 | [가을야구 성적](notebooks/09_가을야구_성적.ipynb) | `postseason_eval.py` | 완료 (포스트시즌 129경기·시리즈 37개, 한국시리즈 전 두 모델 요인 비교, 휴식일 함정) |
 
 ## 로컬 실행
 
