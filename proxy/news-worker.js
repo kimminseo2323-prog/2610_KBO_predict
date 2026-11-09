@@ -12,10 +12,13 @@
 // 요청: GET /news?team=KT&display=3&start=1   (team = 사이트 팀 코드 또는 ALL(리그 전체), display = 1~10, start = 1~100 — "더 보기")
 // 응답: { team, query, lastBuildDate, total, items: [{ title, originallink, link, description, pubDate }] }  ← 네이버 응답 그대로
 // 비밀 변수(wrangler secret put): NAVER_KEY_ID, NAVER_KEY   /   일반 변수: ALLOWED_ORIGINS (쉼표로 구분, 선택)
-// API 문서: https://api.ncloud-docs.com/docs/naver-api-hub-search-news (호출 주소·헤더가 바뀌면 아래 두 줄만 고친다)
+// 네이버 개발자 센터 검색 API(뉴스) — 결제 등록 없이 무료, 하루 25,000회 (2026-11-09 확인).
+// 문서: https://developers.naver.com/docs/serviceapi/search/news/news.md
+// (NAVER API HUB를 쓰면 주소 https://naverapihub.apigw.ntruss.com/search/v1/news,
+//  헤더 X-NCP-APIGW-API-KEY-ID / X-NCP-APIGW-API-KEY 로 아래 두 줄만 바꾸면 된다.)
 
-const API = "https://naverapihub.apigw.ntruss.com/search/v1/news";
-const HEADERS = (env) => ({ "X-NCP-APIGW-API-KEY-ID": env.NAVER_KEY_ID, "X-NCP-APIGW-API-KEY": env.NAVER_KEY });
+const API = "https://openapi.naver.com/v1/search/news.json";
+const HEADERS = (env) => ({ "X-Naver-Client-Id": env.NAVER_KEY_ID, "X-Naver-Client-Secret": env.NAVER_KEY });
 
 // 사이트 팀 코드 → 검색어(구단 정식 이름). site/assets/app.js TEAMS의 full과 같다.
 const TEAM_QUERY = {

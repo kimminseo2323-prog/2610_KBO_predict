@@ -17,8 +17,8 @@
 
 ## 켜는 순서 (사람이 할 일)
 
-1. **네이버 클라우드(민서 계정)**: https://www.ncloud.com → 콘솔 → AI·NAVER API → NAVER API HUB → 이용 신청 → Application 만들기 → "검색(뉴스)" 선택 → 인증 정보에서 Client ID(`X-NCP-APIGW-API-KEY-ID`)와 Client Secret(`X-NCP-APIGW-API-KEY`) 확인. 개인 계정은 결제 카드 등록이 필요하고, 지금은 무료(일 25,000건)입니다.
-2. **Cloudflare 계정**: https://dash.cloudflare.com 가입(무료).
+1. **네이버 개발자 센터(민서 계정)** — 결제 등록 없이 무료, 하루 25,000회: https://developers.naver.com → 로그인 → Application → 애플리케이션 등록 → 이용약관 동의 → (처음 한 번) 휴대폰 인증·이름 입력 → 애플리케이션 이름(예: `kbo-news`) → **사용 API: 검색** → **비로그인 오픈 API 서비스 환경: WEB 설정**, 웹 서비스 URL `https://kimminseo2323-prog.github.io` → 등록. 내 애플리케이션 → 개요에서 **Client ID**와 **Client Secret** 확인. (NAVER API HUB를 써도 되지만 개인 계정은 결제 카드 등록이 필요하다 — `news-worker.js` 위쪽 주석대로 두 줄만 바꾼다.)
+2. **Cloudflare 계정**: https://dash.cloudflare.com 가입(무료). 처음 한 번 workers.dev 하위 이름을 정한다(이 프로젝트: `kbo-predict` → 주소 `https://kbo-news.kbo-predict.workers.dev`).
 3. **배포** (이 폴더에서):
    ```bash
    npm install -g wrangler
