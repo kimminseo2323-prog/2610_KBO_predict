@@ -9,7 +9,7 @@
 // - 이 결과를 저장소에 커밋하거나 예측 모델(AI)에 넣지 않는다. 광고를 붙이지 않는다.
 // - 키는 민서 계정으로 발급한 것만 쓴다(키 공유 금지, 약관 7.2).
 //
-// 요청: GET /news?team=KT&display=3   (team = 사이트 팀 코드, display = 1~10)
+// 요청: GET /news?team=KT&display=3&start=1   (team = 사이트 팀 코드 또는 ALL(리그 전체), display = 1~10, start = 1~100 — "더 보기")
 // 응답: { team, query, lastBuildDate, total, items: [{ title, originallink, link, description, pubDate }] }  ← 네이버 응답 그대로
 // 비밀 변수(wrangler secret put): NAVER_KEY_ID, NAVER_KEY   /   일반 변수: ALLOWED_ORIGINS (쉼표로 구분, 선택)
 // API 문서: https://api.ncloud-docs.com/docs/naver-api-hub-search-news (호출 주소·헤더가 바뀌면 아래 두 줄만 고친다)
@@ -22,6 +22,8 @@ const TEAM_QUERY = {
   OB: "두산 베어스", LT: "롯데 자이언츠", KT: "KT 위즈", WO: "키움 히어로즈", SK: "SSG 랜더스",
   SS: "삼성 라이온즈", HH: "한화 이글스", HT: "KIA 타이거즈", LG: "LG 트윈스", NC: "NC 다이노스",
 };
+// 리그 전체 소식(소식 페이지 "전체" 탭 맨 위). 팀 코드가 아니라 따로 둔다.
+const ALL_QUERY = "KBO 프로야구";
 const DEFAULT_ORIGINS = ["https://kimminseo2323-prog.github.io", "http://127.0.0.1:8000", "http://localhost:8000"];
 
 function corsHeaders(request, env) {
@@ -46,12 +48,13 @@ export default {
     const url = new URL(request.url);
     if (request.method !== "GET" || url.pathname !== "/news") return json({ error: "not found" }, 404, cors);
     const team = url.searchParams.get("team") ?? "";
-    const query = TEAM_QUERY[team];
+    const query = team === "ALL" ? ALL_QUERY : TEAM_QUERY[team];
     if (!query) return json({ error: "unknown team" }, 400, cors);
     const display = Math.min(10, Math.max(1, Number.parseInt(url.searchParams.get("display") ?? "3", 10) || 3));
+    const start = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get("start") ?? "1", 10) || 1));
     if (!env.NAVER_KEY_ID || !env.NAVER_KEY) return json({ error: "api key not configured" }, 500, cors);
 
-    const api = `${API}?${new URLSearchParams({ query, display: String(display), start: "1", sort: "date" })}`;
+    const api = `${API}?${new URLSearchParams({ query, display: String(display), start: String(start), sort: "date" })}`;
     let res;
     try {
       res = await fetch(api, { headers: HEADERS(env) });

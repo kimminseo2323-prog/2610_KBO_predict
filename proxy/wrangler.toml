@@ -1,0 +1,6 @@
+# Cloudflare Worker 설정 — 이 폴더에서 `npx wrangler deploy` 한 번이면 배포된다.
+# 비밀 변수(API 키)는 여기 적지 않는다: `npx wrangler secret put NAVER_KEY_ID`, `npx wrangler secret put NAVER_KEY`
+name = "kbo-news"
+main = "news-worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
