@@ -15,7 +15,7 @@
 import {
   IS_LOCAL, TEAMS, TYPE_COLORS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInnings, fmtDate, fmtKST,
   teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError, ballSVG, countUp,
-  teamColors, teamChip, teamText, favState, typeSummaryTable, fmtProb, fmtDateShort, fmtScore, teamLogo, factorKey, factorLabel, factorHelp, typeBlurb,
+  STADIUMS, teamColors, teamChip, teamText, favState, typeSummaryTable, fmtProb, fmtDateShort, fmtScore, teamLogo, factorKey, factorLabel, factorHelp, typeBlurb,
 } from "./app.js";
 import { barChart, scatter } from "./charts.js";
 import { whatifProb } from "./whatif.js";
@@ -29,6 +29,7 @@ const REWIND = "rewind/2026";
 const state = {
   status: null, latest: null, index: null, history: null, report: null, players: null,
   whatif: null,            // whatif.json (오늘 경기의 선발 바꿔 보기 데이터)
+  schedules: new Map(),    // 시즌 → seasons/schedule_{시즌}.json 읽기(Promise) — 순위표·다가오는 경기
   wiPick: null,            // 선발 바꿔 보기에서 고른 선발 {gameId, home, away} (player_id)
   nameKo: null,            // player_id → 한글 이름 (players.json을 읽은 뒤에 채운다)
   errors: {},              // 파일별 읽기 실패 메시지
@@ -64,12 +65,7 @@ const starterName = (s) => state.nameKo?.get(s.player_id) ?? s.name;
 /** KST 오늘 날짜 "YYYY-MM-DD". */
 const todayKST = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 
-// 구장·취소 사유는 원본이 영문이라 아는 것만 한글로 바꾼다(모르는 값은 그대로).
-const STADIUMS = {
-  Jamsil: "잠실", Gocheok: "고척", Munhak: "문학", Incheon: "인천", Suwon: "수원", Daejeon: "대전",
-  Daegu: "대구", Gwangju: "광주", Sajik: "사직", Busan: "부산", Changwon: "창원", Pohang: "포항",
-  Ulsan: "울산", Cheongju: "청주",
-};
+// 취소 사유는 원본이 영문이라 아는 것만 한글로 바꾼다(모르는 값은 그대로). 구장 이름은 app.js의 STADIUMS.
 const NOTES = { "Rained Out": "우천 취소", "Extreme Heat": "폭염 취소", "Poor Field Conditions": "그라운드 사정으로 취소" };
 
 function playable(day) {
@@ -291,7 +287,7 @@ function renderDateBar() {
     const won = r ? r.wins[r.teams.indexOf(r.champion)] : null;
     hint.textContent = next && next >= todayKST()
       ? `지금은 오늘 예측이 없습니다. 다음 경기는 ${fmtDate(next)}입니다.`
-      : r ? `2026 시즌이 끝났습니다. ${r.name} 우승은 ${teamName(r.champion)}(${won}승 ${r.wins[0] + r.wins[1] - won}패)입니다. 정규시즌 경기일을 골라 다시 볼 수 있습니다.`
+      : r ? `${endedSeason() ?? ""} 시즌이 끝났습니다(${r.name} 우승 ${teamName(r.champion)}). 정규시즌 경기일을 골라 그날의 예측과 결과를 다시 볼 수 있습니다.`.trim()
         : "지금은 비시즌이라 오늘 예측이 없습니다. 2026 시즌 경기일을 골라 보세요.";
   } else {
     hint.textContent = "2026 시즌 경기일만 이동합니다. 화살표 키로도 움직일 수 있습니다.";
@@ -338,6 +334,15 @@ function renderBug() {
   const slot = $("bug-slot");
   if (!slot) return;
   const o = state.day?.outlook;
+  const champ = state.status?.season_result?.champion;
+  if (state.mode !== "live" && champ) { // 시즌이 끝났으면 맨 위 띠에 우승 팀
+    const tc = teamColors(champ);
+    const yr = endedSeason() ?? "";
+    slot.replaceChildren(el("span", { class: "bug__lbl" }, `${yr} 우승`.trim()),
+      el("span", { class: "bug__team", style: { background: tc.bg, color: tc.fg }, "aria-label": `${yr} 우승 ${teamName(champ)}`.trim() },
+        [teamLogo(champ, { size: "sm" }), teamName(champ), el("b", {}, "우승")]));
+    return;
+  }
   if (state.mode !== "live" || o?.type !== "series") { slot.replaceChildren(); return; }
   slot.replaceChildren(el("span", { class: "bug__lbl" }, o.name), ...seriesOrder(o).map((i) => {
     const c = o.teams[i];
@@ -345,6 +350,118 @@ function renderBug() {
     return el("span", { class: "bug__team", style: { background: tc.bg, color: tc.fg }, "aria-label": `${teamName(c)} ${o.wins[i]}승` },
       [teamLogo(c, { size: "sm" }), teamName(c), el("b", {}, String(o.wins[i]))]);
   }));
+}
+
+// ---------- 시즌 종료 카드 (이번 시즌 페이지, 비시즌) ----------
+// 한국시리즈 승부가 나면(status.season_result) 맨 위에 짧게 알리고, 자세한 결과는 지난 시즌 페이지로 보낸다.
+
+/** 끝난 시즌(우승 팀이 정해진 시즌)의 연도 — 마지막으로 예측을 낸 날(latest.json)의 연도. */
+const endedSeason = () => Number(String(state.latest?.date ?? "").slice(0, 4)) || null;
+
+function renderSeason() {
+  const box = $("season");
+  const r = state.status?.season_result;
+  const yr = endedSeason();
+  if (!r || !yr) { box.hidden = true; return; }
+  box.hidden = false;
+  const champ = r.champion, loser = r.teams.find((t) => t !== champ);
+  const cw = r.wins[r.teams.indexOf(champ)], cl = r.wins[r.teams.indexOf(loser)];
+  const tc = teamColors(champ);
+  $("season-body").replaceChildren(el("div", { class: "season-end" }, [
+    el("div", { class: "season-end__champ", style: { background: tc.bg, color: tc.fg } }, [
+      teamLogo(champ, { size: "md" }),
+      el("div", {}, [el("p", { class: "season-end__k" }, `${yr} ${r.name} 우승`), el("p", { class: "season-end__t" }, teamName(champ)),
+        el("p", { class: "season-end__s" }, `${teamName(loser)}에 ${cw}승 ${cl}패`)]),
+    ]),
+    el("div", { class: "season-end__text" }, [
+      el("p", { class: "season-end__h" }, `${yr} 시즌이 끝났습니다`),
+      el("p", {}, `${yr + 1} 시즌 일정이 나오면 이 페이지에서 매일 경기 예측과 일정, 순위표를 보여 줍니다. 그전까지는 지난 시즌에서 ${yr} 한국시리즈와 가을야구, 최종 순위를 다시 볼 수 있습니다.`),
+      el("a", { class: "btn", href: `seasons.html?season=${yr}` }, `지난 시즌에서 ${yr} 다시 보기`),
+    ]),
+  ]));
+}
+
+// ---------- 순위표 · 다가오는 경기 (이번 시즌) ----------
+// seasons/schedule_{시즌}.json(그 시즌 모든 경기)으로 보고 있는 날짜 기준 순위와 앞으로 7일 일정을 계산한다.
+
+function standingsAt(schedule, on) {
+  const rec = new Map();
+  for (const g of schedule) {
+    if (!g.regular || g.status !== "FINAL" || g.date >= on || g.home_score == null) continue;
+    for (const [t, me, op] of [[g.home, g.home_score, g.away_score], [g.away, g.away_score, g.home_score]]) {
+      const r = rec.get(t) ?? { code: t, w: 0, l: 0, d: 0, last: [] };
+      const x = me > op ? "W" : me < op ? "L" : "D";
+      r[x === "W" ? "w" : x === "L" ? "l" : "d"] += 1;
+      r.last.push(x);
+      rec.set(t, r);
+    }
+  }
+  const pct = (r) => r.w / Math.max(r.w + r.l, 1);
+  const rows = [...rec.values()].sort((a, b) => pct(b) - pct(a) || b.w - a.w || a.code.localeCompare(b.code));
+  const top = rows[0];
+  return rows.map((r, i) => ({ ...r, rank: i + 1, pct: pct(r), gb: top ? ((top.w - r.w) + (r.l - top.l)) / 2 : 0,
+    l10: r.last.slice(-10).filter((x) => x === "W").length }));
+}
+
+/** 보고 있는 날짜의 시즌 일정(그 시즌 모든 경기). 처음이면 받아 오고, 다 받으면 순위표·다가오는 경기를 다시 그린다. */
+function scheduleFor(on) {
+  const season = Number(String(on ?? "").slice(0, 4));
+  if (!season) return { status: "none" };
+  if (!state.schedules.has(season)) {
+    const p = fetchJSON(`seasons/schedule_${season}.json`, { fresh: true })
+      .then((data) => { entry.data = data; entry.status = "ok"; })
+      .catch((err) => { entry.status = "error"; entry.error = err.message; })
+      .finally(() => { if (state.day?.date?.startsWith(String(season))) { renderStandings(); renderSchedule(); } });
+    const entry = { status: "loading", promise: p };
+    state.schedules.set(season, entry);
+  }
+  return state.schedules.get(season);
+}
+
+function renderStandings() {
+  const body = $("standings-body");
+  const on = state.day?.date;
+  const sc = scheduleFor(on);
+  if (sc.status === "loading") return; // 받는 중: 뼈대 그대로, 다 받으면 다시 그린다
+  const sched = sc.data;
+  if (!sched || !on) { body.replaceChildren(el("p", { class: "empty" }, "순위표를 불러오지 못했습니다.")); return; }
+  const rows = standingsAt(sched, on);
+  const today = new Set((state.day.games ?? []).flatMap((g) => [g.home.code, g.away.code]));
+  $("standings-lead").textContent = `${fmtDate(on)} 경기 전 기준 정규시즌 순위입니다. 5위까지 가을야구에 나갑니다.`;
+  body.replaceChildren(el("div", { class: "table-scroll" }, el("table", { class: "table stand" }, [
+    el("caption", { class: "sr-only" }, "정규시즌 순위"),
+    el("thead", {}, el("tr", {}, [["순위"], ["팀"], ["승-패-무", "num"], ["승률", "num"], ["게임차", "num"], ["최근 10", "num"]].map(([t, c]) => el("th", { scope: "col", class: c ?? null }, t)))),
+    el("tbody", {}, rows.map((r) => el("tr", { class: `${r.rank === 5 ? "is-cut " : ""}${today.has(r.code) ? "is-today" : ""}`.trim() || null }, [
+      el("td", { class: "num" }, String(r.rank)),
+      el("td", {}, el("span", { class: "stand__team" }, [teamLogo(r.code, { size: "sm" }), teamName(r.code)])),
+      el("td", { class: "num" }, `${r.w}-${r.l}-${r.d}`),
+      el("td", { class: "num" }, r.pct.toFixed(3).replace(/^0/, "")),
+      el("td", { class: "num" }, r.gb ? r.gb.toFixed(1) : "—"),
+      el("td", { class: "num" }, `${r.l10}승`),
+    ]))),
+  ])), el("p", { class: "card__foot" }, "굵은 선 위 = 가을야구 진출권(5위 안), 표시된 팀 = 오늘 경기가 있는 팀."));
+}
+
+function renderSchedule() {
+  const body = $("schedule-body");
+  const on = state.day?.date;
+  const sc = scheduleFor(on);
+  if (sc.status === "loading") return;
+  const sched = sc.data;
+  if (!sched || !on) { body.replaceChildren(el("p", { class: "empty" }, "일정을 불러오지 못했습니다.")); return; }
+  const end = new Date(`${on}T00:00:00+09:00`); end.setDate(end.getDate() + 7);
+  const lim = end.toISOString().slice(0, 10);
+  const up = sched.filter((g) => g.date > on && g.date <= lim && g.status !== "CANCELED");
+  if (!up.length) { body.replaceChildren(el("p", { class: "empty" }, "앞으로 7일 안에 잡힌 경기가 없습니다.")); return; }
+  const days = [...new Set(up.map((g) => g.date))];
+  body.replaceChildren(el("ol", { class: "sched" }, days.map((d) => el("li", { class: "sched__day" }, [
+    el("p", { class: "sched__date" }, fmtDate(d)),
+    el("ul", { class: "sched__games" }, up.filter((g) => g.date === d).map((g) => el("li", {}, [
+      el("span", { class: "sched__time num" }, g.time ?? ""),
+      el("span", { class: "sched__match" }, [teamLogo(g.away, { size: "sm" }), teamName(g.away), el("span", { class: "sched__at" }, "@"), teamLogo(g.home, { size: "sm" }), teamName(g.home)]),
+      el("span", { class: "sched__where" }, STADIUMS[g.stadium] ?? g.stadium ?? ""),
+    ]))),
+  ]))), el("p", { class: "card__foot" }, "예측은 경기 당일 아침부터 올라오고, 예고 선발이 발표되면 다시 계산합니다."));
 }
 
 // ---------- 매치업 카드 ----------
@@ -1066,6 +1183,7 @@ function announce() {
 }
 
 function renderDay() {
+  renderSeason();
   renderDateBar();
   renderHead();
   renderMatchups();
@@ -1073,6 +1191,8 @@ function renderDay() {
   renderFactors();
   renderStarters();
   renderWhatif();
+  renderStandings();
+  renderSchedule();
   renderOutlook();
   renderRecent();
   announce();

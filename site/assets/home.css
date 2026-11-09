@@ -191,10 +191,79 @@
   .home-bento .b-outlook { order: 2; }
   .home-bento .b-starters { order: 3; }
   .home-bento .b-whatif { order: 3; } /* 문서 순서상 선발 카드 바로 뒤 */
+  .home-bento .b-standings { order: 2; }
+  .home-bento .b-schedule { order: 2; }
   .home-bento .b-recent { order: 4; }
   .home-bento .b-accuracy { order: 5; }
   .home-bento .b-typemap { order: 6; }
 }
+
+/* 가을야구 결과 (시즌이 끝난 뒤) */
+.season { margin-top: var(--sp-24); }
+.season + .page-head { margin-top: var(--sp-32); }
+.season__hero { display: flex; align-items: center; gap: var(--sp-16); padding: 20px 24px; }
+.season__hero .tlogo { width: 88px; height: 88px; flex: none; }
+.season__kicker { font-size: 14px; font-weight: 800; opacity: .85; }
+.season__champ { font-family: var(--font-num); font-style: italic; font-size: 64px; font-weight: 800; line-height: 1; letter-spacing: -1px; }
+.season__line { margin-top: 6px; font-size: 15px; font-weight: 600; }
+.season__grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--sp-24); margin-top: var(--sp-16); }
+.season__h { font-size: 16px; font-weight: 800; color: var(--ink); padding-bottom: 8px; border-bottom: 2px solid var(--ink); }
+.ks-games { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-8); margin-top: var(--sp-12); }
+.ks-game { display: grid; gap: 4px; padding: 10px 12px; background: var(--inset, #f3f4f6); }
+.ks-game.is-canceled { opacity: .6; }
+.ks-game__no { font-size: 13px; font-weight: 800; color: var(--ink); }
+.ks-game__meta { font-size: 12px; color: var(--muted); }
+.ks-game__score { display: flex; align-items: baseline; gap: 6px; font-size: 14px; color: var(--muted); }
+.ks-game__score .is-win { color: var(--ink); font-weight: 800; }
+.ks-game__score b { font-family: var(--font-num); font-style: italic; font-size: 22px; font-weight: 800; color: var(--ink); }
+.ks-game .tchip { justify-self: start; }
+.ks-game__pred { font-size: 12px; color: var(--body); }
+.ks-game__pred .is-hit { color: var(--ink); }
+.ks-game__pred .is-miss { color: var(--muted); font-weight: 600; }
+.road { list-style: none; padding: 0; margin-top: var(--sp-12); }
+.road__row { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--hairline); }
+.road__name { font-size: 13px; font-weight: 800; color: var(--ink); }
+.road__match { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.road__loser { color: var(--muted); font-weight: 700; }
+.road__vs { color: var(--muted); }
+.road__note { grid-column: 2; font-size: 12px; color: var(--muted); }
+.road__note:empty { display: none; }
+.road__dots { grid-column: 3; grid-row: 1; display: flex; gap: 3px; }
+.road__dots i { width: 10px; height: 10px; border-radius: 50%; }
+.season__foot { margin-top: var(--sp-16); font-size: 14px; color: var(--body); }
+.season__foot a { color: var(--ink); font-weight: 700; }
+@media (max-width: 767px) {
+  .season__grid { grid-template-columns: minmax(0, 1fr); }
+  .season__champ { font-size: 48px; }
+  .season__hero .tlogo { width: 64px; height: 64px; }
+}
+
+/* 시즌 종료 카드 */
+.season-end { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--sp-24); align-items: center; }
+.season-end__champ { display: flex; align-items: center; gap: var(--sp-16); padding: 18px 22px; }
+.season-end__champ .tlogo { width: 64px; height: 64px; }
+.season-end__k { font-size: 13px; font-weight: 800; opacity: .85; }
+.season-end__t { font-family: var(--font-num); font-style: italic; font-size: 48px; font-weight: 800; line-height: 1; }
+.season-end__s { margin-top: 4px; font-size: 14px; font-weight: 700; }
+.season-end__h { font-size: 20px; font-weight: 800; color: var(--ink); }
+.season-end__text p + p { margin-top: 6px; font-size: 14px; color: var(--body); }
+.season-end__text .btn { margin-top: var(--sp-12); }
+@media (max-width: 767px) { .season-end { grid-template-columns: minmax(0, 1fr); gap: var(--sp-12); } }
+
+/* 순위표 · 다가오는 경기 */
+.stand { margin-top: var(--sp-12); }
+.stand__team { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; }
+.stand tr.is-cut td { border-bottom: 2px solid var(--ink); }
+.stand tr.is-today td { background: var(--inset, #f3f4f6); }
+.sched { list-style: none; padding: 0; margin-top: var(--sp-12); }
+.sched__day + .sched__day { margin-top: var(--sp-12); }
+.sched__date { font-size: 13px; font-weight: 800; color: var(--ink); padding-bottom: 4px; border-bottom: 1px solid var(--hairline); }
+.sched__games { list-style: none; padding: 0; }
+.sched__games li { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 0; font-size: 14px; }
+.sched__time { color: var(--muted); font-size: 13px; }
+.sched__match { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
+.sched__at { color: var(--muted); margin: 0 4px; }
+.sched__where { font-size: 12px; color: var(--muted); }
 
 /* 선발 바꿔 보기 */
 .wi-picks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-12); margin-top: var(--sp-16); }

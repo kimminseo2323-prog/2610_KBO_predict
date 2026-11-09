@@ -22,7 +22,7 @@ from kbo_predict.publish import drop_history, settle_history, upsert_history, wr
 from kbo_predict.rewind import state_before
 from kbo_predict.simulate import load_postseason, next_game_card, outlook_for, season_result, unneeded_games
 from kbo_predict.train_win import load_bundle
-from kbo_predict import whatif
+from kbo_predict import season_archive, whatif
 
 
 # upto('YYYY-MM-DD') 경기 직전 시점의 리그 상태. 되감기(rewind)와 같은 함수를 쓰도록 kbo_predict.rewind로 옮겼다.
@@ -222,6 +222,13 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
         except Exception as e:
             collect_errors.append(f"whatif unavailable: {e!r}")
             print(f"[pipeline] whatif unavailable, continuing: {e!r}", file=sys.stderr)
+
+    # ⑤-2 시즌 기록실 (이번 시즌 순위표·다가오는 경기, 시즌이 끝나면 지난 시즌 목록). 실패해도 발행은 계속.
+    try:
+        season_archive.update(pub / "seasons", season, backtest_path=pub / "backtest_report.json")
+    except Exception as e:
+        collect_errors.append(f"season archive unavailable: {e!r}")
+        print(f"[pipeline] season archive unavailable: {e!r}", file=sys.stderr)
 
     # ⑥ status
     upcoming = [g["date"] for g in games if g["date"] > iso and g["status"] != "CANCELED"]

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>오늘의 경기 · KBO Predict</title>
+<title>이번 시즌 · KBO Predict</title>
 <meta name="description" content="KBO 경기 승패 예측: 오늘 경기의 홈팀 승리 확률, 확률을 가른 요인, 선발 유형, 2026 시즌 지난 경기 다시 보기.">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&display=swap">
@@ -21,15 +21,21 @@
     <a class="btn btn--bug" href="https://github.com/kimminseo2323-prog/2610_KBO_predict">GitHub에서 보기</a>
   </div></div>
   <nav class="menubar" aria-label="주 메뉴"><ul class="wrap">
-    <li><a href="index.html" aria-current="page">오늘의 경기</a></li>
+    <li><a href="news.html">소식</a></li>
+    <li><a href="index.html" aria-current="page">이번 시즌</a></li>
+    <li><a href="seasons.html">지난 시즌</a></li>
     <li><a href="teams.html">팀</a></li>
     <li><a href="players.html">선수</a></li>
     <li><a href="report.html">모델 성적표</a></li>
-    <li><a href="news.html">소식</a></li>
   </ul></nav>
 </header>
 
 <main id="main" class="wrap">
+  <!-- 시즌이 끝나면: 우승 팀 한 줄과 지난 시즌 바로가기 (status.season_result) -->
+  <section class="season" id="season" aria-labelledby="season-title" hidden>
+    <h2 class="sr-only" id="season-title">가을야구 결과</h2>
+    <div id="season-body"></div>
+  </section>
   <!-- 날짜 칩: 라이브면 날짜 + "라이브" + 되감기 토글, 되감기면 2026 날짜 슬라이더 + "라이브로" -->
   <div class="page-head home-head">
     <div>
@@ -97,6 +103,18 @@
       </section>
     </div>
     <div class="bento__col bento__col--side">
+      <section class="card b-standings" id="standings" aria-labelledby="standings-title">
+        <h2 class="card__title" id="standings-title">순위표</h2>
+        <p class="card__lead" id="standings-lead">정규시즌 순위입니다.</p>
+        <div id="standings-body"><div class="skeleton" style="height:240px;margin-top:16px"></div></div>
+      </section>
+
+      <section class="card b-schedule" id="schedule" aria-labelledby="schedule-title">
+        <h2 class="card__title" id="schedule-title">다가오는 경기</h2>
+        <p class="card__lead">앞으로 7일 일정입니다.</p>
+        <div id="schedule-body"><div class="skeleton" style="height:160px;margin-top:16px"></div></div>
+      </section>
+
       <section class="card b-outlook" id="outlook" aria-labelledby="outlook-title">
         <h2 class="card__title" id="outlook-title">전망</h2>
         <div id="outlook-body"><div class="skeleton" style="height:160px;margin-top:16px"></div></div>

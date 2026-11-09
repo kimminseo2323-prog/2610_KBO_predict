@@ -165,6 +165,16 @@
 | `teams[].roster_types.batter{}` / `.pitcher{}` | `{유형 id: 비중}` | `{"0": 0.267, "1": 0.165, "2": 0.568}` | 그 팀에 없는 유형은 키가 빠짐(→ 0) |
 | `teams[].vs{}` | `{상대 코드: 승률}` | `{"HH": 0.8, …}` | 9개 |
 
+### seasons/ — 시즌 기록실 (`kbo_predict.season_archive`)
+
+만드는 곳: 지난 시즌은 `python -m kbo_predict.season_archive`(한 번), 진행 중인 시즌은 매일 실행(`run_pipeline` → `season_archive.update`)이 그 시즌 파일·일정·목록을 다시 씁니다.
+
+| 파일 | 키 | 설명 |
+| --- | --- | --- |
+| `seasons/index.json` | `seasons[].season`, `seasons[].champion`, `seasons[].runner_up`, `seasons[].final_teams[]`, `seasons[].final_wins[]` | 우승 팀이 정해진 시즌만(진행 중인 시즌은 빠짐). 지난 시즌 페이지의 연도 버튼 |
+| `seasons/{season}.json` | `season`, `champion`, `runner_up`, `rewind`, `standings[]`(`rank`, `code`, `w`, `l`, `d`, `pct`, `gb`, `run_diff`, `last10[]`, `streak`), `postseason[]`(`name`, `teams[]`, `head_start[]`, `wins[]`, `winner`, `games[]`: `game_id`, `date`, `time`, `stadium`, `home`, `away`, `status`, `home_score`, `away_score`, `winner`), `model`(`accuracy`, `n`, `rule_accuracy`, `note` 또는 null) | 정규시즌 최종 순위, 가을야구 시리즈(정규시즌 순위 높은 팀이 `teams[0]`, 와일드카드는 `head_start [1, 0]`), 우승 팀(한국시리즈 4승 전에는 null), 그 시즌 모델 성적(여러 시즌 시험, 2018~) |
+| `seasons/schedule_{season}.json` | `[].game_id`, `[].date`, `[].time`, `[].stadium`, `[].home`, `[].away`, `[].status`, `[].home_score`, `[].away_score`, `[].regular` | 그 시즌 모든 경기(약 60 KB). 이번 시즌 페이지가 보고 있는 날짜 기준 순위표와 앞으로 7일 일정을 브라우저에서 계산. 매일 바뀌어 캐시를 피해 읽음 |
+
 ### model_report.json — 모델 성적표 (`report-2026`, 고정)
 
 만드는 곳: `kbo_predict.train_win`(승패 모델 평가) + `kbo_predict.cluster`(`cluster_quality`). 평가 기간: 학습 2015~2024, 검증 2025, 시험(홀드아웃) 2026.
@@ -204,6 +214,11 @@
 | 홈 | 매치업 카드: 팀·확률 | `latest.json` | `games[].home.code`, `games[].away.code`, `games[].home.name`, `games[].away.name`, `games[].home_win_prob` |
 | 홈 | 매치업 카드: 팀 기록 | `latest.json` | `games[].home.win_pct_season`, `games[].home.last10`, `games[].home.run_diff`, `games[].away.win_pct_season`, `games[].away.last10`, `games[].away.run_diff` |
 | 홈 | 매치업 카드: 선발 | `latest.json` | `games[].home.starter.name`, `games[].home.starter.era`, `games[].home.starter.k9`, `games[].home.starter.bb9`, `games[].home.starter.type.name`, `games[].away.starter.name`, `games[].away.starter.era`, `games[].away.starter.k9`, `games[].away.starter.bb9`, `games[].away.starter.type`, `games[].starter_known` |
+| 홈 | 순위표 · 다가오는 경기 | `seasons/schedule_{season}.json` | `[].date`, `[].time`, `[].stadium`, `[].home`, `[].away`, `[].status`, `[].home_score`, `[].away_score`, `[].regular` |
+| 홈 | 시즌 종료 카드 · 맨 위 띠 우승 팀 | `status.json` | `season_result.name`, `season_result.champion`, `season_result.teams[]`, `season_result.wins[]` |
+| 지난 시즌 | 연도 버튼 | `seasons/index.json` | `seasons[].season`, `seasons[].champion` |
+| 지난 시즌 | 우승 배너 · 한국시리즈 경기별 · 우승까지의 길 · 최종 순위 · 모델 성적 | `seasons/{season}.json` | `season`, `champion`, `runner_up`, `rewind`, `postseason[].name`, `postseason[].teams[]`, `postseason[].head_start[]`, `postseason[].wins[]`, `postseason[].winner`, `postseason[].games[].game_id`, `postseason[].games[].date`, `postseason[].games[].stadium`, `postseason[].games[].home`, `postseason[].games[].away`, `postseason[].games[].status`, `postseason[].games[].home_score`, `postseason[].games[].away_score`, `postseason[].games[].winner`, `standings[].rank`, `standings[].code`, `standings[].w`, `standings[].l`, `standings[].d`, `standings[].pct`, `standings[].gb`, `standings[].run_diff`, `model.accuracy`, `model.n`, `model.rule_accuracy` |
+| 지난 시즌 | 한국시리즈 공개 예측 (2026) | `history.csv` | `date`, `game_id`, `home_win_prob`, `correct` |
 | 홈 | 선발을 바꾸면?(라이브) | `whatif.json` | `date`, `model.features[]`, `model.median[]`, `model.mean[]`, `model.scale[]`, `model.coef[]`, `model.intercept`, `model.calibration.method`, `games[].game_id`, `games[].base`, `games[].announced.home`, `games[].announced.away`, `games[].candidates.home[].player_id`, `games[].candidates.home[].name`, `games[].candidates.home[].starts`, `games[].candidates.home[].line`, `games[].candidates.away[].player_id` |
 | 홈 | 선발을 바꾸면?(되감기) | `rewind/2026/{date}.json` | `whatif[].game_id`, `whatif[].base`, `whatif[].announced.home`, `whatif[].announced.away`, `whatif[].candidates.home[].player_id`, `whatif[].candidates.home[].line`, `whatif[].candidates.away[].player_id`, `whatif[].candidates.away[].starts` |
 | 홈 | 선발을 바꾸면?(되감기 모델) | `rewind/2026/index.json` | `whatif_model.features[]`, `whatif_model.median[]`, `whatif_model.mean[]`, `whatif_model.scale[]`, `whatif_model.coef[]`, `whatif_model.intercept`, `whatif_model.calibration.method` |

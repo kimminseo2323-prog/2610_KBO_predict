@@ -20,13 +20,21 @@ export const NEWS_PROXY = "https://kbo-news.kbo-predict.workers.dev";
 /** 데이터 위치: 로컬이면 저장소의 data/public, 배포본(GitHub Pages 등)이면 raw.githubusercontent.com. */
 export const DATA_BASE = IS_LOCAL ? "../data/public" : RAW_BASE;
 
-/** 메뉴 5개 — 순서·이름 고정 (check_site.py의 NAV와 같다). */
+// 구장 이름은 원본이 영문이라 아는 것만 한글로 바꾼다(모르는 값은 그대로). 이번 시즌·지난 시즌이 같이 쓴다.
+export const STADIUMS = {
+  Jamsil: "잠실", Gocheok: "고척", Munhak: "문학", Incheon: "인천", Suwon: "수원", Daejeon: "대전",
+  Daegu: "대구", Gwangju: "광주", Sajik: "사직", Busan: "부산", Changwon: "창원", Pohang: "포항",
+  Ulsan: "울산", Cheongju: "청주",
+};
+
+/** 메뉴 6개 — 순서·이름 고정 (check_site.py의 NAV와 같다). */
 export const NAV = [
-  ["index.html", "오늘의 경기"],
+  ["news.html", "소식"],
+  ["index.html", "이번 시즌"],
+  ["seasons.html", "지난 시즌"],
   ["teams.html", "팀"],
   ["players.html", "선수"],
-  ["report.html", "모델 성적표"],,
-  ["news.html", "소식"]
+  ["report.html", "모델 성적표"],
 ];
 
 // 10구단: 코드 → 한글 이름(ko, teams.py와 같음), 정식 이름(full), 차트 축용 짧은 이름(short), 강조색(color = 토큰 이름).

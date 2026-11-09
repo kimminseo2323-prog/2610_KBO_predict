@@ -1,0 +1,160 @@
+{
+ "seasons": [
+  {
+   "season": 2015,
+   "champion": "OB",
+   "runner_up": "SS",
+   "final_wins": [
+    1,
+    4
+   ],
+   "final_teams": [
+    "SS",
+    "OB"
+   ]
+  },
+  {
+   "season": 2016,
+   "champion": "OB",
+   "runner_up": "NC",
+   "final_wins": [
+    4,
+    0
+   ],
+   "final_teams": [
+    "OB",
+    "NC"
+   ]
+  },
+  {
+   "season": 2017,
+   "champion": "HT",
+   "runner_up": "OB",
+   "final_wins": [
+    4,
+    1
+   ],
+   "final_teams": [
+    "HT",
+    "OB"
+   ]
+  },
+  {
+   "season": 2018,
+   "champion": "SK",
+   "runner_up": "OB",
+   "final_wins": [
+    2,
+    4
+   ],
+   "final_teams": [
+    "OB",
+    "SK"
+   ]
+  },
+  {
+   "season": 2019,
+   "champion": "OB",
+   "runner_up": "WO",
+   "final_wins": [
+    4,
+    0
+   ],
+   "final_teams": [
+    "OB",
+    "WO"
+   ]
+  },
+  {
+   "season": 2020,
+   "champion": "NC",
+   "runner_up": "OB",
+   "final_wins": [
+    4,
+    2
+   ],
+   "final_teams": [
+    "NC",
+    "OB"
+   ]
+  },
+  {
+   "season": 2021,
+   "champion": "KT",
+   "runner_up": "OB",
+   "final_wins": [
+    4,
+    0
+   ],
+   "final_teams": [
+    "KT",
+    "OB"
+   ]
+  },
+  {
+   "season": 2022,
+   "champion": "SK",
+   "runner_up": "WO",
+   "final_wins": [
+    4,
+    2
+   ],
+   "final_teams": [
+    "SK",
+    "WO"
+   ]
+  },
+  {
+   "season": 2023,
+   "champion": "LG",
+   "runner_up": "KT",
+   "final_wins": [
+    4,
+    1
+   ],
+   "final_teams": [
+    "LG",
+    "KT"
+   ]
+  },
+  {
+   "season": 2024,
+   "champion": "HT",
+   "runner_up": "SS",
+   "final_wins": [
+    4,
+    1
+   ],
+   "final_teams": [
+    "HT",
+    "SS"
+   ]
+  },
+  {
+   "season": 2025,
+   "champion": "LG",
+   "runner_up": "HH",
+   "final_wins": [
+    4,
+    1
+   ],
+   "final_teams": [
+    "LG",
+    "HH"
+   ]
+  },
+  {
+   "season": 2026,
+   "champion": "SS",
+   "runner_up": "KT",
+   "final_wins": [
+    1,
+    4
+   ],
+   "final_teams": [
+    "KT",
+    "SS"
+   ]
+  }
+ ]
+}

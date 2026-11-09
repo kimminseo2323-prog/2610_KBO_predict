@@ -1,0 +1,61 @@
+/* 지난 시즌 — 연도 칩, 우승 배너, 한국시리즈 경기 카드, 우승까지의 길, 최종 순위 */
+.years { margin-top: var(--sp-16); }
+.years__list { list-style: none; padding: 0; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.years__btn { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 6px; align-items: center;
+  min-width: 92px; padding: 8px 10px; border: 0; outline: 1px solid var(--hairline); outline-offset: -1px; background: var(--canvas); color: var(--body); font: inherit; cursor: pointer; text-align: left; }
+.years__btn .tlogo { grid-row: 1 / span 2; grid-column: 2; width: 28px; height: 28px; }
+.years__y { font-family: var(--font-num); font-style: italic; font-size: 20px; font-weight: 800; color: var(--ink); line-height: 1; }
+.years__c { font-size: 12px; font-weight: 700; color: var(--muted); }
+.years__btn[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: -2px; }
+.years__btn[aria-pressed="true"] .years__c { color: var(--ink); }
+.years__btn:focus-visible { outline: 3px solid var(--ink); }
+.season { margin-top: var(--sp-24); }
+.season + .page-head { margin-top: var(--sp-32); }
+.season__hero { display: flex; align-items: center; gap: var(--sp-16); padding: 20px 24px; }
+.season__hero .tlogo { width: 88px; height: 88px; flex: none; }
+.season__kicker { font-size: 14px; font-weight: 800; opacity: .85; }
+.season__champ { font-family: var(--font-num); font-style: italic; font-size: 64px; font-weight: 800; line-height: 1; letter-spacing: -1px; }
+.season__line { margin-top: 6px; font-size: 15px; font-weight: 600; }
+.season__grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--sp-24); margin-top: var(--sp-16); }
+.season__h { font-size: 16px; font-weight: 800; color: var(--ink); padding-bottom: 8px; border-bottom: 2px solid var(--ink); }
+.ks-games { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-8); margin-top: var(--sp-12); }
+.ks-game { display: grid; gap: 4px; padding: 10px 12px; background: var(--inset, #f3f4f6); }
+.ks-game.is-canceled { opacity: .6; }
+.ks-game__no { font-size: 13px; font-weight: 800; color: var(--ink); }
+.ks-game__meta { font-size: 12px; color: var(--muted); }
+.ks-game__score { display: flex; align-items: baseline; gap: 6px; font-size: 14px; color: var(--muted); }
+.ks-game__score .is-win { color: var(--ink); font-weight: 800; }
+.ks-game__score b { font-family: var(--font-num); font-style: italic; font-size: 22px; font-weight: 800; color: var(--ink); }
+.ks-game .tchip { justify-self: start; }
+.ks-game__pred { font-size: 12px; color: var(--body); }
+.ks-game__pred .is-hit { color: var(--ink); }
+.ks-game__pred .is-miss { color: var(--muted); font-weight: 600; }
+.road { list-style: none; padding: 0; margin-top: var(--sp-12); }
+.road__row { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--hairline); }
+.road__name { font-size: 13px; font-weight: 800; color: var(--ink); }
+.road__match { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.road__loser { color: var(--muted); font-weight: 700; }
+.road__vs { color: var(--muted); }
+.road__note { grid-column: 2; font-size: 12px; color: var(--muted); }
+.road__note:empty { display: none; }
+.road__dots { grid-column: 3; grid-row: 1; display: flex; gap: 3px; }
+.road__dots i { width: 10px; height: 10px; border-radius: 50%; }
+.season__foot { margin-top: var(--sp-16); font-size: 14px; color: var(--body); }
+.season__foot a { color: var(--ink); font-weight: 700; }
+@media (max-width: 767px) {
+  .season__grid { grid-template-columns: minmax(0, 1fr); }
+  .season__champ { font-size: 48px; }
+  .season__hero .tlogo { width: 64px; height: 64px; }
+}
+
+.season__model { margin-top: var(--sp-24); }
+.season__model-num { margin-top: var(--sp-12); font-size: 14px; color: var(--body); }
+.season__model-num b { font-family: var(--font-num); font-style: italic; font-size: 34px; font-weight: 800; color: var(--ink); margin-right: 6px; }
+.season__model-note { margin-top: 6px; font-size: 13px; color: var(--muted); }
+.season__model .btn { margin-top: var(--sp-12); }
+.season__table { margin-top: var(--sp-32); }
+.st-table { margin-top: var(--sp-12); }
+.st-team { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; }
+.st-table tr.is-champ td { font-weight: 900; color: var(--ink); }
+.st-fate { font-size: 13px; color: var(--muted); white-space: nowrap; }
+@media (max-width: 479px) { .st-table .col-rd { display: none; } }

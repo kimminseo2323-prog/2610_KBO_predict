@@ -39,9 +39,8 @@ PAGES_URL = "https://kimminseo2323-prog.github.io/2610_KBO_predict"  # 사이트
 NEWS_LINK = "https://search.naver.com/search.naver"
 NEWS_PROXY_RE = re.compile(r"^https://[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev$")
 # REPO_URL·RAW_BASE는 site/assets/app.js의 같은 이름 상수와 같다 (tests/test_site.py가 확인).
-PAGES = ["index.html", "teams.html", "players.html", "report.html", "news.html"]
-NAV = [("index.html", "오늘의 경기"), ("teams.html", "팀"), ("players.html", "선수"), ("report.html", "모델 성적표"),
-       ("news.html", "소식")]
+PAGES = ["index.html", "teams.html", "players.html", "report.html", "news.html", "seasons.html"]
+NAV = [("news.html", "소식"), ("index.html", "이번 시즌"), ("seasons.html", "지난 시즌"), ("teams.html", "팀"), ("players.html", "선수"), ("report.html", "모델 성적표")]
 # 허용하는 외부 리소스: https + 호스트 정확히 일치 + (jsDelivr는) 경로 접두사. 그 밖의 외부 리소스는 모두 금지.
 ALLOWED = {
     "fonts.googleapis.com": "/",                              # Inter 글꼴 CSS
@@ -169,6 +168,9 @@ def _sample(data: Path, file: str, cache: dict):
     if file == "rewind/2026/{date}.json":
         index = json.loads((data / "rewind" / "2026" / "index.json").read_text(encoding="utf-8"))
         path = data / "rewind" / "2026" / f"{index['dates'][-1]['date']}.json"
+    elif file in ("seasons/{season}.json", "seasons/schedule_{season}.json"):  # 지난 시즌 목록의 가장 최근 시즌
+        last = json.loads((data / "seasons" / "index.json").read_text(encoding="utf-8"))["seasons"][-1]["season"]
+        path = data / file.replace("{season}", str(last))
     else:
         path = data / file
     if path.suffix == ".csv":

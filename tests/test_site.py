@@ -308,10 +308,11 @@ def test_contract_keys_exist_in_samples():
     rows = check_site.contract_rows((ROOT / "docs" / "site" / "data-contract.md").read_text(encoding="utf-8"))
     assert len(rows) >= 35
     pages = {r.page for r in rows}
-    assert pages == {"홈", "팀", "선수", "성적표", "공통"}
+    assert pages == {"홈", "지난 시즌", "팀", "선수", "성적표", "공통"}
     files = {r.file for r in rows}
     for f in ("latest.json", "status.json", "history.csv", "rewind/2026/index.json", "rewind/2026/{date}.json",
-              "players.json", "teams.json", "model_report.json"):
+              "players.json", "teams.json", "model_report.json", "seasons/index.json", "seasons/{season}.json",
+              "seasons/schedule_{season}.json"):
         assert f in files, f
     results = check_site.check_contract_keys(rows, DATA)
     missing = [(r.file, k) for r, k, ok in results if not ok]
@@ -374,7 +375,7 @@ def test_no_null_children_in_dom_calls():
 
 
 # 브라우저 캐시를 피할(fresh) 파일: 매일 바뀌는 4개뿐. 되감기 날짜 파일·players·teams·model_report는 기본 캐시.
-FRESH = {"status.json", "latest.json", "history.csv", "index.json", "latest_edge.json", "status_rewind.json", "whatif.json"}
+FRESH = {"status.json", "latest.json", "history.csv", "index.json", "latest_edge.json", "status_rewind.json", "whatif.json", "schedule_${season}.json"}
 
 
 def test_fresh_fetch_only_for_daily_files():
@@ -431,7 +432,7 @@ def test_status_rewind_fixture():
 
 # ---------- 홈 (index.html) ----------
 
-HOME_SECTIONS = ["factors", "starters", "whatif", "type-map", "outlook", "accuracy", "recent"]  # 문서 순서 고정 (왼쪽 열 → 오른쪽 열)
+HOME_SECTIONS = ["factors", "starters", "whatif", "type-map", "standings", "schedule", "outlook", "accuracy", "recent"]  # 문서 순서 고정 (왼쪽 열 → 오른쪽 열)
 
 
 def _home_soup():
@@ -840,3 +841,19 @@ def test_team_logos_are_safe_svgs_with_sources():
         assert not re.search(r"<script|<foreignObject|\son\w+=|href=\"https?:|data:image", svg, re.I), code
         assert f"| {code} |" in sources, code  # 출처 표에 그 구단 행이 있다
     assert "export const SHOW_LOGOS" in app
+
+
+def test_seasons_page_and_this_season_cards():
+    """지난 시즌: 연도 버튼 + 시즌 상세(우승·한국시리즈·우승까지의 길·최종 순위). 이번 시즌: 순위표·다가오는 경기는 보고 있는
+    날짜의 시즌 일정 파일(seasons/schedule_{시즌}.json)로 계산하고, 시즌이 끝나면 맨 위에 우승 카드 + 지난 시즌 바로가기."""
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup((SITE / "seasons.html").read_text(encoding="utf-8"), "html.parser")
+    assert soup.find("a", attrs={"aria-current": "page"})["href"] == "seasons.html"
+    assert soup.find(id="years") is not None and soup.find(id="season") is not None
+    js = (ASSETS / "seasons.js").read_text(encoding="utf-8")
+    assert 'fetchJSON(`seasons/${season}.json`)' in js and "?season=" in js and "postseasonFate" in js
+    home = (ASSETS / "home.js").read_text(encoding="utf-8")
+    assert "seasons/schedule_${season}.json" in home and "function standingsAt" in home
+    assert "href: `seasons.html?season=${yr}`" in home and "season_result" in home and "const endedSeason" in home
+    idx = BeautifulSoup((SITE / "index.html").read_text(encoding="utf-8"), "html.parser")
+    assert idx.title.get_text().startswith("이번 시즌") and idx.find(id="season") is not None

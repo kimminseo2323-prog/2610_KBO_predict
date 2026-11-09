@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>지난 시즌 · KBO Predict</title>
+<meta name="description" content="KBO 2015~2026 시즌별 우승 팀, 한국시리즈 경기별 결과, 가을야구 대진, 최종 순위와 그 시즌 모델 성적.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/seasons.css">
+</head>
+<body>
+<a class="skip-link" href="#main">본문으로 건너뛰기</a>
+<header class="topnav">
+  <div class="bugbar"><div class="bugbar__inner wrap">
+    <a class="brand" href="index.html"><svg class="brand__ball" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10.5" fill="#fff"/><path d="M6.6 3.6c2.6 2.6 2.6 14.2 0 16.8M17.4 3.6c-2.6 2.6-2.6 14.2 0 16.8" fill="none" stroke="#d8232a" stroke-width="1.3"/><path d="M6.6 3.6c2.6 2.6 2.6 14.2 0 16.8M17.4 3.6c-2.6 2.6-2.6 14.2 0 16.8" fill="none" stroke="#d8232a" stroke-width="3" stroke-dasharray="0.9 1.6"/></svg>KBO PREDICT</a>
+    <div class="bug-slot" id="bug-slot"></div>
+    <a class="btn btn--bug" href="https://github.com/kimminseo2323-prog/2610_KBO_predict">GitHub에서 보기</a>
+  </div></div>
+  <nav class="menubar" aria-label="주 메뉴"><ul class="wrap">
+    <li><a href="news.html">소식</a></li>
+    <li><a href="index.html">이번 시즌</a></li>
+    <li><a href="seasons.html" aria-current="page">지난 시즌</a></li>
+    <li><a href="teams.html">팀</a></li>
+    <li><a href="players.html">선수</a></li>
+    <li><a href="report.html">모델 성적표</a></li>
+  </ul></nav>
+</header>
+
+<main id="main" class="wrap">
+  <div class="page-head">
+    <div>
+      <h1 class="display-md">지난 시즌</h1>
+      <p class="lead" id="seasons-lead">시즌을 고르면 그해 우승 팀과 한국시리즈 경기, 가을야구 대진, 최종 순위를 봅니다.</p>
+    </div>
+  </div>
+  <nav class="years" id="years" aria-label="시즌 고르기"><div class="skeleton" style="height:64px"></div></nav>
+  <section class="season" id="season" aria-live="polite">
+    <div class="skeleton" style="height:420px;margin-top:16px"></div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="footer__inner wrap">
+    <p id="evidence" class="evidence">갱신 정보를 불러오는 중…</p>
+    <p class="footer__note">데이터: MyKBOStats(비공식 팬 사이트)의 박스스코어를 집계했습니다. 개인 학습용 프로젝트이며 베팅 조언이 아닙니다.</p>
+  </div>
+  <svg class="footer__field" viewBox="0 0 200 200" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2"><path d="M100 182 L188 94 M100 182 L12 94"/><path d="M12 94 Q100 -24 188 94"/><path d="M100 172 L148 124 L100 76 L52 124 Z"/><circle cx="100" cy="126" r="7"/><rect x="144" y="120" width="8" height="8" transform="rotate(45 148 124)"/><rect x="96" y="72" width="8" height="8" transform="rotate(45 100 76)"/><rect x="48" y="120" width="8" height="8" transform="rotate(45 52 124)"/><path d="M95 170 h10 v4 l-5 5 l-5 -5 z"/></svg>
+</footer>
+<script type="module" src="assets/seasons.js"></script>
+</body>
+</html>
