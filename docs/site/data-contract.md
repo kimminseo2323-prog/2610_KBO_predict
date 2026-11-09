@@ -7,7 +7,7 @@
 ## 읽는 법
 
 - 위치: 로컬 미리보기(`localhost`, `127.0.0.1`)에서는 `../data/public/…`, 배포본에서는 아래 raw URL을 씁니다(`site/assets/app.js`의 `DATA_BASE`).
-- 캐시: 매일(하루 세 번) 바뀌는 `status.json`·`latest.json`·`history.csv`·`whatif.json`·`rewind/2026/index.json`만 `?v=<Date.now()>`를 붙이고 `cache: "no-store"`로 읽어 브라우저 캐시를 피합니다(`fetchJSON(name, { fresh: true })`, `fetchCSV`도 같음). `rewind/2026/{date}.json`·`players.json`·`teams.json`·`model_report.json`은 많아야 주 1회 바뀌므로 브라우저 기본 캐시를 씁니다(되감기 슬라이더를 오가도 같은 날짜를 다시 받지 않음). raw.githubusercontent.com의 CDN 캐시는 최대 5분이라, 갱신 직후에는 파일끼리 `generated_at`이 잠깐 어긋날 수 있습니다. 푸터는 `status.json`을 기준으로 씁니다.
+- 캐시: 매일(경기 철 하루 최대 6번, 비시즌은 하루 1번 커밋) 바뀌는 `status.json`·`latest.json`·`history.csv`·`whatif.json`·`rewind/2026/index.json`만 `?v=<Date.now()>`를 붙이고 `cache: "no-store"`로 읽어 브라우저 캐시를 피합니다(`fetchJSON(name, { fresh: true })`, `fetchCSV`도 같음). `rewind/2026/{date}.json`·`players.json`·`teams.json`·`model_report.json`은 많아야 주 1회 바뀌므로 브라우저 기본 캐시를 씁니다(되감기 슬라이더를 오가도 같은 날짜를 다시 받지 않음). raw.githubusercontent.com의 CDN 캐시는 최대 5분이라, 갱신 직후에는 파일끼리 `generated_at`이 잠깐 어긋날 수 있습니다. 푸터는 `status.json`을 기준으로 씁니다.
 - 읽기에 실패하면 빈 화면 대신 오류 문구와 "다시 불러오기" 버튼을 보여 줍니다(`showError`).
 - 시각은 모두 KST(`+09:00`) ISO 문자열이고, 날짜는 `YYYY-MM-DD`입니다. 확률과 비율은 0~1 소수입니다(화면에서 %로 바꿈).
 - 팀 코드: `OB` 두산, `LT` 롯데, `KT` KT, `WO` 키움, `SK` SSG, `SS` 삼성, `HH` 한화, `HT` KIA, `LG` LG, `NC` NC(`src/kbo_predict/teams.py`, 사이트 `TEAMS`).
@@ -49,7 +49,7 @@
 
 ### latest.json — 오늘(또는 가장 최근) 경기 예측
 
-만드는 곳: `kbo_predict.publish.write_latest` ← `predict.predict_game` / `predict.canceled_entry`, 전망은 `simulate.outlook_for`. 승패 모델 `v0.3`(로지스틱 L1 + Elo, 2015~2026 학습, 라이브), 전망은 팀 모델 `team-2026` + 몬테카를로 1만 회.
+만드는 곳: `kbo_predict.publish.write_latest` ← `predict.predict_game` / `predict.canceled_entry`, 전망은 `simulate.outlook_for`. 승패 모델 `v0.3`(로지스틱 L1 + Elo, 2015~2026 학습, 라이브), 전망도 같은 승패 모델(아직 모르는 선발은 '모름', 2026-11-09부터 — 그 전에는 팀 모델 `team-2026`) + 몬테카를로 1만 회.
 
 | 키 | 타입 | 예시 | null 규칙 |
 | --- | --- | --- | --- |

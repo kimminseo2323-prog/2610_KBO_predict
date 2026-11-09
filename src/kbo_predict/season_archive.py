@@ -163,12 +163,18 @@ def write_index(out: Path) -> list[dict]:
     return rows
 
 
+def _with_rewind_flag(rec: dict, out: Path) -> dict:
+    """rewind 플래그를 실제 파일로 확정한다: out 옆 rewind/{시즌}/index.json이 있을 때만 True.
+    (season_record는 시즌 번호(REWIND_FROM)로만 정해서, 다시 보기를 아직 만들지 않은 새 시즌(2027 등)에도 버튼이 생길 뻔했다.)"""
+    return {**rec, "rewind": (out.parent / "rewind" / str(rec["season"]) / "index.json").exists()}
+
+
 def update(out, season: int, *, backtest_path=None) -> dict:
     """매일 실행용: 그 시즌의 {season}.json · schedule_{season}.json을 다시 쓰고 index.json을 다시 만든다."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     bt = json.loads(Path(backtest_path).read_text(encoding="utf-8")) if backtest_path and Path(backtest_path).exists() else None
-    rec = season_record(season, bt)
+    rec = _with_rewind_flag(season_record(season, bt), out)
     _write(out / f"{season}.json", rec)
     _write(out / f"schedule_{season}.json", schedule(season))
     write_index(out)
@@ -184,7 +190,7 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     bt = json.loads(Path(args.backtest).read_text(encoding="utf-8")) if Path(args.backtest).exists() else None
     for s in SEASONS:
-        _write(out / f"{s}.json", season_record(s, bt))
+        _write(out / f"{s}.json", _with_rewind_flag(season_record(s, bt), out))
     for s in SEASONS:  # 지난 시즌의 경기일 다시 보기도 그날 기준 순위표·다가오는 경기를 계산한다
         _write(out / f"schedule_{s}.json", schedule(s))
     index = write_index(out)

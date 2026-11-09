@@ -346,7 +346,9 @@ def test_collect_errors_are_recorded_in_status(tmp_data_dir, bundle_path, fixtur
 
 
 def test_unregistered_season_fallback_is_recorded_in_status(tmp_data_dir, bundle_path, fixture_html, monkeypatch):
+    """2027 경기가 데이터에 생겼는데(일정 발표) REGULAR_SEASON에 없으면 경고 — 사람이 등록하라는 알림."""
     _seed(fixture_html)
+    upsert_games(2027, [_row(20001, "2027-04-03", status="SCHEDULED", hs=None, as_=None, season=2027)])
     monkeypatch.setattr(rp, "collect_range", lambda *a, **k: {"weeks": 1, "games": 0, "boxscores": 0, "errors": []})
     run(date(2027, 4, 1), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
     status = json.loads((tmp_data_dir / "public/status.json").read_text(encoding="utf-8"))
@@ -643,3 +645,20 @@ def test_drop_history_removes_only_unsettled_rows(tmp_path):
                  "2026-11-10,14061,KT,SS,0.5444,v0.3,x,SCHEDULED,,\n", encoding="utf-8")
     assert drop_history(p, {14060, 14061}) == 1
     assert p.read_text(encoding="utf-8").count("\n") == 2 and "14060" in p.read_text(encoding="utf-8")
+
+
+
+def test_new_year_without_new_season_games_keeps_publishing_previous_season(tmp_data_dir, bundle_path, fixture_html,
+                                                                          monkeypatch):
+    """1월 1일~새 시즌 일정 발표 전: 2027 경기가 0개면 2026으로 발행한다 — 미등록 경고 없음, 비시즌 화면 유지,
+    수집이 실패해도 실행 전체가 멈추지 않는다(직전 시즌 데이터로 계속)."""
+    _seed(fixture_html)
+    monkeypatch.setattr(rp, "collect_range", lambda *a, **k: {"weeks": 1, "games": 0, "boxscores": 0, "errors": []})
+    run(date(2027, 1, 5), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
+    status = _status(tmp_data_dir)
+    assert not any("not registered" in e for e in status["collect_errors"])
+    assert status["mode"] == "rewind" and status["next_game_date"] is None
+    assert not (tmp_data_dir / "public/seasons/2027.json").exists()       # 빈 2027 기록실을 만들지 않는다
+    monkeypatch.setattr(rp, "collect_range", _boom)
+    run(date(2027, 1, 6), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)   # raise 안 함
+    assert _status(tmp_data_dir)["mode"] == "rewind"

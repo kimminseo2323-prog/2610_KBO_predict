@@ -115,6 +115,27 @@ async function loadDay(i) {
   }
 }
 
+/**
+ * 시즌이 끝난 뒤(이번 시즌 페이지, status.season_result) 마지막 예측 카드에 실제 결과를 붙인다 — 다시 보기의 g.result와 같은 모양
+ * {home_score, away_score, winner, pick, correct}. 점수는 seasons/schedule_{시즌}.json, 적중 판정은 되감기와 같은 규칙
+ * (반올림 전 홈 승리 확률 ≥ 0.5면 홈을 고른 것). 결과가 붙은 경기는 "선발을 바꾸면?"을 보여 주지 않는다.
+ */
+async function attachFinalResults() {
+  const games = state.latest?.games ?? [];
+  const season = Number(String(state.latest?.date ?? "").slice(0, 4));
+  if (!state.status?.season_result || !games.length || !season) return;
+  let sched;
+  try { sched = await fetchJSON(`seasons/schedule_${season}.json`, { fresh: true }); } catch { return; } // 없으면 예측만 보여 준다
+  const byId = new Map((sched ?? []).map((g) => [g.game_id, g]));
+  for (const g of games) {
+    const s = byId.get(g.game_id);
+    if (s?.status !== "FINAL" || !fin(s.home_score) || !fin(s.away_score) || !fin(g.home_win_prob)) continue;
+    const winner = s.home_score > s.away_score ? "HOME" : s.home_score < s.away_score ? "AWAY" : "DRAW";
+    const pick = g.home_win_prob >= 0.5 ? "HOME" : "AWAY";
+    g.result = { home_score: s.home_score, away_score: s.away_score, winner, pick, correct: winner === "DRAW" ? null : pick === winner };
+  }
+}
+
 const liveAvailable = () => state.status?.mode !== "rewind" && (state.latest?.games?.length ?? 0) > 0;
 
 // ---------- 시작 ----------
@@ -128,6 +149,7 @@ async function init() {
   renderNav(PAGE === "replay" ? "seasons.html" : "index.html");
   $("matchups").setAttribute("aria-busy", "true");
   await loadCore();
+  if (PAGE === "live") await attachFinalResults();
   if (state.index && !state.index.dates?.length) { // 목차가 비었으면 되감기를 쓸 수 없다
     state.errors.index = "지난 경기 목록에 날짜가 없습니다.";
     state.index = null;
@@ -892,7 +914,7 @@ function renderStarters() {
 // 그때의 확률은 위 매치업 카드의 공개 확률과 같다(tests/test_whatif.py).
 
 function whatifData(g) {
-  if (!g) return null;
+  if (!g || (PAGE === "live" && g.result)) return null; // 끝난 경기(시즌 종료 뒤 결과가 붙은 카드)는 바꿔 볼 것이 없다
   if (state.mode === "rewind") {
     const model = state.index?.whatif_model, block = state.day?.whatif?.find((b) => b.game_id === g.game_id);
     return model && block ? { model, block } : null;
@@ -906,6 +928,8 @@ function whatifData(g) {
 function renderWhatif() {
   const body = $("whatif-body");
   const g = selectedGame();
+  $("whatif").hidden = PAGE === "live" && Boolean(g?.result); // 시즌이 끝나 결과가 붙은 경기는 카드째 숨긴다
+  if ($("whatif").hidden) return;
   const data = whatifData(g);
   if (!data) {
     body.replaceChildren(el("p", { class: "empty" }, g ? "이 경기는 선발을 바꿔 볼 데이터가 없습니다." : "이날은 바꿔 볼 경기가 없습니다."));
@@ -1001,6 +1025,8 @@ function renderOutlook() {
     body.replaceChildren(el("p", { class: "empty" }, "이날은 전망을 계산하지 못했습니다."));
     return;
   }
+  const sr = state.status?.season_result;
+  if (PAGE === "live" && o.type === "series" && sr?.name === o.name) return outlookFinal(o, sr, title, body);
   if (o.type === "series") return outlookSeries(o, title, body);
   if (o.type === "playoff_race") return outlookRace(o, title, body);
   title.textContent = "다음 경기";
@@ -1011,6 +1037,26 @@ function renderOutlook() {
     !next ? el("p", { class: "empty" }, "다음 경기 일정이 아직 없습니다.")
       : days < 0 ? el("p", { class: "empty" }, `마지막으로 알려진 경기일(${fmtDate(next)})이 지났습니다. 다음 갱신 때 새 일정으로 바뀝니다.`)
       : el("p", { class: "kpi" }, [days > 0 ? `D-${days}` : "오늘", el("small", {}, fmtDate(next))]),
+  );
+}
+
+/** 시즌이 끝난 뒤(이번 시즌 페이지): 마지막 날 전망 대신 그 시리즈의 최종 전적 + 마지막 경기 전 모델 전망 한 줄. */
+function outlookFinal(o, sr, title, body) {
+  title.textContent = `${sr.name} 결과`;
+  const need = Math.floor(o.best_of / 2) + 1;
+  const wins = (code) => sr.wins?.[sr.teams?.indexOf(code)] ?? 0;
+  const champ = sr.champion, other = (sr.teams ?? []).find((c) => c !== champ);
+  const pre = o.win_prob?.[o.teams.indexOf(champ)];
+  const row = (code) => el("div", { class: "pips__row" }, [
+    el("span", { class: "pips__team" }, code === champ ? teamText(code, teamName(code)) : teamName(code)),
+    el("span", { class: "pips__dots", role: "img", "aria-label": `${teamName(code)} ${wins(code)}승` },
+      Array.from({ length: need }, (_, k) => el("i", { class: k < wins(code) ? "is-on" : null, style: { background: k < wins(code) ? teamSideColors(code)[0] : null } }))),
+    el("span", { class: "pips__n" }, `${wins(code)}승`),
+  ]);
+  body.replaceChildren(
+    el("p", { class: "card__lead" }, `${o.best_of}전 ${need}선승. 우승 ${teamName(champ)}, ${wins(champ)}승 ${wins(other)}패.`),
+    el("div", { class: "pips" }, seriesOrder(o).map((i) => row(o.teams[i]))),
+    ...(fin(pre) ? [el("p", { class: "muted" }, `마지막 경기 전 모델 전망: ${teamName(champ)} 시리즈 승리 ${prob(pre)}`)] : []),
   );
 }
 

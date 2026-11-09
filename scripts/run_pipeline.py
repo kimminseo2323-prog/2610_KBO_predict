@@ -143,7 +143,7 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
         except Exception as e:  # 네트워크 오류뿐 아니라 파서/예기치 않은 예외도 status.json은 남긴다
             collect_errors.append(repr(e))
             print(f"[pipeline] collect failed, continuing with existing data: {e!r}", file=sys.stderr)
-            if not raw_store.load_games(season):
+            if not raw_store.load_games(season) and not raw_store.load_games(season - 1):  # 새해 첫날~일정 발표 전은 직전 시즌으로 이어 간다
                 raise
         # 수집 창(−7일) 밖의 FINAL인데 박스스코어가 없는 경기 (최근 순 최대 20경기, 5초 간격).
         # 예고 선발 뒤에 따로 돌린다 — 여기서 실패해도 오늘 예측에 필요한 수집은 이미 끝났다.
@@ -158,6 +158,12 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
             except Exception as e:
                 collect_errors.append(f"missing boxscores: {e!r}")
                 print(f"[pipeline] missing-boxscore refetch failed: {e!r}", file=sys.stderr)
+    # 새해(1월~)에 새 시즌 경기가 아직 하나도 없으면 직전 시즌으로 발행한다 — 우승 결과·기록실·순위가 그대로 이어지고
+    # 비시즌 화면이 유지된다. "미등록 시즌" 경고는 그 시즌 경기가 데이터에 생긴 뒤(= 일정이 나와 REGULAR_SEASON에 넣을 수
+    # 있을 때)부터 남긴다. 이전에는 1월 1일부터 경기 0개인 2027로 넘어가 우승 카드가 사라지고 경고가 하루 12번 이슈에 쌓였다.
+    if not raw_store.load_games(season) and raw_store.load_games(season - 1):
+        print(f"[pipeline] no {season} games yet; publishing as season {season - 1}", file=sys.stderr)
+        season -= 1
     if season not in seasons.REGULAR_SEASON:
         collect_errors.append(f"season {season} not registered in REGULAR_SEASON; using 03-01..10-31 fallback")
     games, skipped = season_games(season, collect_errors)  # 승부 난 시리즈의 열리지 않을 경기는 없는 것으로 본다

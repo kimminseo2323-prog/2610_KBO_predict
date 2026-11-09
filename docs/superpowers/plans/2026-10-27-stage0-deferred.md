@@ -95,12 +95,26 @@
 - **필수 관문 — 2027-03 전에 `seasons.REGULAR_SEASON[2027]` 등록**(위 "5단계 전에"의 첫 항목 그대로). 미등록이면 2027 시범경기·10월 포스트시즌이 정규시즌으로 집계된다. ~~사이트는 되감기 시즌을 코드에 고정했다~~ → ✅ (2026-11-10) 다시 보기 기본 시즌과 팀 페이지 가을야구 확률 되감기는 `seasons/index.json`의 `rewind_seasons`를 따른다(2018~2026 모두). 2027 되감기를 만들면 코드 수정 없이 따라간다.
 - ✅ (2026-10-30, ba07e58·7628e0b·4277f5f·08702c3) **Genspark 제작본 도착 시 교체 판단** → 어시스턴트가 ego-browser로 Genspark 코드 에이전트(Claude Sonnet 5.5, 홍조 계정)를 직접 돌렸다. 브리프 그대로 주면 참조 구현의 복사본이 나와서(첫 시도, 민서 계정), "레이아웃·분위기를 다시 설계하되 데이터 연결·요소 id·토큰·외부 리소스 규칙은 유지"로 바꿔 홈 → 성적표 → 선수 → 팀 순서로 한 페이지씩 같은 프로젝트에서 만들었다(크레딧 906·777·510·485). 각 페이지는 sandbox 미리보기에서 파일을 내려받아 해당 페이지 파일만 zip → `import_site.py`(sandbox_inspect 스크립트 제거) → `check_site --strict` → `test_site`(마크업 테스트는 무대 래퍼에 맞춰 문서 순서로 세도록 수정) → 1280/360 확인 → 커밋. 공통 assets는 바뀌지 않아 상수 검사는 그대로 유효. 원래 항목: 사용자가 브리프로 만든 zip을 주면 `import_site.py --dry-run` → 반영 → `check_site.py --strict` → 1280px·360px 스크린샷으로 지금 Pages 버전과 비교해 사용자가 정한다. 반영 스크립트는 기존 `site/assets/`를 남겨 두므로(단일 파일 내보내기면 쓰이지 않는 파일이 남음) 교체가 확정되면 안 쓰는 assets 정리와 `check_site`의 상수 검사(`assets/app.js` 기준)가 새 페이지에도 의미가 있는지 다시 본다.
 - **한 달 무인 운영 확인**(스펙 §12 item 6): 일일 2회·주간 재학습·ci·pages 워크플로가 사람 손 없이 도는지, `collect-failure`·`parity-failure` 이슈, 사이트 증거 바의 갱신 시각·실행 번호가 매일 바뀌는지 본다. 주간 재학습 첫 실행은 2026-11-02(위 항목).
-- **Pages 첫 배포**: `pages.yml`의 `enablement: true`가 첫 실행에서 Pages를 켠다. 첫 실행 전에는 URL이 404이고, 실패하면 저장소 Settings → Pages의 source를 "GitHub Actions"로 직접 켠다.
+- ✅ (2026-10-30 공개됨) **Pages 첫 배포**: `pages.yml`의 `enablement: true`가 첫 실행에서 Pages를 켠다. 첫 실행 전에는 URL이 404이고, 실패하면 저장소 Settings → Pages의 source를 "GitHub Actions"로 직접 켠다.
 - ✅ (5단계 뒤 손질) **팀 페이지 되감기 차트 끝 이름 겹침** → `lineChart` endLabels가 같은 값으로 끝난 줄들을 한 묶음으로 묶어 연결선 하나 + 세로 괄호로 그린다(간격 15px, 오른쪽 여백 68px). 원래 항목:: 가을야구 확률 되감기 선 그래프의 오른쪽 끝 팀 이름이 확률이 비슷한 팀끼리(특히 0%·100% 근처) 겹친다 → 이름 위치를 겹치지 않게 밀거나 범례로.
 - ✅ (5단계 뒤 손질) **홈 틸 "선수 유형 지도" 카드의 빈 공간** → `scatter(height: "fill")` + `#typemap-body`·`.inset` flex 열로 지도가 두 줄 높이를 채운다(1280px에서 240 → 375px). 원래 항목:: 데스크톱 벤토에서 틸 카드 아래쪽이 비어 보인다 → 미니 지도 높이·유형별 인원 배치 조정.
 - ✅ (최종 수정 라운드에서 해결, 5단계 뒤 360px 확인) **성적표 신뢰도 곡선 캡션(360px)** → 막대 위 숫자가 없으면 캡션을 "예측 홈 승률"로 줄인다. 원래 항목:: 모바일 폭에서 캡션이 길어 줄바꿈이 어색하다 → 짧은 문구 또는 차트 아래 표로.
 - ✅ (5단계 뒤 손질) **흰 글자 + 핑크 pill 대비를 시스템 규칙으로** → `app.css`: `.card--pink`·`.pill--pink` 기본 글자색 잉크, 24px 이상 표시용 글자만 페이지 CSS가 흰색으로(규칙 주석), `DESIGN_clay.md` Text 절 Project rule, `tokens.css --on-dark` 주석, `test_card_colors_and_text_contrast_rules`가 검사. 원래 항목:: 핑크(#ff4d8b) 위 흰 작은 글자는 대비가 모자라 페이지마다 ink + 크림 inset으로 피해 갔다(스펙 13절 5단계) → `DESIGN_clay.md`·`tokens.css`·`app.css`에 "핑크 위 14px 이하 글자는 ink" 규칙을 하나로 적고 `test_card_colors_and_text_contrast_rules`에 pill까지 넣는다.
 - **`site/_preview.html` 정리**: Task 1의 로컬 미리보기 전용 페이지(gitignore라 배포되지 않음). 사이트가 완성됐으니 지우거나 `scripts/`로 옮긴다.
+
+## 2027 시즌 전에 (2026-11-10 점검 — 날짜가 있는 관문)
+
+비시즌 독립 점검(서브에이전트)에서 나온 항목. 위 "6단계 전에"의 `REGULAR_SEASON[2027]`과 함께 본다.
+
+- ✅ (2026-11-10) **1월 1일 시즌 전환**: `season = target.year`라 1/1부터 경기 0개인 2027로 넘어가 우승 카드가 사라지고 "미등록" 경고가 하루 12번 이슈에 쌓일 뻔했다 → 새 시즌 경기가 데이터에 생기기 전까지 직전 시즌으로 발행(`run_pipeline`, `test_new_year_without_new_season_games_keeps_publishing_previous_season`). 미등록 경고는 2027 일정이 데이터에 들어온 뒤부터 — 그때 등록하라는 알림.
+- ✅ (2026-11-10) `seasons/{시즌}.json`의 `rewind` 플래그를 실제 `rewind/{시즌}/index.json` 유무로(이전: 시즌 번호 ≥ 2018).
+- ✅ (2026-11-10) 비시즌 홈: 마지막 예측 카드에 실제 점수·적중, 끝난 경기는 "선발을 바꾸면?" 숨김, 전망 카드는 시리즈 최종 전적.
+- **2027 일정이 나오면(1~2월)**: `REGULAR_SEASON[2027]`(개막·종료일) 등록 + `tests/test_seasons.py:17`(2015~2026 고정 비교)도 함께 고친다. 미등록이면 3월 시범경기가 `round: "regular"`로 나가 `playoff_race`·순위표·history에 섞인다.
+- **3월 시범경기 전**: `run_pipeline`이 `round`와 상관없이 `history.csv`에 넣는다 — 시범경기 예측을 기록하지 않거나 `round` 열을 더해 사이트(홈 적중률·성적표 라이브 기록)가 시즌·구분별로 나눠 세게 한다. 지금은 2026 포스트시즌 8경기와 2027이 한 적중률로 합쳐진다.
+- **2027 정규시즌 첫 예정 경기**: 예고 선발 파서 픽스처가 포스트시즌 14050 하나뿐 → 정규시즌 경기 페이지로 픽스처 추가.
+- **10월 와일드카드 전**: `config/postseason.yaml`에 2027 틀(teams/start null) — 없으면 `unneeded_games`·`season_result`·시리즈 전망이 모두 꺼져 11-09 버그(열리지 않을 경기 예측, 우승 표시 없음)가 다시 난다. 첫 시리즈 팀을 최종 순위에서 채우는 것도 검토.
+- 2027 다시 보기를 만들면(`build_rewind.py --season 2027 --walk-forward`) 사이트는 코드 수정 없이 따라간다(`rewind_seasons`).
+- 참고: `history.csv`의 14058(19:43 기록)·14059(14:51)는 경기 시작 뒤 다시 기록된 예측이다(운영 규칙 추가 전). 라이브 적중률에 그대로 들어가 있다(README에 적음).
 
 ## 정리만 하면 되는 것
 - `tests/test_mykbo_parse.py`의 `or len(rows) == 4` 무의미 단언, `test_collect` 중복 조건문, `test_features` unused import, `scaler.transform` 중복 호출, `publish.py` 인라인 import.

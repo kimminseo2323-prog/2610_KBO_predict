@@ -7,6 +7,7 @@ import {
   renderNav, renderFooter, showError,
 } from "./app.js";
 
+const REPORT_SEASON = 2026;   // 모델 성적표(report-2026)의 홀드아웃 시즌 — 다시 보기가 여러 시즌 시험과 다른 모델을 쓰는 유일한 시즌
 const $ = (id) => document.getElementById(id);
 const state = { index: null, status: null, history: null, cache: new Map(), season: null, errors: {} };
 
@@ -125,8 +126,8 @@ function renderSeason(rec) {
     el("h3", { class: "season__h" }, "이 시즌, 모델은 얼마나 맞혔나"),
     m ? el("p", { class: "season__model-num" }, [el("b", { class: "num" }, fmtPct(m.accuracy, 1)), ` 정규시즌 ${m.n}경기 적중 (단순 규칙 ${fmtPct(m.rule_accuracy, 1)})`])
       : el("p", { class: "season__model-num muted" }, "이 시즌은 앞선 학습 시즌이 부족해 시험하지 않았습니다(시험은 2018년부터)."),
-    el("p", { class: "season__model-note" }, rec.season === 2026
-      ? "지금 공개 중인 모델과 같은 설정입니다. 정규시즌 경기일마다 그날의 예측과 결과를 다시 볼 수 있습니다."
+    el("p", { class: "season__model-note" }, rec.season === REPORT_SEASON
+      ? `그 시즌보다 앞선 시즌(2025까지)으로 학습한 지금 모델(v0.3) 설정의 성적입니다. 경기일 다시 보기는 모델 성적표의 고정 모델(2024까지 학습·2025 검증)로 예측해 적중률이 조금 다릅니다.${rec.rewind ? " 경기일마다 그날의 예측과 결과를 다시 볼 수 있습니다." : ""}`
       : `그 시즌보다 앞선 시즌들로만 학습한 지금 모델(v0.3) 설정으로 그 시즌을 미리 예측했다면의 성적입니다.${rec.rewind ? " 경기일마다 그날의 예측과 결과를 다시 볼 수 있습니다." : ""}`),
     ...(rec.rewind ? [el("a", { class: "btn", href: `replay.html?season=${rec.season}` }, `${rec.season} 경기일 다시 보기`)] : []),
   ]);

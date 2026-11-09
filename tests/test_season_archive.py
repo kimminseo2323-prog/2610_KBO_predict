@@ -79,3 +79,14 @@ def test_index_lists_rewind_seasons_and_replays_match_backtest():
         assert r["accuracy"] == round(bt["by_season"][str(s)]["l1_elo"]["accuracy"], 4)
     for s in range(2015, 2027):
         assert (ROOT / "data" / "public" / "seasons" / f"schedule_{s}.json").exists()
+
+
+
+def test_rewind_flag_follows_real_rewind_files(tmp_path):
+    """rewind 플래그는 rewind/{시즌}/index.json이 실제로 있을 때만 True (다시 보기를 아직 만들지 않은 새 시즌에 버튼이 생기지 않게)."""
+    out = tmp_path / "seasons"
+    assert sa.update(out, 2026)["rewind"] is False                     # 옆에 rewind/2026이 없다
+    (tmp_path / "rewind" / "2026").mkdir(parents=True)
+    (tmp_path / "rewind" / "2026" / "index.json").write_text("{}", encoding="utf-8")
+    assert sa.update(out, 2026)["rewind"] is True
+    assert json.loads((out / "index.json").read_text(encoding="utf-8"))["rewind_seasons"] == [2026]

@@ -1,7 +1,7 @@
 // KBO Predict — 소식. news.html 전용 모듈.
 //
 // 화면: 구단 탭(전체 · 즐겨찾기 · 10개 구단) → 구단 카드들 → "이 소식은 어디서 오나요" 접기 → 푸터.
-// - 전체: 맨 위 리그 전체 최신 소식 10개(최신순), 그 아래 10개 구단 카드(즐겨찾기한 구단이 앞, 그 뒤는 2026 순위 순) — 카드마다 3개.
+// - 전체: 맨 위 리그 전체 최신 소식 10개(최신순), 그 아래 10개 구단 카드(즐겨찾기한 구단이 앞, 그 뒤는 teams.json의 가장 최근 시즌 순위 순) — 카드마다 3개.
 // - 구단 탭(?team=KT): 그 구단 카드 하나를 크게, 기사 10개 + "더 보기"(10개씩, 최대 100개).
 // - 구단 기사는 네이버 "정확도순"(sort=sim)으로 받는다: "최신순"은 본문에 구단 이름이 한 번만 나와도 섞여 들어와
 //   제목에 그 구단이 나오는 기사가 10개 중 2개뿐이었다(정확도순 9개, 2026-11-09 측정). 리그 전체 소식은 최신순.
@@ -41,7 +41,7 @@ function toggleFav(code) {
   render();
 }
 
-// ---------- 구단 순서: 즐겨찾기 먼저, 그다음 2026 순위 ----------
+// ---------- 구단 순서: 즐겨찾기 먼저, 그다음 가장 최근 시즌 순위 ----------
 
 function order() {
   const rows = state.teams?.teams ?? [];
@@ -263,7 +263,9 @@ function render() {
     return;
   }
   title.textContent = "전체 구단";
-  lead.textContent = state.favs.size ? "즐겨찾기한 구단이 앞에 옵니다. 그다음은 2026 정규시즌 순위 순입니다." : "2026 정규시즌 순위 순입니다. ☆을 누르면 그 구단이 맨 앞에 옵니다.";
+  const last = Math.max(0, ...(state.teams?.teams ?? []).map((r) => Number(r.season) || 0));
+  const by = last ? `${last} 정규시즌 순위 순` : "가나다순";
+  lead.textContent = state.favs.size ? `즐겨찾기한 구단이 앞에 옵니다. 그다음은 ${by}입니다.` : `${by}입니다. ☆을 누르면 그 구단이 맨 앞에 옵니다.`;
   body.replaceChildren(...(NEWS_PROXY ? [leagueSection()] : []), el("div", { class: "news-grid" }, order().map((c) => teamCard(c, false))));
 }
 

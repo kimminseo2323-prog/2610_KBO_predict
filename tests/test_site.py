@@ -912,3 +912,16 @@ def test_replay_default_season_comes_from_season_index():
     assert "LATEST_REWIND" not in js and "const FALLBACK_REWIND = 2026;" in js
     assert '(PAGE === "replay" ? await latestRewind() : FALLBACK_REWIND)' in js
     assert 'String(state.index.model_version ?? "").startsWith("walk-")' in js
+
+
+
+def test_offseason_home_shows_final_results():
+    """시즌이 끝난 뒤 이번 시즌 페이지: 마지막 예측 카드에 실제 점수·적중을 붙이고(되감기와 같은 판정 규칙),
+    끝난 경기는 "선발을 바꾸면?"을 숨기며, 전망 카드는 시리즈 최종 전적 + 마지막 경기 전 전망 한 줄."""
+    js = (ASSETS / "home.js").read_text(encoding="utf-8")
+    assert "async function attachFinalResults()" in js and 'if (PAGE === "live") await attachFinalResults();' in js
+    assert 'const pick = g.home_win_prob >= 0.5 ? "HOME" : "AWAY";' in js
+    assert '$("whatif").hidden = PAGE === "live" && Boolean(g?.result);' in js
+    assert 'if (PAGE === "live" && o.type === "series" && sr?.name === o.name) return outlookFinal(o, sr, title, body);' in js
+    news = (ASSETS / "news.js").read_text(encoding="utf-8")
+    assert "2026 정규시즌 순위 순" not in news                          # 순위 기준 시즌은 teams.json의 가장 최근 시즌
