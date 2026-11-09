@@ -369,6 +369,51 @@ def active_series(season: int, on: str, games: list[dict], ps_config) -> dict | 
     return found
 
 
+def unneeded_games(season: int, games: list[dict], ps_config) -> set[int]:
+    """승부가 이미 난 시리즈의 남은 예정(SCHEDULED) 경기 game_id.
+    원천 사이트는 4승으로 끝난 한국시리즈의 6·7차전 같은 '치르지 않을 경기'를 한동안 예정으로 남겨 둔다.
+    그대로 두면 파이프라인이 열리지 않을 경기를 예측·기록하고 사이트가 시즌이 끝났는데도 라이브로 연다(2026-11-09).
+    승부가 난 경기(시리즈 승리 확정 경기) 뒤의 두 팀 맞대결 중 SCHEDULED인 것만 고른다 (FINAL·취소는 건드리지 않는다)."""
+    out: set[int] = set()
+    for s in resolve_undecided(_series_list(season, ps_config), games):
+        if None in s["teams"] or s["start"] is None:
+            continue
+        t0 = s["teams"][0]
+        w0, w1 = _head_start(s)
+        clinched = None
+        for g in _pair_games(games, s):
+            if clinched is not None:
+                if g["status"] == "SCHEDULED" and g["date"] >= clinched:
+                    out.add(g["game_id"])
+                continue
+            hs, as_ = g.get("home_score"), g.get("away_score")
+            if g["status"] != "FINAL" or hs is None or as_ is None or hs == as_:
+                continue
+            if (g["home_code"] if hs > as_ else g["away_code"]) == t0:
+                w0 += 1
+            else:
+                w1 += 1
+            if _decided(s, w0, w1):
+                clinched = g["date"]
+    return out
+
+
+def season_result(season: int, games: list[dict], ps_config) -> dict | None:
+    """마지막 등록 시리즈(한국시리즈)의 승부가 났으면 {"name", "champion", "teams", "wins"}, 아니면 None.
+    status.json의 season_result — 시즌이 끝난 뒤 사이트가 "2026 우승: 삼성 (4승 1패)"를 보여 준다."""
+    series_list = resolve_undecided(_series_list(season, ps_config), games)
+    if not series_list:
+        return None
+    s = series_list[-1]
+    if None in s["teams"] or s["start"] is None:
+        return None
+    w0, w1, _ = series_record(games, s, "9999-12-31")
+    if not _decided(s, w0, w1):
+        return None
+    return {"name": s["name"], "champion": s["teams"][0] if w0 > w1 else s["teams"][1],
+            "teams": list(s["teams"]), "wins": [w0, w1]}
+
+
 TODAY_SOURCE_WIN = "win_model (starter-inclusive)"   # 첫 남은 경기 = 오늘 경기의 승패 모델 확률 (예고 선발 포함)
 TODAY_SOURCE_TEAM = "team_model"                     # 남은 경기 전부 = 선발 없는 팀 모델
 

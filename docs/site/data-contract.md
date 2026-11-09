@@ -45,6 +45,7 @@
 | `games_today` | 정수 | `1` | 오늘 예측한 경기 수(0 가능) |
 | `model_version` | 문자열 \| null | `"v0.3"` | 라이브 승패 모델 버전 |
 | `collect_errors` | 문자열 배열 | `[]` | 수집 실패 메시지. 비어 있으면 정상 |
+| `season_result` | 객체 \| null | `{"name": "한국시리즈", "champion": "SS", "teams": ["KT", "SS"], "wins": [1, 4]}` | 마지막 시리즈(한국시리즈)의 승부가 나면 우승 팀과 전적(`teams` 순서). 시즌 중에는 null. 비시즌 되감기 안내 문구에 씁니다 |
 
 ### latest.json — 오늘(또는 가장 최근) 경기 예측
 

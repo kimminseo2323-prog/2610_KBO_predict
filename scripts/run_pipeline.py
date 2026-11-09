@@ -18,9 +18,9 @@ from kbo_predict.cluster import load_bundle as load_clusters
 from kbo_predict.cluster import load_labels, require_names, types_map
 from kbo_predict.collect import collect_missing_boxscores, collect_range, fetch_starters
 from kbo_predict.predict import canceled_entry, predict_game, raw_prob
-from kbo_predict.publish import settle_history, upsert_history, write_latest, write_status
+from kbo_predict.publish import drop_history, settle_history, upsert_history, write_latest, write_status
 from kbo_predict.rewind import state_before
-from kbo_predict.simulate import load_postseason, next_game_card, outlook_for
+from kbo_predict.simulate import load_postseason, next_game_card, outlook_for, season_result, unneeded_games
 from kbo_predict.train_win import load_bundle
 from kbo_predict import whatif
 
@@ -81,6 +81,27 @@ def latest_outlook(team_path: Path, season: int, on: str, games: list[dict], sta
         return next_game_card(on, games)
 
 
+def season_games(season: int, collect_errors: list[str] | None = None) -> tuple[list[dict], set[int]]:
+    """그 시즌 경기 목록에서 '승부가 난 시리즈의 남은 예정 경기'(simulate.unneeded_games)를 뺀 것과 뺀 game_id.
+    대진표를 읽지 못해도 예측은 계속한다 (뺄 경기 없음 + 경고)."""
+    games = raw_store.load_games(season)
+    try:
+        skip = unneeded_games(season, games, load_postseason(season))
+    except Exception as e:
+        skip = set()
+        if collect_errors is not None:
+            collect_errors.append(f"postseason config unavailable: {e!r}")
+    return [g for g in games if g["game_id"] not in skip], skip
+
+
+def started(g: dict, now: datetime) -> bool:
+    """경기 시작 시각(datetime_utc)이 지났는가. 시각이 없으면 False (날짜만으로는 판단하지 않는다)."""
+    t = g.get("datetime_utc")
+    if not t:
+        return False
+    return datetime.fromisoformat(t.replace("Z", "+00:00")) <= now
+
+
 LOOKAHEAD_DAYS = 3   # 경기가 없는 날(휴식일·이동일)에는 이 날수 안의 다음 경기일을 미리 예측해 발행한다
 
 
@@ -115,8 +136,8 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
         try:
             out = collect_range(window_start, target + timedelta(days=14))
             collect_errors += [f"{e['path']}: {e['error']}" for e in out["errors"]]
-            target, iso = lookahead_target(raw_store.load_games(season), target)
-            today = [g for g in raw_store.load_games(season) if g["date"] == iso and g["status"] == "SCHEDULED"]
+            target, iso = lookahead_target(season_games(season)[0], target)
+            today = [g for g in season_games(season)[0] if g["date"] == iso and g["status"] == "SCHEDULED"]
             if today:  # 오늘 예정 경기가 없으면(비시즌·휴식일) 경기 페이지를 요청하지 않는다
                 st = fetch_starters(today, fetched_at=meta["generated_at"])
                 raw_store.upsert_starters(season, list(st["starters"].values()))
@@ -142,15 +163,18 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
                 print(f"[pipeline] missing-boxscore refetch failed: {e!r}", file=sys.stderr)
     if season not in seasons.REGULAR_SEASON:
         collect_errors.append(f"season {season} not registered in REGULAR_SEASON; using 03-01..10-31 fallback")
-    games = raw_store.load_games(season)
+    games, skipped = season_games(season, collect_errors)  # 승부 난 시리즈의 열리지 않을 경기는 없는 것으로 본다
     if not fetch:
         target, iso = lookahead_target(games, target)
 
     bundle = load_bundle(model_path)
     meta = {**meta, "model_version": bundle["version"]}
 
-    # ② 정산
+    # ② 정산 (+ 열리지 않을 경기의 예측 행 지우기)
     settled = settle_history(pub / "history.csv", games)
+    if skipped:
+        drop_history(pub / "history.csv", skipped)
+        _drop_from_latest(pub / "latest.json", skipped)
 
     # ③ 상태 누적 (직전 시즌 + target 이전 당해 정규시즌 FINAL — 학습 시 build_dataset과 동일)
     state = build_state(season, iso)
@@ -163,11 +187,19 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
         print(f"[pipeline] starter types unavailable, continuing without them: {e!r}", file=sys.stderr)
 
     # ④ 예측 (취소 경기는 예측 없이 표시만)
+    # 경기 시작 시각이 지난 경기는 시작 전 마지막 예측을 그대로 둔다: 원천 사이트가 경기 중에도 '예정'으로 두고
+    # GitHub 예약 실행이 몇 시간씩 늦어, 시작 뒤에 예측이 다시 기록된 일이 있었다(2026-11-06·07).
+    now = datetime.fromisoformat(meta["generated_at"])
+    prev_latest = _read_json(pub / "latest.json")
+    prev = {e["game_id"]: e for e in (prev_latest or {}).get("games", [])} if (prev_latest or {}).get("date") == iso else {}
     day = [g for g in games if g["date"] == iso]
-    entries = []
+    entries, locked = [], set()
     for g in day:
         if g["status"] == "CANCELED":
             entries.append(canceled_entry(g))
+        elif started(g, now) and g["game_id"] in prev:
+            entries.append({**prev[g["game_id"]], "status": g["status"], "status_note": g.get("status_note")})
+            locked.add(g["game_id"])
         else:
             e = predict_game(bundle, g, state, starters.get(g["game_id"]), starter_types=sp_types)
             e["status_note"] = g.get("status_note")
@@ -175,15 +207,15 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     preds = [e for e in entries if e["status"] != "CANCELED"]
     # 시리즈 전망의 오늘 경기 확률: 위 예측과 같은 승패 모델·같은 입력의 반올림 전 값 (스펙 §8)
     today_probs = {g["game_id"]: raw_prob(bundle, g, state, starters.get(g["game_id"]))
-                   for g in day if g["status"] != "CANCELED"}
+                   for g in day if g["status"] != "CANCELED" and g["game_id"] not in locked}
 
     # ⑤ 전망 + 발행 (경기 행이 아예 없으면 latest 유지 — 전망 시뮬레이션도 돌리지 않는다)
     if entries:
         outlook = latest_outlook(team_path, season, iso, games, state, collect_errors, today_probs)
         write_latest(pub / "latest.json", date=iso, games=entries, meta=meta, outlook=outlook)
         # history의 model_version = 실제로 예측한 번들의 버전 (패키지 상수가 아니라)
-        upsert_history(pub / "history.csv", preds, predicted_at=meta["generated_at"],
-                       model_version=meta["model_version"])
+        upsert_history(pub / "history.csv", [e for e in preds if e["game_id"] not in locked],
+                       predicted_at=meta["generated_at"], model_version=meta["model_version"])
         # 선발 바꿔 보기(사이트): 모델 숫자 + 경기별 후보 선발 기록. 실패해도 예측 발행은 그대로 (표시용 부가 기능)
         try:
             boxes = raw_store.load_boxscores(season)
@@ -198,8 +230,43 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
     upcoming = [g["date"] for g in games if g["date"] > iso and g["status"] != "CANCELED"]
     write_status(pub / "status.json", mode=status_mode(games, target),
                  next_game_date=min(upcoming) if upcoming else None,
-                 games_today=len(preds), meta=meta, collect_errors=collect_errors)
+                 games_today=len(preds), meta=meta, collect_errors=collect_errors,
+                 season_result=_season_result(season, games, collect_errors))
     return {"games_today": len(preds), "settled": settled}
+
+
+def _read_json(path: Path) -> dict | None:
+    import json
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def _drop_from_latest(path: Path, game_ids: set[int]) -> None:
+    """latest.json에 열리지 않을 경기가 남아 있으면 빼고, 그 날짜의 시리즈 전망도 지운다 (승부가 이미 났다).
+    빼고 나서 경기가 하나도 안 남으면 파일을 그대로 둔다 — 사이트 계약상 latest.json에는 경기가 있어야 하고,
+    status.json이 rewind가 되므로 사이트는 이 파일을 쓰지 않는다. (경기를 빼는 것이 먼저라 이 경우는 생기기 어렵다:
+    시리즈가 끝난 뒤의 실행은 열리지 않을 경기를 처음부터 예측하지 않는다.)"""
+    import json
+    obj = _read_json(path)
+    if not obj or not any(g.get("game_id") in game_ids for g in obj.get("games", [])):
+        return
+    keep = [g for g in obj["games"] if g.get("game_id") not in game_ids]
+    if not keep:
+        print(f"[pipeline] {path} holds only unneeded games; leaving it (status mode decides what the site shows)", file=sys.stderr)
+        return
+    obj["games"] = keep
+    obj["outlook"] = None
+    Path(path).write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _season_result(season: int, games: list[dict], collect_errors: list[str]) -> dict | None:
+    try:
+        return season_result(season, games, load_postseason(season))
+    except Exception as e:
+        collect_errors.append(f"season result unavailable: {e!r}")
+        return None
 
 
 def write_whatif(path: Path, *, date: str, model: dict | None, games: list[dict], meta: dict) -> None:

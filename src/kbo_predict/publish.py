@@ -52,7 +52,8 @@ def write_latest(path, *, date: str, games: list[dict], meta: dict, outlook: dic
 
 
 def write_status(path, *, mode: str, next_game_date: str | None, games_today: int, meta: dict,
-                 collect_errors: list[str] | None = None) -> None:
+                 collect_errors: list[str] | None = None, season_result: dict | None = None) -> None:
+    """status.json. season_result = simulate.season_result (한국시리즈가 끝났으면 우승 팀·전적, 아니면 None)."""
     _write_json(path, {
         "generated_at": meta.get("generated_at"),
         "run_url": meta.get("run_url"),
@@ -62,6 +63,7 @@ def write_status(path, *, mode: str, next_game_date: str | None, games_today: in
         "games_today": games_today,
         "model_version": meta.get("model_version"),
         "collect_errors": list(collect_errors or []),
+        "season_result": season_result,
     })
 
 
@@ -118,6 +120,16 @@ def upsert_history(path, predictions: list[dict], *, predicted_at: str, model_ve
             df.loc[len(df)] = row
     df["correct"] = df["correct"].astype("Int64")
     _write_history(path, df)
+
+
+def drop_history(path, game_ids: set[int]) -> int:
+    """정산 전(SCHEDULED) 행 중 game_ids에 든 것(승부가 난 시리즈의 열리지 않을 경기)을 지운다. 지운 행 수."""
+    df = _read_history(path)
+    ids = {str(i) for i in game_ids}
+    drop = df.index[df["game_id"].isin(ids) & (df["status"] == "SCHEDULED")]
+    if len(drop):
+        _write_history(path, df.drop(drop).reset_index(drop=True))
+    return len(drop)
 
 
 def settle_history(path, games: list[dict]) -> int:

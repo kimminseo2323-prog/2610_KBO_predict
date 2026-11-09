@@ -34,4 +34,4 @@
     teams: [KT, null]
     best_of: 7
     start: null
-    homes: [KT, KT, null, null, KT, null, KT]
+    homes: [KT, KT, null, null, null, KT, KT]   # 2-3-2: 1·2차전 정규 1위 홈, 3·4·5차전 상대 홈, 6·7차전 다시 1위 홈

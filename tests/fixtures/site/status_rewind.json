@@ -6,5 +6,17 @@
   "next_game_date": null,
   "games_today": 0,
   "model_version": "v0.2",
-  "collect_errors": []
+  "collect_errors": [],
+  "season_result": {
+    "name": "한국시리즈",
+    "champion": "SS",
+    "teams": [
+      "KT",
+      "SS"
+    ],
+    "wins": [
+      1,
+      4
+    ]
+  }
 }

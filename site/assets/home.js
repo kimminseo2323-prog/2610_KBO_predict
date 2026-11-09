@@ -287,9 +287,12 @@ function renderDateBar() {
   const hint = $("rewind-hint");
   if (rewind && !liveAvailable()) {
     const next = state.status?.next_game_date;
+    const r = state.status?.season_result; // 한국시리즈가 끝났으면 우승 팀과 전적
+    const won = r ? r.wins[r.teams.indexOf(r.champion)] : null;
     hint.textContent = next && next >= todayKST()
       ? `지금은 오늘 예측이 없습니다. 다음 경기는 ${fmtDate(next)}입니다.`
-      : "지금은 비시즌이라 오늘 예측이 없습니다. 2026 시즌 경기일을 골라 보세요.";
+      : r ? `2026 시즌이 끝났습니다. ${r.name} 우승은 ${teamName(r.champion)}(${won}승 ${r.wins[0] + r.wins[1] - won}패)입니다. 정규시즌 경기일을 골라 다시 볼 수 있습니다.`
+        : "지금은 비시즌이라 오늘 예측이 없습니다. 2026 시즌 경기일을 골라 보세요.";
   } else {
     hint.textContent = "2026 시즌 경기일만 이동합니다. 화살표 키로도 움직일 수 있습니다.";
   }

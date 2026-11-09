@@ -22,7 +22,7 @@ REAL_CLUSTERS_PKL = ROOT / "models" / "clusters.pkl"
 FIXTURES = ROOT / "tests" / "fixtures"
 OUTLOOK_WARNING = "outlook unavailable"
 STATUS_KEYS = {"generated_at", "run_url", "commit_sha", "mode", "next_game_date", "games_today", "model_version",
-               "collect_errors"}
+               "collect_errors", "season_result"}
 ENTRY_KEYS = {"game_id", "date", "time", "stadium", "round", "status", "home", "away", "home_win_prob", "factors",
               "starter_known", "status_note"}
 SIDE_KEYS = {"code", "name", "starter", "win_pct_season", "last10", "run_diff"}
@@ -621,3 +621,22 @@ def test_missing_boxscores_skipped_when_collect_failed(monkeypatch, tmp_data_dir
     run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=True)
     assert fake_missing_boxscores == []
     assert _errors(_status(tmp_data_dir)) == [repr(requests.ConnectionError("down"))]
+
+
+def test_started_uses_kickoff_time_only():
+    from datetime import datetime, timezone
+    from scripts.run_pipeline import started
+    now = datetime(2026, 11, 6, 10, 43, tzinfo=timezone.utc)  # 19:43 KST
+    assert started({"datetime_utc": "2026-11-06T09:30:00Z"}, now)        # 18:30 KST 경기 → 이미 시작
+    assert not started({"datetime_utc": "2026-11-07T05:00:00Z"}, now)    # 다음 날 14:00 경기
+    assert not started({"datetime_utc": None}, now)                      # 시각 모르면 시작 안 한 것으로
+
+
+def test_drop_history_removes_only_unsettled_rows(tmp_path):
+    from kbo_predict.publish import drop_history
+    p = tmp_path / "history.csv"
+    p.write_text("date,game_id,home,away,home_win_prob,model_version,predicted_at,status,winner,correct\n"
+                 "2026-11-08,14060,SS,KT,0.4998,v0.3,x,FINAL,HOME,0\n"
+                 "2026-11-10,14061,KT,SS,0.5444,v0.3,x,SCHEDULED,,\n", encoding="utf-8")
+    assert drop_history(p, {14060, 14061}) == 1
+    assert p.read_text(encoding="utf-8").count("\n") == 2 and "14060" in p.read_text(encoding="utf-8")

@@ -433,3 +433,33 @@ def test_next_game_card_shape_and_key_order():
     assert list(card) == ["type", "as_of", "next_game_date"]
     assert card == {"type": "next_game", "as_of": "2026-10-29", "next_game_date": "2026-11-01"}
     assert next_game_card("2026-11-01", games)["next_game_date"] is None
+
+
+def _ks(results, scheduled):
+    """한국시리즈 KT(팀0)-SS 경기 목록: results = [(날짜, 홈, 원정, 홈 점수, 원정 점수)], scheduled = [(날짜, 홈, 원정)]."""
+    games, gid = [], 100
+    for d, h, a, hs, as_ in results:
+        gid += 1
+        games.append({"game_id": gid, "date": d, "home_code": h, "away_code": a, "home_score": hs, "away_score": as_,
+                      "status": "FINAL", "season": 2026})
+    for d, h, a in scheduled:
+        gid += 1
+        games.append({"game_id": gid, "date": d, "home_code": h, "away_code": a, "home_score": None, "away_score": None,
+                      "status": "SCHEDULED", "season": 2026})
+    return games
+
+
+KS_CFG = {2026: [{"name": "한국시리즈", "teams": ["KT", "SS"], "best_of": 7, "start": "2026-11-03",
+                  "homes": ["KT", "KT", "SS", "SS", "SS", "KT", "KT"]}]}
+
+
+def test_unneeded_games_after_series_is_clinched():
+    from kbo_predict.simulate import season_result, unneeded_games
+    played = [("2026-11-03", "KT", "SS", 8, 7), ("2026-11-04", "KT", "SS", 2, 3), ("2026-11-06", "SS", "KT", 5, 1),
+              ("2026-11-07", "SS", "KT", 10, 5), ("2026-11-08", "SS", "KT", 12, 1)]
+    games = _ks(played, [("2026-11-10", "KT", "SS"), ("2026-11-11", "KT", "SS")])
+    assert unneeded_games(2026, games, KS_CFG) == {106, 107}           # 삼성 4승 → 6·7차전은 열리지 않는다
+    assert season_result(2026, games, KS_CFG) == {"name": "한국시리즈", "champion": "SS", "teams": ["KT", "SS"], "wins": [1, 4]}
+    # 아직 진행 중(1승 3패)이면 남은 경기를 빼지 않고 우승도 없다
+    games = _ks(played[:4], [("2026-11-08", "SS", "KT"), ("2026-11-10", "KT", "SS"), ("2026-11-11", "KT", "SS")])
+    assert unneeded_games(2026, games, KS_CFG) == set() and season_result(2026, games, KS_CFG) is None
