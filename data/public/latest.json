@@ -1,86 +1,31 @@
 {
-  "generated_at": "2026-11-08T23:15:52+09:00",
-  "date": "2026-11-08",
+  "generated_at": "2026-11-10T00:13:34+09:00",
+  "date": "2026-11-10",
   "mode": "live",
   "model_version": "v0.3",
-  "commit_sha": "dda2baf4c8bf04d3ca9592c392c81110633fdd79",
-  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/42488903666",
+  "commit_sha": "5a6f0d721c59037a2180f45b13b5d177be93516b",
+  "run_url": "https://github.com/kimminseo2323-prog/2610_KBO_predict/actions/runs/42642416693",
   "games": [
     {
-      "game_id": 14060,
-      "date": "2026-11-08",
-      "time": "14:00",
-      "stadium": "Daegu",
-      "round": "postseason",
-      "status": "FINAL",
+      "game_id": 14061,
+      "date": "2026-11-10",
+      "time": "18:30",
+      "stadium": "Suwon",
+      "status": "CANCELED",
+      "status_note": null,
+      "home_win_prob": null,
+      "factors": [],
       "home": {
-        "code": "SS",
-        "name": "삼성",
-        "starter": null,
-        "win_pct_season": 0.589,
-        "last10": 0.4,
-        "run_diff": 0.96
+        "code": "KT"
       },
       "away": {
-        "code": "KT",
-        "name": "KT",
-        "starter": null,
-        "win_pct_season": 0.647,
-        "last10": 1.0,
-        "run_diff": 1.22
-      },
-      "home_win_prob": 0.4998,
-      "factors": [
-        {
-          "name": "Elo 전력 점수 차이",
-          "contribution_pp": -3.3
-        },
-        {
-          "name": "기본 홈 어드밴티지",
-          "contribution_pp": 2.3
-        },
-        {
-          "name": "타선 삼진 비율 차이",
-          "contribution_pp": 0.6
-        },
-        {
-          "name": "타선 홈런 비율 차이",
-          "contribution_pp": 0.4
-        },
-        {
-          "name": "선발 9이닝당 삼진 차이",
-          "contribution_pp": 0.0
-        }
-      ],
-      "starter_known": false,
-      "status_note": null
+        "code": "SS"
+      }
     }
   ],
   "outlook": {
-    "type": "series",
-    "as_of": "2026-11-08",
-    "name": "한국시리즈",
-    "best_of": 7,
-    "teams": [
-      "KT",
-      "SS"
-    ],
-    "head_start": [
-      0,
-      0
-    ],
-    "wins": [
-      1,
-      3
-    ],
-    "win_prob": [
-      0.1143,
-      0.8857
-    ],
-    "most_common_result": "1-4",
-    "goes_distance_prob": 0.2258,
-    "games_remaining_max": 3,
-    "today_game_prob_source": "team_model",
-    "next_game_date": "2026-11-08"
+    "type": "next_game",
+    "as_of": "2026-11-10",
+    "next_game_date": null
   }
 }
