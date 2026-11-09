@@ -13,11 +13,11 @@
 //   저장소에 저장하지 않고(브라우저 캐시만), 예측 모델에 쓰지 않고, 광고를 붙이지 않는다.
 // NEWS_PROXY가 비어 있으면(준비 전) 구단마다 네이버 뉴스 검색 결과로 가는 링크만 보여 준다(우리 쪽에서 결과를 받지 않음).
 
-import { TEAMS, NEWS_PROXY, el, fetchJSON, settle, renderNav, renderFooter, teamColors, teamName, teamLogo } from "./app.js";
+import { TEAMS, NEWS_PROXY, el, fetchJSON, settle, renderNav, renderFooter, teamColors, teamName, teamLogo, standingsAt } from "./app.js";
 
 const $ = (id) => document.getElementById(id);
 const FAV_KEY = "kbo-news-favorites";
-const state = { status: null, teams: null, errors: {}, tab: "all", favs: new Set(), news: new Map() };
+const state = { status: null, teams: null, schedule: null, errors: {}, tab: "all", sort: "sim", favs: new Set(), news: new Map() };
 const PAGE = 10;        // 구단 탭에서 한 번에 받는 기사 수
 const MAX_START = 91;   // 프록시가 허용하는 마지막 시작 위치(start ≤ 100) → 최대 100개
 
@@ -108,17 +108,17 @@ function newsList(code, data) {
 }
 
 /** 구단 탭: 10개씩 더 받아 같은 목록 뒤에 잇는다(네이버가 준 순서 그대로). */
-function moreButton(code, list, next) {
+function moreButton(code, list, next, sort = "sim") {
   const btn = el("button", { class: "btn btn--secondary news-more", type: "button" }, "기사 더 보기");
   btn.addEventListener("click", async () => {
     btn.disabled = true;
     btn.textContent = "불러오는 중…";
     try {
-      const data = await loadNews(code, PAGE, { start: next });
+      const data = await loadNews(code, PAGE, { start: next, sort });
       const items = data?.items ?? [];
       list.append(...items.map(newsItem));
       if (items.length < PAGE || next + PAGE > MAX_START) btn.remove();
-      else { btn.replaceWith(moreButton(code, list, next + PAGE)); }
+      else { btn.replaceWith(moreButton(code, list, next + PAGE, sort)); }
     } catch {
       btn.disabled = false;
       btn.textContent = "다시 시도";
@@ -142,6 +142,39 @@ function leagueSection() {
 
 // ---------- 카드 ----------
 
+/** 구단 탭 머리: 그 시즌 순위·전적과 최근 5경기 (seasons/schedule_{시즌}.json, 이번 시즌 페이지와 같은 계산). */
+function teamStrip(code) {
+  const sched = state.schedule;
+  if (!sched?.length) return null;
+  const last = sched.filter((g) => g.status === "FINAL").at(-1)?.date;
+  if (!last) return null;
+  const end = new Date(`${last}T00:00:00+09:00`); end.setDate(end.getDate() + 1);
+  const row = standingsAt(sched, end.toISOString().slice(0, 10)).find((r) => r.code === code);
+  const recent = sched.filter((g) => g.status === "FINAL" && g.home_score != null && (g.home === code || g.away === code)).slice(-5);
+  if (!row && !recent.length) return null;
+  const season = String(last).slice(0, 4);
+  return el("div", { class: "team-strip" }, [
+    ...(row ? [el("p", { class: "team-strip__rank" }, [el("b", { class: "num" }, `${row.rank}위`),
+      ` ${season} 정규시즌 ${row.w}승 ${row.l}패 ${row.d}무 · 승률 ${row.pct.toFixed(3).replace(/^0/, "")}`])] : []),
+    ...(recent.length ? [el("span", { class: "team-strip__lbl" }, recent.some((g) => !g.regular) ? "최근 5경기 (가을야구 포함)" : "최근 5경기"),
+      el("ol", { class: "team-strip__recent", "aria-label": "최근 5경기" }, recent.map((g) => {
+      const home = g.home === code, mine = home ? g.home_score : g.away_score, opp = home ? g.away_score : g.home_score;
+      const res = mine > opp ? "승" : mine < opp ? "패" : "무";
+      return el("li", { class: `team-strip__g is-${res === "승" ? "w" : res === "패" ? "l" : "d"}`, title: `${g.date} ${teamName(g.away)} ${g.away_score} : ${g.home_score} ${teamName(g.home)}` },
+        [el("b", {}, res), el("span", {}, `${home ? "vs" : "@"} ${teamName(home ? g.away : g.home)} ${mine}:${opp}`)]);
+    }))] : []),
+  ]);
+}
+
+/** 구단 탭 정렬: 관련도순(기본) / 최신순. 주소의 ?sort=date로도 연다. */
+function sortSwitch(code) {
+  const btn = (key, label) => el("button", {
+    class: `news-sort__btn${state.sort === key ? " is-on" : ""}`, type: "button", "aria-pressed": String(state.sort === key),
+    onclick: () => { state.sort = key; const u = new URL(location.href); if (key === "date") u.searchParams.set("sort", "date"); else u.searchParams.delete("sort"); history.replaceState(null, "", u); render(); },
+  }, label);
+  return el("div", { class: "news-sort", role: "group", "aria-label": `${teamName(code)} 기사 정렬` }, [btn("sim", "관련도순"), btn("date", "최신순")]);
+}
+
 function teamCard(code, big) {
   const c = teamColors(code);
   const fav = state.favs.has(code);
@@ -156,6 +189,7 @@ function teamCard(code, big) {
         onclick: () => toggleFav(code),
       }, fav ? "★" : "☆"),
     ]),
+    ...(big ? [teamStrip(code), NEWS_PROXY ? sortSwitch(code) : null].filter(Boolean) : []),
     body,
     el("footer", { class: "news-card__foot" }, [
       NEWS_PROXY ? el("span", { class: "news-card__src" }, "네이버 검색결과") : null,
@@ -166,11 +200,11 @@ function teamCard(code, big) {
     body.append(el("p", { class: "news-card__note" }, "기사 목록 연결을 준비하고 있습니다. 아래 링크로 최신 기사를 볼 수 있습니다."));
   } else {
     body.append(el("div", { class: "skeleton", style: "height:96px" }));
-    loadNews(code, big ? PAGE : 3)
+    loadNews(code, big ? PAGE : 3, { sort: big ? state.sort : "sim" })
       .then((data) => {
         const list = newsList(code, data);
         body.replaceChildren(list);
-        if (big && list.tagName === "OL" && (data?.items?.length ?? 0) === PAGE) body.append(moreButton(code, list, PAGE + 1));
+        if (big && list.tagName === "OL" && (data?.items?.length ?? 0) === PAGE) body.append(moreButton(code, list, PAGE + 1, state.sort));
       })
       .catch(() => body.replaceChildren(el("p", { class: "empty" }, "기사 목록을 불러오지 못했습니다. 아래 링크로 볼 수 있습니다.")));
   }
@@ -208,7 +242,9 @@ function render() {
   const title = $("news-title"), lead = $("news-board-lead");
   if (TEAMS[state.tab]) {
     title.textContent = `${teamName(state.tab, { full: true })} 소식`;
-    lead.textContent = NEWS_PROXY ? "이 구단과 관련이 큰 기사부터 네이버 검색 결과 그대로 보여 줍니다(정확도순). 아래에서 10개씩 더 볼 수 있습니다." : "";
+    lead.textContent = NEWS_PROXY ? (state.sort === "date"
+      ? "가장 최근 기사부터 네이버 검색 결과 그대로 보여 줍니다(최신순 — 다른 구단 기사가 섞일 수 있습니다). 아래에서 10개씩 더 볼 수 있습니다."
+      : "이 구단과 관련이 큰 기사부터 네이버 검색 결과 그대로 보여 줍니다(관련도순). 아래에서 10개씩 더 볼 수 있습니다.") : "";
     body.replaceChildren(el("div", { class: "news-grid news-grid--one" }, teamCard(state.tab, true)));
     return;
   }
@@ -230,7 +266,11 @@ async function init() {
   state.favs = loadFavs();
   const q = new URLSearchParams(location.search).get("team");
   state.tab = TEAMS[q] ? q : q === "fav" ? "fav" : "all";
+  state.sort = new URLSearchParams(location.search).get("sort") === "date" ? "date" : "sim";
   await Promise.all([settle(state, "status", fetchJSON("status.json", { fresh: true })), settle(state, "teams", fetchJSON("teams.json"))]);
+  // 구단 머리 줄(순위·최근 경기): teams.json의 가장 최근 시즌 일정
+  const season = Math.max(0, ...(state.teams?.teams ?? []).map((r) => Number(r.season) || 0));
+  if (season) await settle(state, "schedule", fetchJSON(`seasons/schedule_${season}.json`, { fresh: true }));
   renderFooter(state.status);
   render();
 }

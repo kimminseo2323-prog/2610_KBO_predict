@@ -64,3 +64,18 @@
 @media (max-width: 767px) { .league-news .news-list { columns: 1; } }
 /* 구단 탭: 더 보기 */
 .news-more { margin-top: var(--sp-12); }
+
+/* 구단 탭 머리 줄: 순위·전적 + 최근 5경기 */
+.team-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: var(--sp-8) var(--sp-16); border-bottom: 1px solid var(--hairline); }
+.team-strip__rank { font-size: 14px; color: var(--body); }
+.team-strip__rank b { font-family: var(--font-num); font-style: italic; font-size: 26px; font-weight: 800; color: var(--ink); margin-right: 4px; }
+.team-strip__lbl { font-size: 12px; font-weight: 700; color: var(--muted); margin-right: -12px; }
+.team-strip__recent { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.team-strip__g { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--body); padding: 2px 8px 2px 2px; background: var(--inset, #f3f4f6); }
+.team-strip__g b { display: inline-grid; place-items: center; width: 20px; height: 20px; font-size: 12px; color: #fff; background: var(--muted); }
+.team-strip__g.is-w b { background: var(--ink); }
+/* 정렬 전환 */
+.news-sort { display: inline-flex; margin: var(--sp-12) var(--sp-16) 0; outline: 1px solid var(--hairline); }
+.news-sort__btn { min-height: 36px; padding: 0 14px; border: 0; background: var(--canvas); color: var(--body); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.news-sort__btn.is-on { background: var(--ink); color: #fff; }
+.news-sort__btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }

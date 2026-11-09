@@ -27,6 +27,30 @@ export const STADIUMS = {
   Ulsan: "울산", Cheongju: "청주",
 };
 
+/**
+ * 그 시즌 일정(seasons/schedule_{시즌}.json)으로 on('YYYY-MM-DD') 경기 전까지의 정규시즌 순위.
+ * 승률 = 승 / (승 + 패)(무승부 제외), 같으면 승수 → 코드 순. 이번 시즌 순위표와 소식 구단 머리가 같이 쓴다.
+ * 각 행: {code, w, l, d, last[](W/L/D 순서대로), rank, pct, gb, l10}.
+ */
+export function standingsAt(schedule, on) {
+  const rec = new Map();
+  for (const g of schedule) {
+    if (!g.regular || g.status !== "FINAL" || g.date >= on || g.home_score == null) continue;
+    for (const [t, me, op] of [[g.home, g.home_score, g.away_score], [g.away, g.away_score, g.home_score]]) {
+      const r = rec.get(t) ?? { code: t, w: 0, l: 0, d: 0, last: [] };
+      const x = me > op ? "W" : me < op ? "L" : "D";
+      r[x === "W" ? "w" : x === "L" ? "l" : "d"] += 1;
+      r.last.push(x);
+      rec.set(t, r);
+    }
+  }
+  const pct = (r) => r.w / Math.max(r.w + r.l, 1);
+  const rows = [...rec.values()].sort((a, b) => pct(b) - pct(a) || b.w - a.w || a.code.localeCompare(b.code));
+  const top = rows[0];
+  return rows.map((r, i) => ({ ...r, rank: i + 1, pct: pct(r), gb: top ? ((top.w - r.w) + (r.l - top.l)) / 2 : 0,
+    l10: r.last.slice(-10).filter((x) => x === "W").length }));
+}
+
 /** 메뉴 6개 — 순서·이름 고정 (check_site.py의 NAV와 같다). */
 export const NAV = [
   ["news.html", "소식"],

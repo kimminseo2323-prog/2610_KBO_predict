@@ -15,7 +15,7 @@
 import {
   IS_LOCAL, TEAMS, TYPE_COLORS, el, fetchJSON, fetchCSV, settle, fin, fmtPct, fmtRate3, fmtInnings, fmtDate, fmtKST,
   teamName, typeColor, verdictPill, winnerText, renderNav, renderFooter, showError, ballSVG, countUp,
-  STADIUMS, teamColors, teamChip, teamText, favState, typeSummaryTable, fmtProb, fmtDateShort, fmtScore, teamLogo, factorKey, factorLabel, factorHelp, typeBlurb,
+  STADIUMS, standingsAt, teamColors, teamChip, teamText, favState, typeSummaryTable, fmtProb, fmtDateShort, fmtScore, teamLogo, factorKey, factorLabel, factorHelp, typeBlurb,
 } from "./app.js";
 import { barChart, scatter } from "./charts.js";
 import { whatifProb } from "./whatif.js";
@@ -384,25 +384,6 @@ function renderSeason() {
 // ---------- 순위표 · 다가오는 경기 (이번 시즌) ----------
 // seasons/schedule_{시즌}.json(그 시즌 모든 경기)으로 보고 있는 날짜 기준 순위와 앞으로 7일 일정을 계산한다.
 
-function standingsAt(schedule, on) {
-  const rec = new Map();
-  for (const g of schedule) {
-    if (!g.regular || g.status !== "FINAL" || g.date >= on || g.home_score == null) continue;
-    for (const [t, me, op] of [[g.home, g.home_score, g.away_score], [g.away, g.away_score, g.home_score]]) {
-      const r = rec.get(t) ?? { code: t, w: 0, l: 0, d: 0, last: [] };
-      const x = me > op ? "W" : me < op ? "L" : "D";
-      r[x === "W" ? "w" : x === "L" ? "l" : "d"] += 1;
-      r.last.push(x);
-      rec.set(t, r);
-    }
-  }
-  const pct = (r) => r.w / Math.max(r.w + r.l, 1);
-  const rows = [...rec.values()].sort((a, b) => pct(b) - pct(a) || b.w - a.w || a.code.localeCompare(b.code));
-  const top = rows[0];
-  return rows.map((r, i) => ({ ...r, rank: i + 1, pct: pct(r), gb: top ? ((top.w - r.w) + (r.l - top.l)) / 2 : 0,
-    l10: r.last.slice(-10).filter((x) => x === "W").length }));
-}
-
 /** 보고 있는 날짜의 시즌 일정(그 시즌 모든 경기). 처음이면 받아 오고, 다 받으면 순위표·다가오는 경기를 다시 그린다. */
 function scheduleFor(on) {
   const season = Number(String(on ?? "").slice(0, 4));
@@ -433,7 +414,7 @@ function renderStandings() {
     el("thead", {}, el("tr", {}, [["순위"], ["팀"], ["승-패-무", "num"], ["승률", "num"], ["게임차", "num"], ["최근 10", "num"]].map(([t, c]) => el("th", { scope: "col", class: c ?? null }, t)))),
     el("tbody", {}, rows.map((r) => el("tr", { class: `${r.rank === 5 ? "is-cut " : ""}${today.has(r.code) ? "is-today" : ""}`.trim() || null }, [
       el("td", { class: "num" }, String(r.rank)),
-      el("td", {}, el("span", { class: "stand__team" }, [teamLogo(r.code, { size: "sm" }), teamName(r.code)])),
+      el("td", {}, el("a", { class: "stand__team", href: `news.html?team=${r.code}`, title: `${teamName(r.code)} 소식 보기` }, [teamLogo(r.code, { size: "sm" }), teamName(r.code)])),
       el("td", { class: "num" }, `${r.w}-${r.l}-${r.d}`),
       el("td", { class: "num" }, r.pct.toFixed(3).replace(/^0/, "")),
       el("td", { class: "num" }, r.gb ? r.gb.toFixed(1) : "—"),

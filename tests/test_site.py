@@ -853,7 +853,11 @@ def test_seasons_page_and_this_season_cards():
     js = (ASSETS / "seasons.js").read_text(encoding="utf-8")
     assert 'fetchJSON(`seasons/${season}.json`)' in js and "?season=" in js and "postseasonFate" in js
     home = (ASSETS / "home.js").read_text(encoding="utf-8")
-    assert "seasons/schedule_${season}.json" in home and "function standingsAt" in home
+    app = (ASSETS / "app.js").read_text(encoding="utf-8")
+    assert "seasons/schedule_${season}.json" in home and "export function standingsAt" in app and "standingsAt," in home
+    assert "news.html?team=${r.code}" in home                                              # 순위표 팀 → 그 구단 소식
+    news = (ASSETS / "news.js").read_text(encoding="utf-8")
+    assert "function teamStrip" in news and "function sortSwitch" in news and 'get("sort") === "date"' in news
     assert "href: `seasons.html?season=${yr}`" in home and "season_result" in home and "const endedSeason" in home
     idx = BeautifulSoup((SITE / "index.html").read_text(encoding="utf-8"), "html.parser")
     assert idx.title.get_text().startswith("이번 시즌") and idx.find(id="season") is not None
