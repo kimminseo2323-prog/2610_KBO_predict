@@ -1,5 +1,5 @@
 """되감기(rewind) JSON: 누수 없음 · 결과/전망 · 평가 모델과 일치 · 결정성 · 이어 쌓은 상태 == 처음부터 만든 상태.
-커밋된 data/raw(2025·2026)와 models/report-2026.pkl · team-2026.pkl을 쓴다."""
+커밋된 data/raw(2025·2026)와 models/report-2026.pkl을 쓴다 (전망도 같은 모델)."""
 import copy
 import json
 from pathlib import Path
@@ -28,7 +28,7 @@ def real_small():
         "games": raw_store.load_games(SEASON),
         "boxscores": raw_store.load_boxscores(SEASON),
         "bundle": load_bundle(Path("models/report-2026.pkl")),
-        "team_bundle": load_bundle(Path("models/team-2026.pkl")),
+        "team_bundle": None,  # 전망도 예측 모델(report-2026)로 — outlook_eval.py
         "starter_types": starter_types(CLUSTERS_PKL, SEASON),
     }
 
@@ -67,7 +67,7 @@ def test_rewind_day_ignores_future_games(real_small, day):
 
 def test_rewind_day_has_results_and_outlook(day):
     assert day["mode"] == "rewind" and day["date"] == DAY
-    assert day["model_version"] == "report-2026" and day["team_model_version"] == "team-2026"
+    assert day["model_version"] == "report-2026" and day["outlook_model_version"] == "report-2026"
     assert day["starter_source"] == STARTER_SOURCE
     assert day["generated_at"] == META["generated_at"] and day["commit_sha"] == META["commit_sha"]
     ids = [g["game_id"] for g in day["games"]]

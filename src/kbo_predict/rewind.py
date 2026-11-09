@@ -9,7 +9,7 @@
   예측 모델은 평가용 고정 모델 report-2026(2015~2024 학습)이다 — 2026은 학습에 안 쓴 시험 시즌이라
   되감기 정확도가 model_report.json의 시험 정확도와 같아야 한다.
 - 선발은 박스스코어의 실제 선발(투구 순서 1번)을 쓴다. 학습 피처(features.build_training_frame)도 같은 선발을 쓴다.
-- outlook: 그날 경기 전 기준 가을야구 확률 카드(simulate.outlook_for — 팀 모델 team-2026).
+- outlook: 그날 경기 전 기준 가을야구 확률 카드(simulate.outlook_for — 예측과 같은 report-2026, 미래 경기는 선발 '모름').
 
 적중(correct) 판정: 반올림 전 P(홈 승) ≥ 0.5면 홈 승 예측 — 학습 평가(train_win._correct)와 같은 규칙.
 공개 칸 home_win_prob(소수 4자리)로 판정하지 않는다: 0.49997(원정 예측)이 0.5000으로 보이는 경기가 있다(13572).
@@ -105,17 +105,18 @@ def _result(game: dict, p_raw: float) -> dict:
 
 
 def day_payload(season: int, on: str, *, games: list[dict], boxscores: dict[int, dict], bundle: dict,
-                team_bundle: dict, starter_types: dict[int, dict] | None = None, meta: dict,
+                team_bundle: dict | None = None, starter_types: dict[int, dict] | None = None, meta: dict,
                 state: LeagueState | None = None, ps_config=None) -> dict:
     """on 날짜의 되감기 파일 내용.
     games = 그 시즌 경기 전부(raw_store.load_games), boxscores = 그 시즌 박스스코어(raw_store.load_boxscores).
-    bundle = 예측 모델(report-2026), team_bundle = 선발 없는 팀 모델(team-2026, 전망용).
+    bundle = 예측 모델(report-2026), team_bundle = 전망에 쓸 모델 — 없으면 bundle(2026-11-09부터 기본, outlook_eval.py).
     starter_types = 투수 id -> 직전 시즌 유형 {"id", "name"} (표시용, 없으면 None).
     meta = {"generated_at", "commit_sha", "run_url"(선택)}.
     state = on 경기 직전 상태. 없으면 state_before(season, on, games=games, boxscores=boxscores)로 만든다.
     정규시즌 FINAL·CANCELED 경기를 game_id 순으로 담는다 (day_rows). 취소 경기는 result = None."""
     if state is None:
         state = state_before(season, on, games=games, boxscores=boxscores)
+    team_bundle = bundle if team_bundle is None else team_bundle
     entries = []
     for g in sorted((g for g in day_rows(games, season) if g["date"] == on), key=lambda g: g["game_id"]):
         if g["status"] == "CANCELED":
@@ -138,7 +139,7 @@ def day_payload(season: int, on: str, *, games: list[dict], boxscores: dict[int,
         "date": on,
         "mode": MODE,
         "model_version": bundle["version"],
-        "team_model_version": team_bundle["version"],
+        "outlook_model_version": team_bundle["version"],
         "starter_source": STARTER_SOURCE,
         "commit_sha": meta.get("commit_sha"),
         "run_url": meta.get("run_url"),
@@ -162,7 +163,7 @@ def write_day(path: Path, payload: dict) -> None:
     _write_json(path, payload, indent=None, sort_keys=True, separators=(",", ":"))
 
 
-def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict, meta: dict,
+def build_season(season: int, *, out_dir, bundle: dict, team_bundle: dict | None = None, meta: dict,
                  dates: list[str] | None = None, starter_types: dict[int, dict] | None = None,
                  ps_config=None) -> dict:
     """season의 되감기 파일을 out_dir/{season}/{date}.json으로 쓰고 out_dir/{season}/index.json을 돌려준다.

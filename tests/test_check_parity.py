@@ -177,7 +177,7 @@ def test_default_paths_are_repo_relative(tmp_path, monkeypatch):
     monkeypatch.setattr(cp, "render", lambda table: 0)
     assert cp.main(["--quick"]) == 0
     assert seen["cwd"] == ROOT and seen["out"] == ROOT / "artifacts" / "parity"
-    for p in (build_rewind.OUT_DIR, build_rewind.REPORT_PKL, build_rewind.TEAM_PKL, build_rewind.CLUSTERS_DEFAULT):
+    for p in (build_rewind.OUT_DIR, build_rewind.REPORT_PKL, build_rewind.CLUSTERS_DEFAULT):
         assert p.is_absolute() and ROOT in p.parents
 
 

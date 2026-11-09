@@ -22,6 +22,7 @@ NOTEBOOKS = {
     "07_그리드서치와_오토ML.ipynb": "automl.py",
     "08_여러_시즌_시험.ipynb": "backtest.py",
     "09_가을야구_성적.ipynb": "postseason_eval.py",
+    "10_전망_모델_합치기.ipynb": "outlook_eval.py",
 }
 DEFINES = re.compile(r"^\s*(def|class)\s", re.MULTILINE)  # 노트북에서 함수·클래스를 새로 만들지 않는다 (로직은 src/에)
 

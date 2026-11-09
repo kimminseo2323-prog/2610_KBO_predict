@@ -17,7 +17,7 @@ import { barChart, calibrationChart, enableTips, lineChart } from "./charts.js";
 
 const $ = (id) => document.getElementById(id);
 
-const state = { report: null, history: null, status: null, backtest: null, tuning: null, grid: null, automl: null, postseason: null, errors: {} };
+const state = { report: null, history: null, status: null, backtest: null, tuning: null, grid: null, automl: null, postseason: null, outlookModel: null, errors: {} };
 
 // ---------- 작은 도우미 ----------
 
@@ -222,18 +222,68 @@ function renderPostseason() {
   const ks = r.series.filter((s) => s.season === ts).at(-1);
   const tIn = dev.tests.in_state_vs_frozen, tTeam = dev.tests.team_vs_frozen;
   const verdict = el("p", { class: "ps-verdict" }, [
-    `${ts} ${ks.name} 전에 지금 방식은 ${teamName(ks.teams[0])} 쪽을 ${Math.round(ks.p_first.frozen * 100)}%로, 시리즈 전망에 쓰는 팀 모델은 ${teamName(ks.teams[1])} 쪽을 ${Math.round((1 - ks.p_first.team) * 100)}%로 봤습니다. 결과는 ${teamName(ks.winner)} ${Math.max(...ks.wins)}승 ${Math.min(...ks.wins)}패였습니다. `,
+    `${ts} ${ks.name} 전에 지금 방식은 ${teamName(ks.teams[0])} 쪽을 ${Math.round(ks.p_first.frozen * 100)}%로, 그때 시리즈 전망에 쓰던 팀 모델은 ${teamName(ks.teams[1])} 쪽을 ${Math.round((1 - ks.p_first.team) * 100)}%로 봤습니다. 결과는 ${teamName(ks.winner)} ${Math.max(...ks.wins)}승 ${Math.min(...ks.wins)}패였습니다. `,
     `하지만 ${d0}~${d1} 가을야구 ${dev.n}경기에서는 지금 방식(${fmtPct(dev.frozen.accuracy, 1)})이 팀 모델(${fmtPct(dev.team.accuracy, 1)})보다 많이 맞혔고, 차이는 우연과 구분되지 않습니다(${pText(tTeam.mcnemar_p)}). `,
     el("b", {}, r.decision.adopt_in_state ? "가을야구 결과를 반영하는 방식으로 바꿉니다." : "그래서 지금 방식을 유지합니다."),
     ` 가을야구 결과를 전력에 넣어 가며 예측하는 방식도 확률 오차가 줄지 않았습니다(${pText(tIn.logloss_p)}).`,
   ]);
   body.replaceChildren(head, cmp, verdict, games,
     el("details", { class: "more" }, [el("summary", {}, "왜 두 계산이 엇갈렸고, 이 시험은 믿을 만한가요?"), el("ul", {}, [
-      el("li", {}, "경기별 예측(지금 방식)은 Elo 전력 점수를 크게 봅니다. Elo는 여러 시즌 경기 결과로 쌓은 점수라 정규시즌을 압도한 팀을 꾸준히 높게 봅니다. 시리즈 전망의 팀 모델은 Elo와 선발을 쓰지 않고 최근 흐름·안방 승률 같은 팀 기록만 봅니다. 그래서 두 계산이 다른 팀을 고를 수 있습니다."),
+      el("li", {}, "경기별 예측(지금 방식)은 Elo 전력 점수를 크게 봅니다. Elo는 여러 시즌 경기 결과로 쌓은 점수라 정규시즌을 압도한 팀을 꾸준히 높게 봅니다. 그때 시리즈 전망에 쓰던 팀 모델은 Elo와 선발을 쓰지 않고 최근 흐름·안방 승률 같은 팀 기록만 봤습니다. 그래서 두 계산이 다른 팀을 골랐고, 이후 전망을 경기 예측 모델로 합쳤습니다(아래 '전망 모델 하나로 합치기')."),
       el("li", {}, "가을야구는 한 해 12~16경기뿐이라 여러 해를 합쳐도 약 115경기입니다. 몇 %p 차이는 우연과 구분하기 어렵고, 한 시리즈의 결과로 어느 방식이 낫다고 말할 수 없습니다."),
       el("li", {}, "가을야구 결과를 반영하는 방식에서 휴식일 차이는 지금 방식과 같은 값을 썼습니다. 한국시리즈 직행 팀은 20일 넘게 쉬는데, 정규시즌에는 이런 휴식이 없어 모델이 그 값을 지나치게 크게 해석했기 때문입니다(처음 계산에서 직행 팀 우세가 79%까지 커졌습니다)."),
       el("li", {}, `채택 규칙(${d0}~${d1} 확률 오차가 낮고 p < ${ALPHA})은 ${ts} 가을야구 결과를 본 뒤에 정했습니다. 그 사실을 숨기지 않으려고 여기 적습니다.`),
       el("li", {}, `"다시 계산"은 그 시즌보다 앞선 시즌들로만 배운 모델의 결과이고, "실제로 공개한 예측"은 그때 사이트에 올린 기록입니다. 매일 예측은 ${fmtDate(live.first_date)}부터라 앞선 경기는 공개 기록이 없습니다.`),
+    ])]),
+  );
+}
+
+// ---------- 전망 모델 하나로 합치기 (outlook_model_report.json) ----------
+
+function renderOutlookModel() {
+  const body = $("outlook-model-body");
+  const r = state.outlookModel;
+  if (!r) {
+    showError(body, state.errors.outlookModel, async () => { await settle(state, "outlookModel", fetchJSON("outlook_model_report.json")); renderOutlookModel(); });
+    return;
+  }
+  const dev = r.pooled.dev, test = r.pooled.test, ss = r.series_summary.all;
+  const d0 = r.protocol.dev_seasons[0], d1 = r.protocol.dev_seasons.at(-1), ts = r.protocol.test_season;
+  const pick = r.chosen, old = "team";
+  const vsOld = r.tests_dev[pick];
+  $("outlook-model-lead").textContent = `시리즈 전망과 가을야구 확률의 남은 경기는 선발을 모릅니다. 그때 쓸 모델 다섯 개를 ${d0}~${ts} 경기 ${fmtInt(r.pooled.dev.n + r.pooled.test.n)}개(선발을 가린 채)와 가을야구 시리즈 ${ss.n}개로 비교했습니다.`;
+  const kpi = (big, small, lead = false) => el("div", { class: `bt-kpi${lead ? " bt-kpi--lead" : ""}` }, [el("b", {}, big), el("span", {}, small)]);
+  const head = el("div", { class: "bt-head" }, [
+    kpi("하나로", `고른 것: ${r.candidates[pick]}`, true),
+    kpi(`−${(vsOld.logloss_gain).toFixed(4)}`, `예전 전망 모델보다 확률 오차가 줄었습니다 (${pText(vsOld.logloss_p)})`),
+    kpi(`${ss[pick]} / ${ss.n}`, `가을야구 시리즈 승자를 시작 전에 맞힌 수 (가장 많음)`),
+  ]);
+  const sub = (main, s) => [main, el("span", { class: "th-sub" }, s)];
+  const rows = Object.keys(r.candidates).map((n) => el("tr", { class: n === pick ? "is-chosen" : null }, [
+    el("th", { scope: "row" }, [r.candidates[n], n === pick ? el("span", { class: "pill pill--sm pill--ink holdout__tag" }, "고른 것")
+      : n === old ? el("span", { class: "pill pill--sm pill--muted holdout__tag" }, "예전") : null]),
+    el("td", { class: "num" }, fmtPct(dev[n].accuracy, 1)),
+    el("td", { class: "num" }, num(dev[n].log_loss, 4)),
+    el("td", { class: "num" }, fmtPct(test[n].accuracy, 1)),
+    el("td", { class: "num" }, `${ss[n]} / ${ss.n}`),
+  ]));
+  const cmp = el("div", { class: "inset ps-table" }, table("선발 모를 때 쓸 모델 다섯 개",
+    [["모델"], [`${d0}~${d1} 적중률`, "num"], [sub("확률 오차", "log loss"), "num"], [`${ts} 적중률`, "num"], [sub("시리즈 승자", "시작 전 예상"), "num"]],
+    rows, "holdout-table"));
+  const ks = r.ks_2026[0], ub = r.unified_vs_best;
+  const verdict = el("p", { class: "ps-verdict" }, [
+    `예전 전망 모델(팀 기록만)은 다섯 후보 중 확률 오차가 가장 컸습니다. 가장 작은 것은 ${r.candidates[r.best_dev]}이었지만 경기 예측 모델(v0.3)을 그대로 쓰는 것과의 차이는 우연과 구분되지 않았습니다(${pText(ub.logloss_p)}). `,
+    el("b", {}, "미리 정한 규칙대로 전망도 경기 예측과 같은 모델 하나로 합쳤습니다."),
+    " 이제 같은 경기를 두 모델이 다르게 보는 일이 없고, 오늘 경기와 남은 경기의 차이는 선발 발표 여부뿐입니다.",
+  ]);
+  const ksRow = el("p", { class: "ps-verdict" }, [
+    `정직하게 적으면, 합친 모델이었다면 ${fmtDate(ks.date)} 한국시리즈 시작 전 전망은 ${teamName(ks.teams[0])} 우승 ${fmtPct(ks.unified[0], 0)}로 나왔을 것입니다(예전 모델은 ${teamName(ks.teams[1])} ${fmtPct(ks.old_team[1], 0)}, 사실상 반반). 실제 결과는 ${teamName(ks.teams[1])} 우승이었습니다. 한 시리즈는 운에 크게 흔들리므로 모델은 여러 시즌 성적으로 골랐습니다.`,
+  ]);
+  body.replaceChildren(head, cmp, verdict, ksRow,
+    el("details", { class: "more" }, [el("summary", {}, "어떻게 시험했나요?"), el("ul", {}, [
+      el("li", {}, "시즌마다 그보다 앞선 시즌들로만 학습했습니다. 정규시즌 경기는 실제 선발을 가리고 '선발 모름'으로 넣어, 미래 경기를 예측하는 전망과 같은 조건으로 채점했습니다."),
+      el("li", {}, `고르는 규칙은 계산 전에 정했습니다. ${d0}~${d1} 확률 오차가 가장 작은 후보를 찾고, 경기 예측 모델을 그대로 쓰는 안이 그보다 확실히 나쁘지 않으면(p ≥ ${ALPHA}) 하나로 합칩니다. 같은 성적이면 모델이 하나인 쪽이 읽기 쉽고 관리하기 쉽기 때문입니다.`),
+      el("li", {}, `"경기 예측과 엇갈린 비율"은 선발을 아는 경기 예측과 다른 팀을 고른 경기의 비율입니다. 합친 뒤에도 0이 아닌 이유는 선발 정보 때문입니다(${d0}~${d1} ${fmtPct(dev[pick].disagree_with_game_model, 0)}). 예전 모델은 ${fmtPct(dev[old].disagree_with_game_model, 0)}였습니다.`),
     ])]),
   );
 }
@@ -296,12 +346,13 @@ async function init() {
   await Promise.all([loadReport(), loadHistory(), settle(state, "status", fetchJSON("status.json", { fresh: true })),
     settle(state, "backtest", fetchJSON("backtest_report.json")), settle(state, "tuning", fetchJSON("tuning_report.json")),
     settle(state, "grid", fetchJSON("tuning_grid_report.json")), settle(state, "automl", fetchJSON("automl_report.json")),
-    settle(state, "postseason", fetchJSON("postseason_report.json"))]);
+    settle(state, "postseason", fetchJSON("postseason_report.json")), settle(state, "outlookModel", fetchJSON("outlook_model_report.json"))]);
   renderFooter(state.status);
   renderReport();
   renderLive();
   renderBacktest();
   renderPostseason();
+  renderOutlookModel();
   renderSearch();
   bindGlossary();
 }

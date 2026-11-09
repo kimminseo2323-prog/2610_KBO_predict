@@ -57,7 +57,7 @@ MODELS = ("frozen", "in_state", "team")
 CANDIDATES = {
     "frozen": "지금 방식 (v0.3, 정규시즌 끝 전력으로 고정)",
     "in_state": "가을야구 결과 반영 (v0.3, 가을 경기로 전력 갱신)",
-    "team": "시리즈 전망용 팀 모델 (선발·Elo 없음)",
+    "team": "예전 시리즈 전망 모델 (팀 기록만, 선발·Elo 없음)",
 }
 RULES = {"home": "항상 홈팀", "better_record": "정규시즌 승률이 높은 팀"}
 

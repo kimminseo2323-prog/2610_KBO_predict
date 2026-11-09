@@ -317,7 +317,7 @@ def check_rewind(t: Table, out: Path, models: dict) -> None:
 
     rewind_dir = out / "rewind"
     shutil.rmtree(rewind_dir, ignore_errors=True)  # 지난 실행의 파일이 섞이지 않게 빈 폴더에서
-    build_season(REWIND_SEASON, out_dir=rewind_dir, bundle=models["report"], team_bundle=models["team"],
+    build_season(REWIND_SEASON, out_dir=rewind_dir, bundle=models["report"],  # 전망도 같은 모델 (outlook_eval.py)
                  meta={"generated_at": None, "commit_sha": None, "run_url": None}, dates=None,
                  starter_types=starter_types(CLUSTERS_PKL, REWIND_SEASON), ps_config=load_postseason(REWIND_SEASON))
     committed_dir, regen_dir = PUBLIC / "rewind" / str(REWIND_SEASON), rewind_dir / str(REWIND_SEASON)

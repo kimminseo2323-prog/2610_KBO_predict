@@ -123,7 +123,7 @@
 .report-bento > .r-calibration { grid-column: span 5; }
 .report-bento > .r-importance { grid-column: span 5; }
 .report-bento > .r-variants { grid-column: span 7; }
-.report-bento > .r-clusters, .report-bento > .r-live, .report-bento > .r-backtest, .report-bento > .r-search, .report-bento > .r-postseason { grid-column: 1 / -1; }
+.report-bento > .r-clusters, .report-bento > .r-live, .report-bento > .r-backtest, .report-bento > .r-search, .report-bento > .r-postseason, .report-bento > .r-outlook-model { grid-column: 1 / -1; }
 
 /* 표 공통: 행 머리(th scope=row)는 본문 글자로 */
 .report-bento .table tbody th {

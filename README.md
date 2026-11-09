@@ -7,7 +7,7 @@
 
 KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 공개 파일로 기록하는 포트폴리오 프로젝트입니다. 선수 유형 클러스터링을 더해 한 저장소에서 예측과 분석을 함께 다룹니다.
 
-**현재 버전: 승패 모델 v0.3 + 선수 유형 `clusters-2026b` + 팀 모델 `team-2026` + 사이트 (5단계까지 완료)**. 2015~2026 12개 시즌으로 경기 전 피처 27개(팀 19 + 선발 7 + Elo 전력 점수 1)를 만들고, 로지스틱 회귀(L1, C=0.03)와 LightGBM을 2015~2024로 학습해 2025로 고른 뒤, 학습·선택에 쓰지 않은 2026 시즌으로 평가했습니다. 2026 적중률은 61.0%이고, 2026에 앞서 정해 둔 비교 대상 "선발 평균자책점 낮은 팀" 규칙보다 +4.3%p입니다(McNemar p = 0.043). 2018~2026 아홉 시즌을 "앞 시즌들로만 학습해 그 시즌 예측"으로 다시 시험하면 6,328경기 57.9%로 같은 규칙보다 +3.3%p입니다(p < 0.001). 매일 예측에는 그날 발표된 예고 선발투수를 넣습니다. v0.1(팀 피처 3개)은 v0.2(L2 로지스틱, 피처 26개)로, v0.2는 2026-11에 v0.3으로 교체되었습니다(아래 "여러 시즌 시험과 v0.3").
+**현재 버전: 승패 모델 v0.3(경기 예측과 시리즈·가을야구 전망을 한 모델로) + 선수 유형 `clusters-2026b` + 사이트 (5단계까지 완료)**. 2015~2026 12개 시즌으로 경기 전 피처 27개(팀 19 + 선발 7 + Elo 전력 점수 1)를 만들고, 로지스틱 회귀(L1, C=0.03)와 LightGBM을 2015~2024로 학습해 2025로 고른 뒤, 학습·선택에 쓰지 않은 2026 시즌으로 평가했습니다. 2026 적중률은 61.0%이고, 2026에 앞서 정해 둔 비교 대상 "선발 평균자책점 낮은 팀" 규칙보다 +4.3%p입니다(McNemar p = 0.043). 2018~2026 아홉 시즌을 "앞 시즌들로만 학습해 그 시즌 예측"으로 다시 시험하면 6,328경기 57.9%로 같은 규칙보다 +3.3%p입니다(p < 0.001). 매일 예측에는 그날 발표된 예고 선발투수를 넣습니다. v0.1(팀 피처 3개)은 v0.2(L2 로지스틱, 피처 26개)로, v0.2는 2026-11에 v0.3으로 교체되었습니다(아래 "여러 시즌 시험과 v0.3").
 
 3단계에서는 박스스코어를 선수·시즌 단위로 합산해 타자 4유형, 투수 4유형을 K-means로 나누고(이름은 사람이 붙임), 유사 선수·2D 지도·소속 확률을 [`players.json`](data/public/players.json)으로, 팀별 요약을 [`teams.json`](data/public/teams.json)으로 내보냅니다. "직전 시즌 유형"으로 만든 상성 피처를 승패 모델에 넣어 보았지만 채택 기준에 못 미쳐 넣지 않았습니다(아래 "선수 유형" 절).
 
@@ -68,7 +68,7 @@ KBO 경기의 승패 확률을 매일 예측하고, 예측과 실제 결과를 �
           평가용 report-2026  models/report-2026.pkl  → data/public/model_report.json (한 번 생성해 고정)
                               → data/public/rewind/2026/{date}.json, index.json (되감기, 한 번 생성해 고정)
           라이브 v0.3         models/win_model.pkl    (2015~2026 전체 학습, 주간 재학습)
-          팀 모델 team-2026   models/team-2026.pkl    (선발 피처 없는 19개, 2015~2024 학습)
+          팀 모델 team-2026   models/team-2026.pkl    (선발 피처 없는 19개, 2015~2024 학습 — 성적표 비교용, 2026-11-09부터 전망에는 안 씀)
                               → 가을야구·시리즈 몬테카를로 1만 회 → outlook 블록 (latest.json, 되감기)
                                 (시리즈의 오늘 경기만 라이브 v0.3의 선발 포함 확률)
         → GitHub Actions
@@ -236,15 +236,32 @@ scripts/check_parity.py  ← 커밋된 산출물을 원본 데이터만으로 �
 |---|---|---|---|---|
 | **지금 방식** (v0.3, 정규시즌 끝 전력으로 고정) | **59.1%** | **0.6764** | 35.7% | 24 |
 | 가을야구 결과 반영 (가을 경기로 전력 갱신, 휴식일 차이만 고정) | 60.0% | 0.6774 | 35.7% | 24 |
-| 시리즈 전망용 팀 모델 (선발·Elo 없음) | 55.6% | 0.6842 | 57.1% | 23 |
+| 예전 시리즈 전망 모델 (팀 기록만, 선발·Elo 없음) | 55.6% | 0.6842 | 57.1% | 23 |
 | 규칙: 정규시즌 승률이 높은 팀 | 55.6% | — | 57.1% | 22 |
 | 규칙: 항상 홈팀 | 55.6% | — | 71.4% | — |
 
 - **가을에 모델이 따로 망가지지는 않습니다.** 2018~2025 가을 59.1%는 정규시즌(57.9%)과 비슷합니다. 다만 115경기라 규칙·팀 모델과의 차이는 우연과 구분되지 않습니다(McNemar p = 0.63, 0.52).
 - **2026 부진**은 모델이 거의 반반(43~59%)으로 본 경기에서 이변이 이어진 결과입니다. 모델 확률대로라면 14경기 중 5경기 이하가 나올 확률은 약 12%, 한국시리즈 2~5차전을 모두 틀릴 확률은 약 4%입니다.
-- **한국시리즈 전 두 계산이 엇갈린 이유**: 경기 예측(승패 모델)은 Elo 전력 점수(KT +63)를 크게 봐 KT 우세(KT 홈 54%), 시리즈 전망(팀 모델, Elo 없음)은 최근 흐름·안방 승률 쪽 요인이 삼성으로 기울어 삼성 우승 51~52%였습니다. 이번엔 시리즈 전망이 맞았지만, 여러 시즌으로는 어느 쪽이 낫다고 할 수 없습니다.
+- **한국시리즈 전 두 계산이 엇갈린 이유**: 경기 예측(승패 모델)은 Elo 전력 점수(KT +63)를 크게 봐 KT 우세(KT 홈 54%), 시리즈 전망(팀 모델, Elo 없음)은 최근 흐름·안방 승률 쪽 요인이 삼성으로 기울어 삼성 우승 51~52%였습니다. 이번엔 시리즈 전망이 맞았지만, 여러 시즌으로는 어느 쪽이 낫다고 할 수 없습니다. 이 엇갈림 때문에 전망을 경기 예측 모델로 합쳤습니다(아래 "전망 모델 하나로 합치기").
 - **가을야구 결과 반영은 채택하지 않았습니다.** 채택 규칙(2018~2025 log loss가 낮고 p < 0.05)을 넘지 못했습니다(log loss 0.001 나빠짐, p = 0.43). 처음 예비 계산에서는 좋아 보였는데, 원인은 **휴식일 함정**이었습니다 — 가을 경기로 상태를 갱신하면 한국시리즈 직행 팀의 휴식일이 20일을 넘어, 학습 범위(차이 대부분 −2~+2일) 밖의 값이 확률을 77~79%까지 끌어올렸습니다. 휴식일 차이만 고정하자 개선이 사라졌습니다.
 - 정직하게 적는 것: 채택 규칙은 2026 가을 결과와 예비 계산을 본 뒤에 정했습니다. 사이트에 실제로 공개한 2026 가을 예측은 10/29부터 8경기 중 4경기 적중입니다(다시 계산한 값과 학습 범위가 달라 조금 다름).
+
+### 전망 모델 하나로 합치기 (2026-11, `outlook_eval.py`, 노트북 10)
+
+시리즈 전망과 가을야구 확률의 남은 경기는 선발을 모릅니다. 그동안은 선발 없는 팀 모델(`team-2026`)을 따로 썼는데, 2026 한국시리즈 전에 경기 예측(KT)과 시리즈 전망(삼성)이 다른 팀을 골랐습니다. 그래서 "선발 모를 때 쓸 모델" 다섯 개를 같은 walk-forward로 비교했습니다. 정규시즌 경기는 실제 선발을 가리고 '모름'으로 넣었습니다(라이브 미발표 경기와 같은 입력). 결과는 [`data/public/outlook_model_report.json`](data/public/outlook_model_report.json).
+
+| 후보 (선발 모름) | 2018~2025 적중률 | log loss | 2026 적중률 | 가을 시리즈 승자 (37개) |
+|---|---|---|---|---|
+| 예전 전망 모델 (팀 기록만, L2) | 54.0% | 0.6903 | 55.0% | 24 |
+| 팀 기록 + Elo (L2) | 54.4% | 0.6886 | 55.7% | 21 |
+| 팀 기록 + Elo (L1, v0.3에서 선발만 뺌) | 55.6% | **0.6848** | 56.7% | 23 |
+| **v0.3 하나로 합치기 (선발 모름으로 넣음)** | 54.9% | 0.6858 | 55.6% | **25** |
+| v0.3(선발 모름)과 팀 모델의 평균 | 54.4% | 0.6867 | 55.2% | 22 |
+
+- 고르는 규칙(계산 전, 2026-11-09): 2018~2025 log loss 최저 후보를 찾고, v0.3을 그대로 쓰는 안이 그보다 확실히 나쁘지 않으면(p ≥ 0.05) 한 모델로 합친다 — 같은 성적이면 모델이 하나인 쪽이 읽기 쉽고 관리하기 쉽기 때문.
+- **예전 전망 모델이 가장 나빴습니다.** 최저는 "팀 기록 + Elo (L1)"이었지만 v0.3과의 차이는 우연과 구분되지 않아(p = 0.097) **v0.3 하나로 합쳤습니다.** 예전 전망 모델보다는 확실히 좋습니다(log loss −0.0044, p = 0.001, 9시즌 중 8시즌 더 좋음).
+- 이제 같은 경기를 두 모델이 다르게 보지 않습니다. 오늘 경기와 남은 경기의 차이는 선발 발표 여부뿐입니다. 라이브(`run_pipeline`)와 되감기(`report-2026`) 모두 적용했고, 되감기 165일의 가을야구 확률도 다시 만들었습니다.
+- 정직하게 적는 것: 합친 모델이었다면 2026 한국시리즈 1차전 전 전망은 KT 우승 56%였을 것입니다(예전 모델은 반반 50%, 실제 우승 삼성). 한 시리즈는 운에 크게 흔들리므로 여러 시즌 성적으로 골랐습니다. 이 시험은 그 엇갈림을 본 뒤 시작했지만 후보와 규칙은 계산 전에 정했습니다.
 
 ### 요인 분해
 
@@ -395,7 +412,7 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 | `playoff_race` | 정규시즌 날짜 (되감기의 모든 날짜) | `teams`: 팀 코드별 `wins`, `losses`, `rank_now`(현재 순위), `exp_wins`(시즌 종료 기대 승수), `playoff_prob`(가을야구 = 정규시즌 5위 이내 확률) |
 | `next_game` | 그 밖 (시범경기, 등록되지 않은 시리즈, 비시즌) | `next_game_date` (취소 제외 다음 경기 날짜 또는 null) |
 
-- **확률 모델**: 미래 경기 확률은 선발 없는 팀 모델 `team-2026`([`models/team-2026.pkl`](models/team-2026.pkl), 팀 피처 19개, report-2026과 같은 2015~2024 학습·2025 선택 절차 — `model_report.json`의 `ablation.no_starter`와 같은 모델, 2026 정확도 0.547)로 냅니다. 미래 경기의 선발은 아직 모르기 때문입니다. 단, 시리즈 카드에서 **오늘 경기**는 예고 선발을 아는 라이브 승패 모델의 확률(같은 날 `latest.json` 경기 항목의 `home_win_prob`, 반올림 전 값)을 씁니다 — 오늘 경기의 실제 홈이 대진표의 다음 순번 홈과 같을 때만이고, 그러면 `today_game_prob_source`가 `"win_model (starter-inclusive)"`입니다(시리즈 도중 경기 없는 날 등은 `"team_model"`).
+- **확률 모델**: 미래 경기 확률도 **예측과 같은 승패 모델**(라이브 `win_model`, 되감기 `report-2026`)로 내고, 아직 모르는 선발은 '모름'(`starter_known = 0`, 나머지 선발 피처는 학습 중앙값)으로 넣습니다. 2026-11-09 전에는 선발 없는 팀 모델 `team-2026`(팀 피처 19개)을 따로 썼는데, 한국시리즈 전 경기 예측과 시리즈 전망이 다른 팀을 고르는 일이 생겨 아래 "전망 모델 하나로 합치기"에서 비교한 뒤 합쳤습니다. 단, 시리즈 카드에서 **오늘 경기**는 예고 선발을 아는 라이브 승패 모델의 확률(같은 날 `latest.json` 경기 항목의 `home_win_prob`, 반올림 전 값)을 씁니다 — 오늘 경기의 실제 홈이 대진표의 다음 순번 홈과 같을 때만이고, 그러면 `today_game_prob_source`가 `"win_model (starter-inclusive)"`입니다(시리즈 도중 경기 없는 날 등은 `"team_model"` — 이름은 예전 그대로지만 지금은 같은 승패 모델의 선발 '모름' 확률입니다).
 - **몬테카를로**: 남은 경기의 결과를 그 확률로 무작위로 1만 번 뽑아 결과를 셉니다(`numpy.random.default_rng(42)`, 같은 입력이면 같은 JSON). 각 경기 확률은 기준 날짜의 팀 상태로 한 번 계산하고, 시뮬레이션 안에서는 상태를 갱신하지 않습니다.
 - **가을야구 동률**: 승률(무승부 제외)이 같은 팀들이 걸친 순위 [lo, hi]에 대해 각 팀에 `clip((5−lo+1)/(hi−lo+1), 0, 1)`만큼 진출 몫을 나눠 줍니다. 그래서 시뮬레이션마다 정확히 5자리가 배분됩니다. `rank_now`는 동률이면 높은 순위(정수)입니다.
 - **시리즈 입력**: 대진(팀, `best_of`, 1차전 날짜, 경기별 홈팀, 선택 `head_start`)은 사람이 유지하는 [`config/postseason.yaml`](config/postseason.yaml)에서 읽고, 지금까지의 전적은 `head_start` + `games.jsonl`에서 기준 날짜 **전**에 끝난 경기(`date < on`)로 셉니다. 취소 경기는 다음 경기가 같은 순번(같은 홈)으로 치러지고, 포스트시즌 무승부는 경기 순번(홈 슬롯)을 하나 씁니다.
@@ -407,7 +424,7 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 
 비시즌에 사이트가 "이 날 모델은 이렇게 예측했고 결과는 이랬다"를 보여 주도록, 2026 정규시즌 날짜마다 `latest.json`과 같은 모양의 파일을 미리 만들었습니다(`python -X utf8 scripts/build_rewind.py --season 2026`, 요청 없음, 약 15초).
 
-- **모델**: 평가용 `report-2026`(2015~2024 학습, 2026은 홀드아웃)과 `team-2026`만 씁니다. 날짜 D의 피처와 `outlook`은 D 전날까지 끝난 경기로만 만들고(`rewind.state_before`, `date < D`), D 이후(같은 날 2차전 포함) 결과를 바꿔도 D의 파일이 바뀌지 않는다는 테스트가 있습니다.
+- **모델**: 평가용 `report-2026`(2015~2024 학습, 2026은 홀드아웃) 하나만 씁니다(예측·전망 모두). 날짜 D의 피처와 `outlook`은 D 전날까지 끝난 경기로만 만들고(`rewind.state_before`, `date < D`), D 이후(같은 날 2차전 포함) 결과를 바꿔도 D의 파일이 바뀌지 않는다는 테스트가 있습니다.
 - **선발**: 과거 예고 선발 이력이 없으므로 박스스코어의 **실제 선발**을 씁니다(`starter_source: "actual (boxscore pitching order 1)"`). 백테스트와 같은 가정입니다.
 - **범위**: 정규시즌 165일(03-28~10-12) 전부, 날짜당 파일 1개 + `index.json` = 166개, 933,712바이트(약 0.93 MB). 취소 경기도 `latest.json`과 같은 모양(`home_win_prob: null`, `factors: []`, `result: null`)으로 넣어 모든 날짜에 파일이 있습니다(790행 = FINAL 718 + 취소 72). LIVE로 멈춘 2경기(13352, 13606)는 넣지 않습니다. 시범경기·포스트시즌도 넣지 않습니다.
 - **결과 블록** `result`: `home_score`, `away_score`, `winner`(`HOME`/`AWAY`/`DRAW`), `pick`, `correct`. `pick`은 반올림 **전** 확률이 0.5 이상이면 `HOME`이고(`train_win._correct`와 같은 규칙), `correct = pick == winner`, 무승부는 `correct: null`입니다. 예: 13572(06-12)는 표시 확률이 0.5000이지만 반올림 전 값이 0.5보다 조금 작아 `pick`이 `AWAY`입니다.
@@ -450,8 +467,7 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 
 ### 해석할 때 주의할 점 (한계)
 
-- **시리즈 시뮬레이션에서 선발을 아는 건 오늘 경기뿐입니다.** 오늘 경기는 예측 카드와 같은 선발 포함 확률(10-29 3차전 SS 55.4%)로, 그 뒤 경기는 선발 없는 팀 모델로 굴립니다(해결: 예전에는 오늘 경기도 팀 모델 SS 49.7%로 굴려 카드와 숫자가 어긋났습니다). 선발 로테이션은 반영하지 않습니다.
-- **라이브 전망의 팀 모델은 2015~2024 학습**입니다(`team-2026`). 2015~2026으로 다시 학습한 라이브 팀 모델은 2027 시즌 전으로 미뤘습니다.
+- **시리즈 시뮬레이션에서 선발을 아는 건 오늘 경기뿐입니다.** 오늘 경기는 예측 카드와 같은 선발 포함 확률로, 그 뒤 경기는 같은 모델에 선발 '모름'으로 굴립니다. 선발 로테이션은 반영하지 않습니다.
 - **시뮬레이션 안에서 팀 상태가 바뀌지 않습니다.** 한 경기 결과가 다음 경기의 승률·최근 10경기 같은 피처를 바꾸는 효과를 무시하고, 남은 경기를 모두 기준 날짜 상태로 계산합니다(불펜 피로 피처도 고정).
 - **가을야구 동률 배분은 실제 KBO 규정과 다릅니다.** 실제로는 상대 전적이나 순위 결정전으로 가르지만, 여기서는 승률만 보고 진출 몫을 나눕니다.
 - **포스트시즌 대진은 사람이 갱신합니다.** `config/postseason.yaml`에 없는 시리즈는 `next_game` 카드가 되고, 2026 한국시리즈는 상대가 정해지면 채워야 합니다. 데이터에서 끝나지 않은 채 남은 등록 시리즈는 다음 시리즈가 시작될 때까지 "진행 중"으로 보입니다.
@@ -469,14 +485,15 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 | 파일 | 내용 |
 | --- | --- |
 | [`latest.json`](data/public/latest.json) | 오늘 경기 예측: 팀, 구장, 시간, 팀별 예고 선발(`starter`: 이름·ERA·K/9·BB/9·이닝·선발 등판 수, `type`: 직전 시즌 투수 유형 `{id, name}` 또는 직전 시즌 자격이 없으면 null), 홈 승률, 기여도(`contribution_pp`) 상위 5개 요인, `round`(`preseason`/`regular`/`postseason`), 메타(`generated_at`, `commit_sha`, `run_url`, `model_version`, `mode`). 취소 경기는 `status: "CANCELED"`, `home_win_prob: null`, `factors: []` |
-| `latest.json`의 `outlook` | 전망 카드 하나: `type`이 `series`(진행 중인 포스트시즌 시리즈: 전적·시리즈 승리 확률·가장 흔한 결말·최종전 확률·오늘 경기 확률 출처·`next_game_date` — 오늘 경기는 선발 포함 확률), `playoff_race`(정규시즌: 팀별 승·패·현재 순위·기대 승수·가을야구 확률), `next_game`(그 밖: `next_game_date`) 중 하나, 모두 `as_of`. 팀 모델 `team-2026` + 몬테카를로 1만 회, 확률 소수 4자리 (위 "전망 카드" 절). 팀 모델을 읽지 못하면 `next_game` 꼴로 대신하고 `collect_errors`에 남김 |
-| [`rewind/{season}/{date}.json`](data/public/rewind/2026/2026-09-01.json) | 되감기: 그날의 `latest.json`과 같은 모양 + 경기별 `result`(`home_score`, `away_score`, `winner`, `pick`, `correct`; 취소 경기는 null)와 `outlook`(`playoff_race`). 메타는 `mode: "rewind"`, `model_version: "report-2026"`, `team_model_version: "team-2026"`, `starter_source: "actual (boxscore pitching order 1)"`. 2026 정규시즌 165일, 압축 JSON 합계 933,712바이트(`index.json` 포함, 약 0.93 MB) |
+| `latest.json`의 `outlook` | 전망 카드 하나: `type`이 `series`(진행 중인 포스트시즌 시리즈: 전적·시리즈 승리 확률·가장 흔한 결말·최종전 확률·오늘 경기 확률 출처·`next_game_date` — 오늘 경기는 선발 포함 확률), `playoff_race`(정규시즌: 팀별 승·패·현재 순위·기대 승수·가을야구 확률), `next_game`(그 밖: `next_game_date`) 중 하나, 모두 `as_of`. 라이브 승패 모델(미래 경기는 선발 '모름') + 몬테카를로 1만 회, 확률 소수 4자리 (위 "전망 카드" 절). 시뮬레이션이 실패하면 `next_game` 꼴로 대신하고 `collect_errors`에 남김 |
+| [`rewind/{season}/{date}.json`](data/public/rewind/2026/2026-09-01.json) | 되감기: 그날의 `latest.json`과 같은 모양 + 경기별 `result`(`home_score`, `away_score`, `winner`, `pick`, `correct`; 취소 경기는 null)와 `outlook`(`playoff_race`). 메타는 `mode: "rewind"`, `model_version: "report-2026"`, `outlook_model_version: "report-2026"`(전망도 같은 모델), `starter_source: "actual (boxscore pitching order 1)"`. 2026 정규시즌 165일, 압축 JSON 합계 933,712바이트(`index.json` 포함, 약 0.93 MB) |
 | [`rewind/{season}/index.json`](data/public/rewind/2026/index.json) | 되감기 목차: `season`, `model_version`, `dates`(날짜별 `date`, `games`, `decided`, `correct`), `accuracy`(0.594), `n_decided`(702), `note`(적중 규칙). 날짜별 `correct` 합 417 |
 | [`model_report.json`](data/public/model_report.json) | 모델 성적표(`report-2026`): 두 알고리즘의 검증·시험 지표, 기준선 3종, McNemar 검정, 캘리브레이션 구간표, 피처 중요도, 선발 피처 제외 비교, 선발 소스 표기, 유형 상성 피처 전후 비교(`matchup_feature_ablation`), 군집 품질(`cluster_quality`: K별 실루엣·유지율, 유형별 인원·대표 선수·중심 지표, 소속 확률 방식). 한 번 생성해 고정 (3단계에서 두 블록을 채우려고 다시 만들었고 기존 키의 값은 그대로) |
 | [`players.json`](data/public/players.json) | 선수-시즌 2,918개(타자 1,327 + 투수 1,591, 2015~2026). 메타(`generated_at`, `commit_sha`, `model_version: "clusters-2026b"`, `fit_seasons`, `note`)와 `types`(그룹별 유형 `id`·`name`·`blurb`), `players[]`: `group`, `season`, `player_id`, `name`(로마자), `name_ko`, `team`, `pos`, `type {id, name}`, `prob`, `membership`(유형별 소속 확률), `x`·`y`(PCA 2D 좌표), `stats`(타자: 타석·타율·출루율·홈런·도루·K%·BB%·ISO·BABIP / 투수: 등판·선발·이닝·ERA·K%·BB%·HR%·BABIP), `similar`(유사 선수 5명 — 서로 다른 선수, 선수마다 가장 비슷한 시즌 하나; `player_id`·`season`·`similarity`만 — 이름은 같은 파일에서 찾음). 압축 JSON 1.77 MB (gzip -9 기준 약 270 KB) |
 | [`teams.json`](data/public/teams.json) | 팀-시즌 120개(10구단 × 2015~2026). `season`, `code`, `name`, `games`, `wins`·`losses`·`ties`, `win_pct`(무승부 제외), `home_pct`, `away_pct`, `pyth_pct`(피타고리안), `model_expected`(report-2026 모델의 홀드아웃 예측 평균, 2026만 — 2015~2025는 학습·검증 시즌이라 null), `roster_types`(타자는 타석, 투수는 아웃 수로 가중한 유형 비중), `vs`(상대 팀별 승률) |
 | [`history.csv`](data/public/history.csv) | 과거 예측과 결과 기록: date, game_id, home, away, home_win_prob, model_version, predicted_at, status, winner, correct. 2026-10-29부터 쌓는 중 (모델 버전별로 나눠 셈) |
 | [`postseason_report.json`](data/public/postseason_report.json) | 가을야구 성적(`postseason_eval.py`): 2018~2026 포스트시즌 경기별 세 방식 확률, 시즌별·합친 적중률·log loss·검정, 시리즈 37개의 시작 전 예상과 승자, 채택 결정, 2026 공개 기록. 사람이 다시 돌릴 때만 바뀜 |
+| [`outlook_model_report.json`](data/public/outlook_model_report.json) | 전망 모델 합치기(`outlook_eval.py`): 선발 모를 때 쓸 후보 다섯 개의 시즌별·합친 적중률·log loss·경기 예측과 엇갈린 비율, 검정, 가을 시리즈 37개 예상, 고른 것(`chosen`), 2026 한국시리즈 날짜별 두 모델의 시리즈 전망. 사람이 다시 돌릴 때만 바뀜 |
 | [`status.json`](data/public/status.json) | 파이프라인 상태: generated_at, run_url, commit_sha, mode, next_game_date, games_today, model_version, collect_errors, season_result(한국시리즈가 끝나면 `{name, champion, teams, wins}`, 아니면 null) (경기가 없는 날도 갱신). `mode`는 오늘부터 14일 안에 취소되지 않은 경기가 있으면 `live`, 없으면 `rewind`(비시즌 — 사이트가 되감기를 보여 줌) |
 
 수집에 실패한 경기가 있으면(`collect_errors`가 비어 있지 않으면) 일일 워크플로가 `collect-failure` 라벨의 GitHub 이슈를 새로 열거나 기존 이슈에 코멘트합니다([`scripts/collect_errors.py`](scripts/collect_errors.py)). 공개 파일·`games.jsonl`·`starters.jsonl`은 임시 파일에 쓴 뒤 바꿔 넣으므로(원자적 쓰기), 실행이 중간에 죽어도 반쯤 쓴 파일이 남지 않습니다.
@@ -493,7 +510,7 @@ data/raw/name_aliases.json                       개명 선수 한글 이름 별
 data/processed/features.parquet                  피처 데이터셋 (gitignore, 아래 "로컬 실행"으로 다시 만듦)
 data/processed/matchup.parquet                   상성 피처 (gitignore, SHA256은 models/manifest.json의 report.matchup_sha256)
 models/clusters.pkl                              선수 유형 군집 묶음 clusters-2026b (커밋)
-models/team-2026.pkl                             선발 없는 팀 모델 team-2026 (커밋, 시뮬레이션용)
+models/team-2026.pkl                             선발 없는 팀 모델 team-2026 (커밋, 성적표 '선발 없이' 비교용 — 전망에는 안 씀)
 config/postseason.yaml                           포스트시즌 대진표 (사람이 갱신, 시리즈 시뮬레이션 입력)
 ```
 
@@ -542,6 +559,7 @@ config/postseason.yaml                           포스트시즌 대진표 (사�
 | 07 | [그리드 서치와 오토ML](notebooks/07_그리드서치와_오토ML.ipynb) | `automl.py` | 완료 (그리드·FLAML 결과를 읽고 결승을 다시 계산해 같은지 확인, 약 40초) |
 | 08 | [여러 시즌 시험](notebooks/08_여러_시즌_시험.ipynb) | `backtest.py` | 완료 (2018~2026 시즌별 학습·예측을 다시 계산해 결과 파일과 같은지 확인) |
 | 09 | [가을야구 성적](notebooks/09_가을야구_성적.ipynb) | `postseason_eval.py` | 완료 (포스트시즌 129경기·시리즈 37개, 한국시리즈 전 두 모델 요인 비교, 휴식일 함정) |
+| 10 | [전망 모델 합치기](notebooks/10_전망_모델_합치기.ipynb) | `outlook_eval.py` | 완료 (선발 모를 때 후보 다섯 개, 미리 정한 규칙으로 v0.3 하나로 합침, 2026 한국시리즈 전망 재계산) |
 
 ## 로컬 실행
 
@@ -552,7 +570,7 @@ python -m kbo_predict.features --out data/processed/features.parquet   # 2015~20
 python -m kbo_predict.cluster fit       # 선수 유형 군집 → models/clusters.pkl, manifest의 clusters 항목
 python -m kbo_predict.features --matchup-out data/processed/matchup.parquet   # 직전 시즌 유형 상성 피처
 python -m kbo_predict.train_win report --force --matchup data/processed/matchup.parquet --clusters models/clusters.pkl   # report-2026 학습·평가 → model_report.json, models/report-2026.pkl (고정된 보고서를 다시 만들 때만)
-python -m kbo_predict.train_win team     # 선발 없는 팀 모델 → models/team-2026.pkl (보고서 숫자 불변)
+python -m kbo_predict.train_win team     # 선발 없는 팀 모델 → models/team-2026.pkl (성적표 비교용, 보고서 숫자 불변)
 python -m kbo_predict.train_win live [--skip-if-same]   # 라이브 v0.3 → models/win_model.pkl (report를 먼저 실행; 예측이 같으면 쓰지 않음)
 python -m kbo_predict.cluster publish   # players.json, teams.json (report-2026.pkl과 features.parquet 필요)
 python -m kbo_predict.cluster compare --against models/clusters.pkl --new <새 pkl> [--types <유형 CSV>]   # 군집 재계산이 커밋본과 같은지

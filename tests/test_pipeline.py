@@ -17,7 +17,6 @@ import scripts.run_pipeline as rp
 META = {"generated_at": "2026-10-29T09:00:00+09:00", "model_version": "v0.1", "commit_sha": None, "run_url": None}
 LATEST_KEYS = {"generated_at", "date", "mode", "model_version", "commit_sha", "run_url", "games", "outlook"}
 ROOT = Path(__file__).resolve().parents[1]
-REAL_TEAM_PKL = ROOT / "models" / "team-2026.pkl"      # 커밋된 팀 모델 (전망용)
 REAL_CLUSTERS_PKL = ROOT / "models" / "clusters.pkl"
 FIXTURES = ROOT / "tests" / "fixtures"
 OUTLOOK_WARNING = "outlook unavailable"
@@ -477,7 +476,7 @@ def test_latest_has_outlook_series(tmp_data_dir_postseason, bundle_path, monkeyp
     monkeypatch.setattr(simulate, "series", spy)
     d = tmp_data_dir_postseason
     out = run(date(2026, 10, 29), data_dir=d, model_path=bundle_path, meta=META, fetch=False,
-              team_path=REAL_TEAM_PKL, clusters_path=REAL_CLUSTERS_PKL)
+              clusters_path=REAL_CLUSTERS_PKL)
     assert out["games_today"] == 1
     latest = _latest(d)
     assert set(latest) == LATEST_KEYS and latest["mode"] == "live"
@@ -492,16 +491,19 @@ def test_latest_has_outlook_series(tmp_data_dir_postseason, bundle_path, monkeyp
     assert o["today_game_prob_source"] == "win_model (starter-inclusive)" and o["head_start"] == [0, 0]
     assert seen["homes"] == ["team1", "team1", "team0"] and len(seen["p"]) == o["games_remaining_max"] == 3
     assert seen["p"][0] == pytest.approx(1 - g["home_win_prob"], abs=5e-5)
-    assert seen["p"][1] != pytest.approx(seen["p"][0], abs=1e-6)           # 4차전은 팀 모델 (다른 값)
+    # 전망도 예측과 같은 모델(outlook_eval.py): 오늘 선발 기록이 없어(starter_known false) 선발 '모름'과 같고, 4차전도 같은
+    # KIA 홈이면 두 칸이 같은 확률이다 (예전 팀 모델이었다면 달랐다 — 같은 경기를 두 모델이 다르게 보던 문제). 5차전은 삼성 홈.
+    assert g["starter_known"] is False
+    assert seen["p"][1] == pytest.approx(seen["p"][0], abs=1e-12)
+    assert seen["p"][2] != pytest.approx(seen["p"][1], abs=1e-6)
     status = _status(d)
-    assert status["mode"] == "live" and status["collect_errors"] == []  # 팀 모델이 있으면 전망 경고 없음
+    assert status["mode"] == "live" and status["collect_errors"] == []  # 전망 경고 없음
 
 
 def test_outlook_fallback_for_unknown_series(tmp_data_dir, bundle_path, fixture_html):
     """시범경기 날짜(03-21): 정규시즌도 등록 시리즈도 아니다 → outlook next_game, 파이프라인은 그대로 성공."""
     _seed(fixture_html, _row(9201, "2026-03-21", status="SCHEDULED", hs=None, as_=None))
-    out = run(date(2026, 3, 21), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False,
-              team_path=REAL_TEAM_PKL)
+    out = run(date(2026, 3, 21), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False)
     assert out["games_today"] == 1
     latest = _latest(tmp_data_dir)
     assert latest["games"][0]["round"] == "preseason"
@@ -509,20 +511,21 @@ def test_outlook_fallback_for_unknown_series(tmp_data_dir, bundle_path, fixture_
     assert _status(tmp_data_dir)["collect_errors"] == []
 
 
-def test_outlook_without_team_model_warns(tmp_data_dir, bundle_path, fixture_html, tmp_path, capsys):
-    """팀 모델이 없거나 깨졌으면 outlook = next_game(오늘 다음 경기 날짜) + collect_errors 경고. 예측 발행은 계속."""
+def test_outlook_failure_warns(tmp_data_dir, bundle_path, fixture_html, monkeypatch, capsys):
+    """전망 시뮬레이션이 실패하면(대진표 오류 등) outlook = next_game(오늘 다음 경기 날짜) + collect_errors 경고. 예측 발행은 계속."""
     _seed(fixture_html)
-    bad = tmp_path / "team.pkl"
-    bad.write_bytes(b"not a pickle")
-    for team_path in (tmp_path / "missing.pkl", bad):
-        out = run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False,
-                  team_path=team_path)
-        assert out["games_today"] == 1
-        outlook = _latest(tmp_data_dir)["outlook"]
-        assert outlook == {"type": "next_game", "next_game_date": "2026-10-30", "as_of": "2026-10-29"}
-        assert list(outlook) == ["type", "as_of", "next_game_date"]  # outlook_for의 next_game과 같은 키 순서
-        errs = _status(tmp_data_dir)["collect_errors"]
-        assert len(errs) == 1 and errs[0].startswith(f"{OUTLOOK_WARNING} ({team_path})")
+
+    def boom(*a, **kw):
+        raise ValueError("bad bracket")
+
+    monkeypatch.setattr(rp, "outlook_for", boom)
+    out = run(date(2026, 10, 29), data_dir=tmp_data_dir, model_path=bundle_path, meta=META, fetch=False)
+    assert out["games_today"] == 1
+    outlook = _latest(tmp_data_dir)["outlook"]
+    assert outlook == {"type": "next_game", "next_game_date": "2026-10-30", "as_of": "2026-10-29"}
+    assert list(outlook) == ["type", "as_of", "next_game_date"]  # outlook_for의 next_game과 같은 키 순서
+    errs = _status(tmp_data_dir)["collect_errors"]
+    assert len(errs) == 1 and errs[0].startswith(OUTLOOK_WARNING)
     assert OUTLOOK_WARNING in capsys.readouterr().err
 
 

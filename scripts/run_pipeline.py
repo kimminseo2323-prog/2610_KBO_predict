@@ -31,7 +31,6 @@ build_state = state_before
 
 
 CLUSTERS_PKL = Path("models/clusters.pkl")
-TEAM_PKL = Path("models/team-2026.pkl")  # 선발 없는 팀 모델 — 전망(outlook) 시뮬레이션용 (예측 확률에는 안 쓴다)
 LIVE_WINDOW_DAYS = 14  # status.json mode: 오늘부터 이 일수 안에 경기가 있으면 "live", 없으면 "rewind"
 
 
@@ -62,21 +61,19 @@ def status_mode(games: list[dict], on: date) -> str:
     return "live" if any(lo <= g["date"] <= hi and g["status"] != "CANCELED" for g in games) else "rewind"
 
 
-def latest_outlook(team_path: Path, season: int, on: str, games: list[dict], state, collect_errors: list[str],
+def latest_outlook(bundle: dict, season: int, on: str, games: list[dict], state, collect_errors: list[str],
                    today_probs: dict[int, float] | None = None) -> dict:
     """latest.json의 outlook 카드 (simulate.outlook_for: series / playoff_race / next_game — 모두 그날 경기 전 기준).
-    today_probs = {game_id: 반올림 전 P(홈 승)} — 오늘 경기의 승패 모델(예고 선발 포함) 확률. 시리즈 카드는 오늘 경기에
-    이 확률을 쓴다 (스펙 §8 — latest.json 경기 항목의 home_win_prob와 같은 예측).
-    팀 모델(team_path)이 없거나, 불러오기·시뮬레이션이 실패하면 {"type": "next_game", ...}로 대신하고
-    collect_errors와 stderr에 경고를 남긴다 (starter_types와 같은 방식 — 전망 때문에 예측 발행이 멈추지 않게)."""
-    team_path = Path(team_path)
+    bundle = 오늘 예측에 쓴 라이브 승패 모델. 미래 경기도 같은 모델로, 선발은 '모름'으로 넣는다 (outlook_eval.py — 2026-11-09에
+    선발 없는 팀 모델 team-2026 대신 하나로 합쳤다: 같은 경기를 두 모델이 다르게 보지 않게, 성적도 더 좋다).
+    today_probs = {game_id: 반올림 전 P(홈 승)} — 오늘 경기의 예고 선발 포함 확률. 시리즈 카드는 오늘 경기에 이 값을 쓴다.
+    시뮬레이션이 실패하면 {"type": "next_game", ...}로 대신하고 collect_errors와 stderr에 경고를 남긴다
+    (전망 때문에 예측 발행이 멈추지 않게)."""
     try:
-        if not team_path.exists():
-            raise FileNotFoundError(f"{team_path} not found")
-        return outlook_for(season, on, games, state=state, team_bundle=load_bundle(team_path),
+        return outlook_for(season, on, games, state=state, team_bundle=bundle,
                            ps_config=load_postseason(season), today_probs=today_probs)
-    except Exception as e:  # 깨진 pkl, 대진표 오류 등
-        collect_errors.append(f"outlook unavailable ({team_path}): {e!r}")
+    except Exception as e:  # 대진표 오류 등
+        collect_errors.append(f"outlook unavailable: {e!r}")
         print(f"[pipeline] outlook unavailable, using next_game: {e!r}", file=sys.stderr)
         return next_game_card(on, games)
 
@@ -122,7 +119,7 @@ def lookahead_target(games: list[dict], target: date) -> tuple[date, str]:
 
 
 def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bool = True,
-        clusters_path: Path = CLUSTERS_PKL, team_path: Path = TEAM_PKL) -> dict:
+        clusters_path: Path = CLUSTERS_PKL) -> dict:
     data_dir = Path(data_dir)
     season = target.year
     iso = target.isoformat()
@@ -211,7 +208,7 @@ def run(target: date, *, data_dir: Path, model_path: Path, meta: dict, fetch: bo
 
     # ⑤ 전망 + 발행 (경기 행이 아예 없으면 latest 유지 — 전망 시뮬레이션도 돌리지 않는다)
     if entries:
-        outlook = latest_outlook(team_path, season, iso, games, state, collect_errors, today_probs)
+        outlook = latest_outlook(bundle, season, iso, games, state, collect_errors, today_probs)
         write_latest(pub / "latest.json", date=iso, games=entries, meta=meta, outlook=outlook)
         # history의 model_version = 실제로 예측한 번들의 버전 (패키지 상수가 아니라)
         upsert_history(pub / "history.csv", [e for e in preds if e["game_id"] not in locked],
