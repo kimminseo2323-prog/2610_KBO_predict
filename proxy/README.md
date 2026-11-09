@@ -38,3 +38,14 @@
 - `team`: 사이트 팀 코드(OB, LT, KT, WO, SK, SS, HH, HT, LG, NC). 검색어는 구단 정식 이름입니다.
 - `display`: 1~10. 전체 탭은 3개, 구단 탭은 10개를 부릅니다.
 - 허용 출처(CORS): `https://kimminseo2323-prog.github.io`와 로컬 미리보기만. 바꾸려면 Worker 변수 `ALLOWED_ORIGINS`에 쉼표로 적습니다.
+
+
+## 매일 예측 실행 예약 (`cron/`, Worker `kbo-cron`)
+
+GitHub Actions의 예약 실행은 몰리는 날 몇 시간씩 늦거나 빠집니다(2026-11-03: 17:07·17:55 실행이 6~8시간 늦음). 그래서 Cloudflare Cron Triggers가 정해진 시각에 GitHub API로 `daily.yml`을 수동 실행(workflow_dispatch)합니다. GitHub 쪽 예약은 대비용으로 그대로 둡니다.
+
+- 시각: `7 0,3,5,7,8 * * *`, `55 8 * * *` (UTC) = 09:07 · 12:07 · 14:07 · 16:07 · 17:07 · 17:55 KST. 무료 플랜은 계정당 예약 5개.
+- 토큰: GitHub **fine-grained personal access token** — Repository access: `2610_KBO_predict`만, Permissions → Repository → **Actions: Read and write**만. 만료일을 정해 두고, 만료 전에 새로 발급해 다시 등록합니다.
+- 등록: `cd proxy/cron` → `npx wrangler secret put GH_TOKEN`(값은 채팅·파일에 적지 않음).
+- 확인: `npx wrangler tail kbo-cron` — 예약 시각에 `{"ok":true,"status":204}` 로그가 남고, GitHub Actions에 `workflow_dispatch` 실행이 생깁니다.
+- 주소로 직접 불러도 실행되지 않습니다(404, `workers_dev = false`).

@@ -1,0 +1,8 @@
+# 매일 예측 실행 예약 Worker — 이 폴더에서 `npx wrangler deploy`. 토큰은 `npx wrangler secret put GH_TOKEN`.
+name = "kbo-cron"
+main = "cron-worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = false
+
+[triggers]
+crons = ["7 0,3,5,7,8 * * *", "55 8 * * *"]   # UTC — 09:07·12:07·14:07·16:07·17:07, 17:55 KST
