@@ -33,4 +33,4 @@ data/processed/
 site/_preview.html
 
 # Cloudflare wrangler 로컬 캐시
-proxy/.wrangler/
+proxy/**/.wrangler/
