@@ -824,7 +824,7 @@ def test_news_page_tabs_favorites_and_attribution():
     assert "저장하지 않고" in soup.find(id="news-about").get_text()
     js = (ASSETS / "news.js").read_text(encoding="utf-8")
     assert 'localStorage.getItem(FAV_KEY)' in js and js.count("try {") >= 2      # 저장소를 못 써도 페이지는 돈다
-    assert '"네이버 검색결과"' in js and "originallink || it.link" in js and 'rel: "noopener"' in js
+    assert '"네이버 검색결과"' in js and "safeURL(it.originallink) ?? safeURL(it.link)" in js and 'rel: "noopener"' in js
     assert "if (!NEWS_PROXY)" in js and "search.naver.com/search.naver?where=news" in js
     assert 'loadNews("ALL", 10, { sort: "date" })' in js and "moreButton(" in js       # 리그 전체 소식, 구단 탭 더 보기
     assert 'fetchJSON("teams.json")' in js and "history.replaceState" in js and "aria-pressed" in js
@@ -877,3 +877,26 @@ def test_seasons_page_and_this_season_cards():
     assert "href: `seasons.html?season=${yr}`" in home and "season_result" in home and "const endedSeason" in home
     idx = BeautifulSoup((SITE / "index.html").read_text(encoding="utf-8"), "html.parser")
     assert idx.title.get_text().startswith("이번 시즌") and idx.find(id="season") is not None
+
+
+def test_security_hardening():
+    """보안 점검(2026-11-10) 반영: 모든 페이지 CSP(스크립트는 같은 출처만, 연결은 raw·프록시만), 기사 링크는 http(s)만,
+    팀 코드는 Object.hasOwn으로(프로토타입 이름 차단), 프록시는 IP당 호출 제한·업스트림 비JSON 처리."""
+    from bs4 import BeautifulSoup
+    for page in ("index.html", "replay.html", "seasons.html", "teams.html", "players.html", "report.html", "news.html"):
+        meta = BeautifulSoup((SITE / page).read_text(encoding="utf-8"), "html.parser").find("meta", attrs={"http-equiv": "Content-Security-Policy"})
+        assert meta is not None, page
+        csp = meta["content"]
+        assert "script-src 'self';" in csp and "object-src 'none'" in csp and "form-action 'none'" in csp, page
+        assert "connect-src 'self' https://raw.githubusercontent.com https://kbo-news.kimminseo2323.workers.dev;" in csp, page
+    news = (ASSETS / "news.js").read_text(encoding="utf-8")
+    assert "function safeURL" in news and 'x.protocol === "https:" || x.protocol === "http:"' in news
+    assert "safeURL(it.originallink) ?? safeURL(it.link)" in news and "TEAMS[q]" not in news
+    w = (ROOT / "proxy" / "news-worker.js").read_text(encoding="utf-8")
+    assert "Object.hasOwn(TEAM_QUERY, team)" in w and "env.LIMITER" in w and "CF-Connecting-IP" in w and "non-JSON" in w
+    toml = (ROOT / "proxy" / "wrangler.toml").read_text(encoding="utf-8")
+    assert "[[ratelimits]]" in toml and "limit = 30" in toml
+    app = (ASSETS / "app.js").read_text(encoding="utf-8")
+    assert app.split("export const NEWS_PROXY = ")[1].split(";")[0].strip('"') in csp       # 프록시 주소가 바뀌면 CSP도 같이
+    gi = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert all(x in gi for x in (".env", ".dev.vars", "proxy/**/.wrangler/"))

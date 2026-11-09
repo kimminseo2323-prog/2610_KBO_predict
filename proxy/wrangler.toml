@@ -4,3 +4,11 @@ name = "kbo-news"
 main = "news-worker.js"
 compatibility_date = "2026-11-01"
 workers_dev = true
+
+# 같은 IP 분당 30회 제한 (news-worker.js의 env.LIMITER) — 쿼터 남용 방지
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 30
+  period = 60

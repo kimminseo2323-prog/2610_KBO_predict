@@ -372,10 +372,12 @@ def active_series(season: int, on: str, games: list[dict], ps_config) -> dict | 
 
 
 def unneeded_games(season: int, games: list[dict], ps_config) -> set[int]:
-    """승부가 이미 난 시리즈의 남은 예정(SCHEDULED) 경기 game_id.
+    """승부가 이미 난 시리즈의 남은 경기 game_id (예정 SCHEDULED이든, 원천 사이트가 나중에 취소 CANCELED로 바꾼 것이든).
     원천 사이트는 4승으로 끝난 한국시리즈의 6·7차전 같은 '치르지 않을 경기'를 한동안 예정으로 남겨 둔다.
     그대로 두면 파이프라인이 열리지 않을 경기를 예측·기록하고 사이트가 시즌이 끝났는데도 라이브로 연다(2026-11-09).
-    승부가 난 경기(시리즈 승리 확정 경기) 뒤의 두 팀 맞대결 중 SCHEDULED인 것만 고른다 (FINAL·취소는 건드리지 않는다)."""
+    승부가 난 경기(시리즈 승리 확정 경기) 뒤의 두 팀 맞대결 중 FINAL이 아닌 것을 고른다. 원천 사이트는 열리지 않은 6·7차전을
+    처음엔 예정으로, 며칠 뒤엔 취소로 바꿨다(2026-11-10) — 취소로 바뀐 뒤에도 "그날 취소 경기"로 발행되지 않게 둘 다 뺀다.
+    승부가 나기 전의 우천 취소는 건드리지 않는다."""
     out: set[int] = set()
     for s in resolve_undecided(_series_list(season, ps_config), games):
         if None in s["teams"] or s["start"] is None:
@@ -385,7 +387,7 @@ def unneeded_games(season: int, games: list[dict], ps_config) -> set[int]:
         clinched = None
         for g in _pair_games(games, s):
             if clinched is not None:
-                if g["status"] == "SCHEDULED" and g["date"] >= clinched:
+                if g["status"] != "FINAL" and g["date"] >= clinched:
                     out.add(g["game_id"])
                 continue
             hs, as_ = g.get("home_score"), g.get("away_score")

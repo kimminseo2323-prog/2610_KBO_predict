@@ -49,8 +49,16 @@ export default {
     }
     const url = new URL(request.url);
     if (request.method !== "GET" || url.pathname !== "/news") return json({ error: "not found" }, 404, cors);
+    // 같은 IP의 과한 호출 막기(Workers Rate Limiting 바인딩, 분당 30회 — 전체 탭 한 번 = 11회). Origin은 브라우저 밖에서 위조할 수 있어서
+    // CORS만으로는 남용을 못 막는다 — 네이버 쿼터(일 5,000)를 한 사람이 다 쓰지 못하게.
+    if (env.LIMITER) {
+      const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+      const { success } = await env.LIMITER.limit({ key: ip });
+      if (!success) return json({ error: "too many requests" }, 429, { ...cors, "Retry-After": "60" });
+    }
     const team = url.searchParams.get("team") ?? "";
-    const query = team === "ALL" ? ALL_QUERY : TEAM_QUERY[team];
+    // Object.hasOwn: ?team=constructor 같은 프로토타입 이름이 통과하지 않게
+    const query = team === "ALL" ? ALL_QUERY : Object.hasOwn(TEAM_QUERY, team) ? TEAM_QUERY[team] : null;
     if (!query) return json({ error: "unknown team" }, 400, cors);
     const display = Math.min(10, Math.max(1, Number.parseInt(url.searchParams.get("display") ?? "3", 10) || 3));
     const start = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get("start") ?? "1", 10) || 1));
@@ -66,7 +74,12 @@ export default {
       return json({ error: "upstream unreachable" }, 502, cors);
     }
     if (!res.ok) return json({ error: `upstream ${res.status}` }, 502, cors);
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      return json({ error: "upstream returned non-JSON" }, 502, cors);
+    }
     // 네이버가 준 값을 그대로 (순서·내용 변경 없음). 팀 코드와 검색어만 덧붙인다.
     return json({ team, query, sort, lastBuildDate: data.lastBuildDate, total: data.total, items: data.items ?? [] }, 200,
       { ...cors, "Cache-Control": "private, max-age=600" });

@@ -463,3 +463,19 @@ def test_unneeded_games_after_series_is_clinched():
     # 아직 진행 중(1승 3패)이면 남은 경기를 빼지 않고 우승도 없다
     games = _ks(played[:4], [("2026-11-08", "SS", "KT"), ("2026-11-10", "KT", "SS"), ("2026-11-11", "KT", "SS")])
     assert unneeded_games(2026, games, KS_CFG) == set() and season_result(2026, games, KS_CFG) is None
+
+
+
+def test_unneeded_games_include_later_canceled_ones():
+    """원천 사이트가 열리지 않은 6·7차전을 나중에 취소(CANCELED)로 바꿔도 빼야 한다(2026-11-10 실제로 그랬다)."""
+    from kbo_predict.simulate import unneeded_games
+    played = [("2026-11-03", "KT", "SS", 8, 7), ("2026-11-04", "KT", "SS", 2, 3), ("2026-11-06", "SS", "KT", 5, 1),
+              ("2026-11-07", "SS", "KT", 10, 5), ("2026-11-08", "SS", "KT", 12, 1)]
+    games = _ks(played, [("2026-11-10", "KT", "SS"), ("2026-11-11", "KT", "SS")])
+    for g in games[-2:]:
+        g["status"] = "CANCELED"
+    assert unneeded_games(2026, games, KS_CFG) == {106, 107}
+    # 승부가 나기 전 우천 취소는 그대로 (빼지 않는다)
+    early = _ks(played[:2], [("2026-11-05", "SS", "KT")])
+    early[-1]["status"] = "CANCELED"
+    assert unneeded_games(2026, early, KS_CFG) == set()

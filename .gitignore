@@ -34,3 +34,8 @@ site/_preview.html
 
 # Cloudflare wrangler 로컬 캐시
 proxy/**/.wrangler/
+
+# 비밀 변수 파일(혹시 만들어도 커밋되지 않게)
+.env
+.env.*
+.dev.vars

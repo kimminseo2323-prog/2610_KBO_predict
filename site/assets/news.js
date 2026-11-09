@@ -26,7 +26,7 @@ const MAX_START = 91;   // 프록시가 허용하는 마지막 시작 위치(sta
 function loadFavs() {
   try {
     const raw = JSON.parse(localStorage.getItem(FAV_KEY) ?? "[]");
-    return new Set((Array.isArray(raw) ? raw : []).filter((c) => TEAMS[c]));
+    return new Set((Array.isArray(raw) ? raw : []).filter((c) => Object.hasOwn(TEAMS, c)));
   } catch {
     return new Set(); // 사생활 보호 모드 등에서 저장소를 못 쓰면 즐겨찾기 없이 시작
   }
@@ -92,8 +92,14 @@ function ago(pubDate) {
 }
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 
+/** 기사 링크는 http(s)만 쓴다 — 외부 데이터에 javascript: 같은 주소가 섞여도 누르면 실행되지 않게. 아니면 null. */
+function safeURL(u) {
+  try { const x = new URL(String(u ?? "")); return x.protocol === "https:" || x.protocol === "http:" ? x.href : null; } catch { return null; }
+}
+
 function newsItem(it) {
-  const href = it.originallink || it.link;
+  const href = safeURL(it.originallink) ?? safeURL(it.link);
+  if (!href) return null; // 쓸 수 있는 링크가 없는 항목은 건너뛴다
   return el("li", { class: "news-item" }, [
     el("a", { class: "news-item__title", href, target: "_blank", rel: "noopener" }, richText(it.title)),
     ...(it.description ? [el("p", { class: "news-item__desc" }, richText(it.description))] : []),
@@ -104,7 +110,7 @@ function newsItem(it) {
 function newsList(code, data) {
   const items = data?.items ?? [];
   if (!items.length) return el("p", { class: "empty" }, "지금은 이 구단 기사가 검색되지 않습니다.");
-  return el("ol", { class: "news-list" }, items.map(newsItem));
+  return el("ol", { class: "news-list" }, items.map(newsItem).filter(Boolean));
 }
 
 /** 구단 탭: 10개씩 더 받아 같은 목록 뒤에 잇는다(네이버가 준 순서 그대로). */
@@ -116,7 +122,7 @@ function moreButton(code, list, next, sort = "sim") {
     try {
       const data = await loadNews(code, PAGE, { start: next, sort });
       const items = data?.items ?? [];
-      list.append(...items.map(newsItem));
+      list.append(...items.map(newsItem).filter(Boolean));
       if (items.length < PAGE || next + PAGE > MAX_START) btn.remove();
       else { btn.replaceWith(moreButton(code, list, next + PAGE, sort)); }
     } catch {
@@ -229,7 +235,7 @@ function renderTabs() {
 function selectTab(key) {
   state.tab = key;
   const url = new URL(location.href);
-  if (TEAMS[key]) url.searchParams.set("team", key); else if (key === "fav") url.searchParams.set("team", "fav"); else url.searchParams.delete("team");
+  if (Object.hasOwn(TEAMS, key)) url.searchParams.set("team", key); else if (key === "fav") url.searchParams.set("team", "fav"); else url.searchParams.delete("team");
   history.replaceState(null, "", url);
   render();
   $("news").scrollIntoView({ block: "start", behavior: "smooth" });
@@ -240,7 +246,7 @@ function render() {
   const body = $("news-body");
   body.setAttribute("aria-busy", "false");
   const title = $("news-title"), lead = $("news-board-lead");
-  if (TEAMS[state.tab]) {
+  if (Object.hasOwn(TEAMS, state.tab)) {
     title.textContent = `${teamName(state.tab, { full: true })} 소식`;
     lead.textContent = NEWS_PROXY ? (state.sort === "date"
       ? "가장 최근 기사부터 네이버 검색 결과 그대로 보여 줍니다(최신순 — 다른 구단 기사가 섞일 수 있습니다). 아래에서 10개씩 더 볼 수 있습니다."
@@ -265,7 +271,7 @@ async function init() {
   renderNav("news.html");
   state.favs = loadFavs();
   const q = new URLSearchParams(location.search).get("team");
-  state.tab = TEAMS[q] ? q : q === "fav" ? "fav" : "all";
+  state.tab = Object.hasOwn(TEAMS, q ?? "") ? q : q === "fav" ? "fav" : "all";
   state.sort = new URLSearchParams(location.search).get("sort") === "date" ? "date" : "sim";
   await Promise.all([settle(state, "status", fetchJSON("status.json", { fresh: true })), settle(state, "teams", fetchJSON("teams.json"))]);
   // 구단 머리 줄(순위·최근 경기): teams.json의 가장 최근 시즌 일정
