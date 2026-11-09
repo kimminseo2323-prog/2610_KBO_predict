@@ -18,7 +18,7 @@
 ## 켜는 순서 (사람이 할 일)
 
 1. **NAVER API HUB (네이버 클라우드, 민서 계정)**: 네이버 개발자 센터의 검색 API는 2026-07-31부터 신규 신청이 막혀 API HUB에서만 신청할 수 있다(개발자 센터 공지 32530). https://www.ncloud.com → 회원가입·로그인 → 콘솔 → AI·NAVER API → NAVER API HUB → 이용 신청 → Application 만들기 → "검색(뉴스)" 선택 → 인증 정보에서 Client ID(`X-NCP-APIGW-API-KEY-ID`)와 Client Secret(`X-NCP-APIGW-API-KEY`) 확인. 개인 계정은 결제 수단 등록이 필요할 수 있다. 지금은 무료 요금제만 있고(추후 유료 요금제 예정), 콘솔에서 호출량 임계치·비용 알림을 설정해 둔다.
-2. **Cloudflare 계정**: https://dash.cloudflare.com 가입(무료). 처음 한 번 workers.dev 하위 이름을 정한다(이 프로젝트: `kbo-predict` → 주소 `https://kbo-news.kbo-predict.workers.dev`).
+2. **Cloudflare 계정**: https://dash.cloudflare.com 가입(무료). 처음 한 번 workers.dev 하위 이름을 정한다(이 계정: `kimminseo2323` → 주소 `https://kbo-news.kimminseo2323.workers.dev`. 대시보드에서 이 이름을 바꾸면 주소도 바뀌므로 `site/assets/app.js`의 `NEWS_PROXY`도 같이 바꾼다).
 3. **배포** (이 폴더에서):
    ```bash
    npm install -g wrangler
