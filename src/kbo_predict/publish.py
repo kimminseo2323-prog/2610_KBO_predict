@@ -67,6 +67,22 @@ def write_status(path, *, mode: str, next_game_date: str | None, games_today: in
     })
 
 
+HEARTBEAT_KEYS = ("generated_at", "run_url", "commit_sha")  # 실행할 때마다 바뀌는 칸 (내용이 아니라 "언제 돌았나")
+
+
+def heartbeat_only(old: dict | None, new: dict) -> bool:
+    """비시즌에 커밋을 건너뛸지: 바뀐 것이 실행 시각뿐이고, 오늘(KST) 이미 한 번 갱신했으면 True.
+
+    비시즌에도 예약 실행은 하루 최대 12번 돈다(Cloudflare 6 + GitHub 예비 6). 매번 status.json의 시각만 바꾼 커밋을
+    남기면 겨울 넉 달에 1,000개가 넘는 빈 커밋이 쌓인다 — 그래서 비시즌(mode "rewind", 다음 경기 없음)에는 하루 첫 실행만 남긴다.
+    시즌 중, 다음 경기가 잡힌 뒤, 수집 오류가 있을 때, 시각 말고 다른 칸이 바뀌었을 때는 항상 커밋한다(False).
+    generated_at은 KST(+09:00) ISO 문자열이라 앞 10자가 KST 날짜다."""
+    if not old or new.get("mode") != "rewind" or new.get("next_game_date") or new.get("collect_errors"):
+        return False
+    body = lambda d: {k: v for k, v in d.items() if k not in HEARTBEAT_KEYS}  # noqa: E731
+    return body(old) == body(new) and str(old.get("generated_at"))[:10] == str(new.get("generated_at"))[:10]
+
+
 def _read_history(path) -> pd.DataFrame:
     path = Path(path)
     if not path.exists():

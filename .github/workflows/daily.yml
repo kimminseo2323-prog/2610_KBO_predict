@@ -37,6 +37,9 @@ jobs:
           git add data/raw data/public
           if git diff --cached --quiet; then
             echo "no changes"
+          elif [ "$(git diff --cached --name-only)" = "data/public/status.json" ] && python scripts/heartbeat_gate.py; then
+            # 비시즌: 실행 시각만 바뀐 status.json은 하루 첫 실행만 커밋한다 (publish.heartbeat_only)
+            git reset -q
           else
             git commit -m "auto: predictions $(TZ=Asia/Seoul date +%F-%H%M)"
             git pull --rebase origin main

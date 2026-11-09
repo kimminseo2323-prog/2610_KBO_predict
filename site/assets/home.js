@@ -23,10 +23,11 @@ import { whatifProb } from "./whatif.js";
 const $ = (id) => document.getElementById(id);
 // 같은 모듈이 두 페이지를 그린다: index.html(이번 시즌 — 오늘·가장 최근 예측)과 replay.html(지난 시즌 > 경기일 다시 보기).
 const PAGE = document.body?.dataset.page === "replay" ? "replay" : "live";
-const LATEST_REWIND = 2026;   // 시즌을 고르지 않았을 때 여는 다시 보기 시즌
+const FALLBACK_REWIND = 2026;   // 시즌 목록(seasons/index.json)을 못 읽을 때 여는 다시 보기 시즌
 const params = new URLSearchParams(location.search);
-// 다시 보기 시즌: ?season= (없으면 ?date=의 연도, 그것도 없으면 LATEST_REWIND)
-const REPLAY_SEASON = Number(params.get("season")) || Number(String(params.get("date") ?? "").slice(0, 4)) || LATEST_REWIND;
+// 다시 보기 시즌: ?season= (없으면 ?date=의 연도, 그것도 없으면 seasons/index.json의 rewind_seasons 중 가장 최근 — 다시 보기 페이지만 받는다)
+const REPLAY_SEASON = Number(params.get("season")) || Number(String(params.get("date") ?? "").slice(0, 4))
+  || (PAGE === "replay" ? await latestRewind() : FALLBACK_REWIND);
 const REWIND = `rewind/${REPLAY_SEASON}`;
 const FIXTURE = IS_LOCAL ? params.get("fixture") : null;     // "edge" | "offseason" | null
 const FIXTURE_BASE = "../tests/fixtures/site";
@@ -269,7 +270,7 @@ function bindControls() {
   $("rewind-prev").addEventListener("click", () => openRewind(state.dateIdx - 1));
   $("rewind-next").addEventListener("click", () => openRewind(state.dateIdx + 1));
   if (PAGE === "live") { // 이번 시즌: 다시 보기는 지난 시즌 아래 페이지로
-    $("rewind-toggle").addEventListener("click", () => { location.href = `replay.html?season=${endedSeason() ?? LATEST_REWIND}`; });
+    $("rewind-toggle").addEventListener("click", () => { const s = endedSeason(); location.href = s ? `replay.html?season=${s}` : "replay.html"; });
   }
   if (PAGE === "replay") $("to-live").addEventListener("click", () => { location.href = "index.html"; });
   if (PAGE === "replay") $("replay-season")?.addEventListener("change", (e) => { location.href = `replay.html?season=${e.target.value}`; });
@@ -340,7 +341,7 @@ function renderHead() {
     state.snappedFrom = null; // 처음 한 번만 알린다
     $("day-title").textContent = `${fmtDate(day.date)} 다시 보기`;
     $("day-lead").textContent = snapped + (d && d.decided
-      ? `이날 ${d.decided}경기 중 ${d.correct}경기를 적중했습니다. ${REPLAY_SEASON} 시즌 전체 적중률은 ${fmtPct(state.index.accuracy, 1)}입니다.${REPLAY_SEASON < LATEST_REWIND ? ` (${REPLAY_SEASON}보다 앞선 시즌으로만 학습한 모델)` : ""}`
+      ? `이날 ${d.decided}경기 중 ${d.correct}경기를 적중했습니다. ${REPLAY_SEASON} 시즌 전체 적중률은 ${fmtPct(state.index.accuracy, 1)}입니다.${String(state.index.model_version ?? "").startsWith("walk-") ? ` (${REPLAY_SEASON}보다 앞선 시즌으로만 학습한 모델)` : ""}`
       : "이날은 적중을 따질 경기가 없습니다.");
   }
   renderBug();
@@ -403,6 +404,14 @@ function renderSeason() {
       el("a", { class: "btn", href: `seasons.html?season=${yr}` }, `지난 시즌에서 ${yr} 다시 보기`),
     ]),
   ]));
+}
+
+/** 다시 보기가 있는 가장 최근 시즌 (seasons/index.json의 rewind_seasons). 못 읽으면 FALLBACK_REWIND. */
+async function latestRewind() {
+  try {
+    const seasons = (await fetchJSON("seasons/index.json", { fresh: true })).rewind_seasons ?? [];
+    return seasons.length ? Math.max(...seasons) : FALLBACK_REWIND;
+  } catch { return FALLBACK_REWIND; }
 }
 
 /** 다시 보기: 시즌 고르기(seasons/index.json의 rewind_seasons). */

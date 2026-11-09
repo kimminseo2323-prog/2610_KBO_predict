@@ -393,7 +393,8 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 | [`weekly_retrain.yml`](.github/workflows/weekly_retrain.yml) | 매주 월요일 03:07 (UTC 일요일 `7 18`) + 수동 | 피처 재생성 → `train_win live --skip-if-same`(예측과 manifest의 `live.features_fingerprint`가 모두 그대로면 쓰지 않음) → 군집 후보 fit → `cluster compare --types`(유형 정의가 같은지, 유형표 해시가 바뀌었는지) → 유형표가 바뀌었으면(`types_changed=1`) **실패**("frozen cluster inputs changed — refreeze by hand", 자동 fit·publish 없음) → 전체 `check_parity --require-live`(노트북 02~05 포함) | main에서만 `auto: weekly retrain YYYY-MM-DD`로 커밋(바뀐 것이 없으면 커밋 없음), 실패 시 `parity-failure` 이슈 |
 | [`ci.yml`](.github/workflows/ci.yml) | main push, PR | `pytest -m "not slow"` + `check_parity --quick` (ubuntu, 30분 제한, 같은 브랜치의 이전 실행 취소) | 위 `ci · parity` 배지 |
 
-- 권한은 `daily`·`weekly`가 `contents: write` + `issues: write`, `ci`가 `contents: read`입니다. 시크릿은 쓰지 않습니다.
+- 권한은 `daily`·`weekly`가 `contents: write` + `issues: write`, `ci`가 `contents: read`입니다. GitHub 워크플로는 시크릿을 쓰지 않습니다(정시 시작용 GitHub 토큰은 Cloudflare Worker `kbo-cron`의 비밀 변수에만 있음).
+- **비시즌 커밋은 하루 1번**: 비시즌(`status.json`의 `mode: "rewind"`, 다음 경기 없음)에도 예약 실행은 하루 최대 12번(Cloudflare 6 + GitHub 6) 돕니다. 바뀐 것이 `status.json`의 실행 시각뿐이고 오늘(KST) 이미 커밋했으면 커밋하지 않습니다([`scripts/heartbeat_gate.py`](scripts/heartbeat_gate.py), `publish.heartbeat_only`). 수집 오류, 다음 경기 날짜, 그 밖의 내용이 바뀌면 언제나 커밋합니다.
 - 의존성은 런타임 [`requirements.txt`](requirements.txt)(일일·주간)와 개발용 [`requirements-dev.txt`](requirements-dev.txt)(`-r requirements.txt` + pytest·matplotlib·nbformat·nbclient·nbconvert·ipykernel, ci·주간)로 나눴습니다. 모두 `==` 고정이고 numpy는 1.26.4를 유지합니다.
 - `model_report.json`, `models/report-2026.pkl`, `models/team-2026.pkl`, `models/clusters.pkl`, `players.json`·`teams.json`, 되감기 JSON은 주간 재학습이 덮어쓰지 않습니다(고정). 주간 재학습이 바꾸는 것은 `models/win_model.pkl`과 manifest의 `live` 항목뿐입니다. 군집 유형표가 커밋본과 달라지면(얼린 2015~2026 박스스코어가 바뀐 것) 주간 재학습은 실패하고 `parity-failure` 이슈를 엽니다 — 원인을 확인한 뒤 `cluster fit`·`publish`·`train_win report --force`로 사람이 다시 얼립니다.
 - 얼린 시즌(2015~2026)의 박스스코어는 일일 작업이 다시 받지 않습니다(빠진 박스스코어 재수집은 얼리지 않은 시즌만). 그래서 얼린 산출물의 parity가 매일 수집 때문에 깨지지 않습니다.
@@ -419,7 +420,7 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 - **시리즈 입력**: 대진(팀, `best_of`, 1차전 날짜, 경기별 홈팀, 선택 `head_start`)은 사람이 유지하는 [`config/postseason.yaml`](config/postseason.yaml)에서 읽고, 지금까지의 전적은 `head_start` + `games.jsonl`에서 기준 날짜 **전**에 끝난 경기(`date < on`)로 셉니다. 취소 경기는 다음 경기가 같은 순번(같은 홈)으로 치러지고, 포스트시즌 무승부는 경기 순번(홈 슬롯)을 하나 씁니다.
 - **와일드카드 1승 어드밴티지**: 4위 팀이 1승을 안고 시작하는 2선승제는 `best_of: 3`, `head_start: [1, 0]`(팀0 = 4위)으로 적습니다. `homes`는 실제 경기 수(`best_of − sum(head_start)` = 2)만큼이고, 4위는 1승, 5위는 2승이 더 필요합니다. 2026: LG(4위, 두 경기 모두 홈) 대 두산 — 1차전 전 카드는 전적 1-0, LG 0.8194(경기당 LG 승 확률이 p면 1 − (1 − p)²). 실제로는 LG가 1차전을 이겨 2-0으로 끝났습니다. 5위가 1차전을 이기면 1-1로 2차전이 남습니다.
 - 출력 확률(`playoff_prob`, `exp_wins`, `win_prob` 등)은 소수 4자리입니다.
-- **예 (2026-10-29)**: 플레이오프 삼성(SS) 대 KIA(HT) 1승 1패, 오늘 3차전(KIA 홈)은 예고 선발 포함 확률 SS 0.5536, 4차전은 팀 모델 SS 0.4974, 5차전(삼성 홈) SS 0.5629 → 시리즈 승리 확률 SS 0.5579 / HT 0.4421, 가장 흔한 결말 3-2, 5차전까지 갈 확률 0.5083(`today_game_prob_source: "win_model (starter-inclusive)"`). 오늘 경기도 팀 모델로 굴리면 SS 0.5279였습니다. 커밋된 `latest.json`(10-29 14:40 실행)은 이 기능 전에 만들어져 `outlook`이 아직 없고, 다음 일일 실행부터 들어갑니다.
+- **예 (2026-10-29)**: 플레이오프 삼성(SS) 대 KIA(HT) 1승 1패, 오늘 3차전(KIA 홈)은 예고 선발 포함 확률 SS 0.5536, 4차전은 팀 모델 SS 0.4974, 5차전(삼성 홈) SS 0.5629 → 시리즈 승리 확률 SS 0.5579 / HT 0.4421, 가장 흔한 결말 3-2, 5차전까지 갈 확률 0.5083(`today_game_prob_source: "win_model (starter-inclusive)"`). 오늘 경기도 팀 모델로 굴리면 SS 0.5279였습니다.
 
 ### 되감기 (`rewind/2026/`)
 
@@ -471,11 +472,11 @@ GitHub Actions 워크플로 3개가 저장소를 돌리고, 사이트가 읽을 
 - **시리즈 시뮬레이션에서 선발을 아는 건 오늘 경기뿐입니다.** 오늘 경기는 예측 카드와 같은 선발 포함 확률로, 그 뒤 경기는 같은 모델에 선발 '모름'으로 굴립니다. 선발 로테이션은 반영하지 않습니다.
 - **시뮬레이션 안에서 팀 상태가 바뀌지 않습니다.** 한 경기 결과가 다음 경기의 승률·최근 10경기 같은 피처를 바꾸는 효과를 무시하고, 남은 경기를 모두 기준 날짜 상태로 계산합니다(불펜 피로 피처도 고정).
 - **가을야구 동률 배분은 실제 KBO 규정과 다릅니다.** 실제로는 상대 전적이나 순위 결정전으로 가르지만, 여기서는 승률만 보고 진출 몫을 나눕니다.
-- **포스트시즌 대진은 사람이 갱신합니다.** `config/postseason.yaml`에 없는 시리즈는 `next_game` 카드가 되고, 2026 한국시리즈는 상대가 정해지면 채워야 합니다. 데이터에서 끝나지 않은 채 남은 등록 시리즈는 다음 시리즈가 시작될 때까지 "진행 중"으로 보입니다.
+- **포스트시즌 대진의 뼈대는 사람이 적습니다.** 시리즈 이름·`best_of`·홈 순서는 `config/postseason.yaml`에 적고, 아직 정해지지 않은 상대 팀과 시작일은 앞 시리즈 승자와 첫 맞대결 날짜로 데이터에서 채웁니다(`simulate.resolve_undecided`, 2026-10-31부터). 설정에 없는 시리즈는 `next_game` 카드가 되고, 데이터에서 끝나지 않은 채 남은 등록 시리즈는 다음 시리즈가 시작될 때까지 "진행 중"으로 보입니다.
 - **되감기는 실제 선발 가정입니다.** 백테스트와 같이 "경기 전에 선발을 정확히 안다"는 가정 위의 예측입니다. 예고 선발 이력은 따로 쌓지 않습니다(`starters.jsonl`은 경기당 가장 최근 발표만).
 - **값 지문의 경계**: 어떤 값이 소수 6자리 반올림 경계에 정확히 걸리면 플랫폼에 따라 지문이 달라질 수 있습니다(지금 데이터에서는 Linux·Windows가 같음).
 - **주간 재학습은 얼린 군집을 스스로 다시 얼리지 않습니다.** 유형표가 바뀌면(`types_changed=1`) 실패로 멈추고 사람이 다시 얼립니다. 이 실패 경로는 Actions에서 아직 돈 적이 없습니다(지금 데이터로는 유형표가 그대로).
-- **`history.csv`는 아직 짧습니다**: 2026-10-29부터 포스트시즌 4경기(v0.2 예측, 정산된 3경기 모두 적중, 11-03은 결과 대기). v0.3 예측은 다음 자동 실행부터 쌓입니다. 라이브 적중률은 기록이 쌓여야 말할 수 있습니다.
+- **라이브 기록(`history.csv`)은 2026 포스트시즌 8경기뿐입니다**: 플레이오프 3경기(v0.2) 3개 적중, 한국시리즈 5경기(v0.3) 1개 적중 — 합계 4/8. 표본이 작아 라이브 적중률로 모델을 판단할 수 없고, 가을야구 성적은 위 "가을야구 성적"(여러 시즌 walk-forward)으로 봅니다. 11/6·11/7 두 경기는 예측이 경기 시작 뒤에 다시 기록됐습니다(아래 운영 규칙으로 지금은 막음). 2027 정규시즌부터 다시 쌓입니다.
 
 ## 공개 파일
 

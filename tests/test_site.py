@@ -648,8 +648,10 @@ def test_teams_markup():
     assert soup.find("script", src="assets/teams.js").get("type") == "module"
     js = (ASSETS / "teams.js").read_text(encoding="utf-8")
     assert 'fetchJSON("teams.json")' in js and 'fetchJSON("model_report.json")' in js
-    assert re.search(r'fetchJSON\((?:"rewind/2026/index\.json"|`rewind/\$\{REWIND_SEASON\}/index\.json`), \{ fresh: true \}\)', js)
-    assert "const REWIND_SEASON = 2026;" in js
+    # 가을야구 확률 되감기: 다시 보기가 있는 시즌 모두(seasons/index.json의 rewind_seasons) — 2026 고정이 아니다
+    assert "fetchJSON(`rewind/${season}/index.json`, { fresh: true })" in js
+    assert 'fetchJSON("seasons/index.json", { fresh: true })' in js and "rewind_seasons" in js
+    assert "REWIND_SEASON" not in js and "const FALLBACK_REWIND = [2026];" in js
     assert "history.replaceState" in js and "teamNameFor" in js
     assert re.search(r'import\s*\{[^}]*\btypeColor\b[^}]*\}\s*from\s*"\./app\.js"', js)
     assert not re.search(r"\b(?:const|let|var)\s+(?:TYPE_COLORS|TEAMS)\b", js)  # 색·팀은 app.js 하나뿐
@@ -900,3 +902,13 @@ def test_security_hardening():
     assert app.split("export const NEWS_PROXY = ")[1].split(";")[0].strip('"') in csp       # 프록시 주소가 바뀌면 CSP도 같이
     gi = (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert all(x in gi for x in (".env", ".dev.vars", "proxy/**/.wrangler/"))
+
+
+
+def test_replay_default_season_comes_from_season_index():
+    """다시 보기 기본 시즌은 seasons/index.json의 rewind_seasons 중 가장 최근(2027 다시 보기를 만들면 코드 수정 없이 따라간다).
+    walk-forward 시즌 안내는 연도 비교가 아니라 그 다시 보기의 model_version("walk-…")으로 판단한다."""
+    js = (ASSETS / "home.js").read_text(encoding="utf-8")
+    assert "LATEST_REWIND" not in js and "const FALLBACK_REWIND = 2026;" in js
+    assert '(PAGE === "replay" ? await latestRewind() : FALLBACK_REWIND)' in js
+    assert 'String(state.index.model_version ?? "").startsWith("walk-")' in js

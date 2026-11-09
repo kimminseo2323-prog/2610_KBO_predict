@@ -99,6 +99,8 @@
 
 만드는 곳: `kbo_predict.rewind`(`scripts/build_rewind.py`). 모델 `report-2026`(2015~2024 학습·2025 검증, 2026은 홀드아웃). 고정 파일.
 
+지난 시즌 `rewind/{2018~2025}/`도 같은 형식이다(`build_rewind.py --walk-forward`, 모델 `walk-{시즌}` = 그 시즌보다 앞선 시즌들로만 학습, `whatif`·`whatif_model` 없음). 어느 시즌이 있는지는 `seasons/index.json`의 `rewind_seasons` — 다시 보기의 기본 시즌(가장 최근)과 팀 페이지 가을야구 확률 되감기(그 목록의 시즌만)가 이 목록을 따른다. 아래 매핑 표의 `rewind/2026/…`은 검사용 대표 경로다.
+
 | 키 | 타입 | 예시 | null 규칙 |
 | --- | --- | --- | --- |
 | `season` | 정수 | `2026` | |

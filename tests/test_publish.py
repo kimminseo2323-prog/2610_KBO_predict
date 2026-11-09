@@ -129,3 +129,26 @@ def test_write_json_atomic(tmp_path, monkeypatch):
     write_latest(latest, date="2026-10-30", games=[{"game_id": 2}], meta=meta)  # 정상 쓰기도 .tmp를 남기지 않는다
     assert json.loads(latest.read_text(encoding="utf-8"))["date"] == "2026-10-30"
     assert sorted(p.name for p in tmp_path.iterdir()) == ["history.csv", "latest.json"]
+
+
+
+def test_heartbeat_only_skips_same_day_offseason_timestamp_commits():
+    """비시즌에 시각만 바뀐 status.json은 같은 KST 날짜면 건너뛴다(하루 1번). 그 밖에는 모두 커밋."""
+    from kbo_predict.publish import heartbeat_only
+    base = {"generated_at": "2026-11-10T09:07:01+09:00", "run_url": "r1", "commit_sha": "a", "mode": "rewind",
+            "next_game_date": None, "games_today": 0, "model_version": "v0.3", "collect_errors": [],
+            "season_result": {"champion": "SS"}}
+    later = {**base, "generated_at": "2026-11-10T17:55:30+09:00", "run_url": "r2", "commit_sha": "b"}
+    assert heartbeat_only(base, later)
+    assert not heartbeat_only(base, {**later, "generated_at": "2026-11-11T00:13:00+09:00"})   # 다음 날 첫 실행
+    assert not heartbeat_only(base, {**later, "mode": "live"})                                 # 시즌 중
+    assert not heartbeat_only(base, {**later, "next_game_date": "2027-03-14"})                 # 다음 경기가 잡힘
+    assert not heartbeat_only(base, {**later, "collect_errors": ["boom"]})                     # 오류는 꼭 남긴다
+    assert not heartbeat_only(base, {**later, "season_result": None})                          # 내용이 바뀜
+    assert not heartbeat_only(None, later)                                                     # 처음 만드는 파일
+
+
+def test_daily_workflow_uses_heartbeat_gate_only_for_status_only_changes():
+    from pathlib import Path
+    wf = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
+    assert '"$(git diff --cached --name-only)" = "data/public/status.json" ] && python scripts/heartbeat_gate.py' in wf

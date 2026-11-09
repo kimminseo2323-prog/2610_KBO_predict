@@ -2,11 +2,11 @@
 //
 // 화면 순서: 머리(#teams-lead + 시즌 고르기 #season-select, ?season=으로도 열림) → 카드 4장 → 푸터 증거 바.
 //   #standings(크림, 순위표) #roster-types(라벤더, 로스터 유형 구성) #head-to-head(피치, 상대 전적 10×10)
-//   #playoff-rewind(오커, 가을야구 확률 되감기 — 2026만, 다른 시즌이면 숨김)
+//   #playoff-rewind(오커, 가을야구 확률 되감기 — 경기일 다시 보기가 있는 시즌만(seasons/index.json의 rewind_seasons, 2018~), 없으면 숨김)
 //
 // 데이터: teams.json(팀-시즌 120줄)과 model_report.json(유형 이름: cluster_quality.{batter,pitcher}.types[])을
 // 처음에 함께 받는다. players.json(1.77 MB)은 읽지 않는다. 시즌을 바꾸면 ①②③은 받아 둔 것으로 다시 그린다(다시 받지 않음).
-// ④는 2026을 처음 보여 줄 때 rewind/2026/index.json과 날짜 파일 최대 25개(약 7일 간격 + 마지막 날)를 동시에 받는다.
+// ④는 그 시즌을 처음 보여 줄 때 rewind/{시즌}/index.json과 날짜 파일 최대 25개(약 7일 간격 + 마지막 날)를 동시에 받는다(시즌별로 기억).
 // 데이터 키는 docs/site/data-contract.md 매핑 표(페이지 "팀")에 적은 것만 쓴다.
 
 import {
@@ -17,7 +17,7 @@ import { lineChart, stackedBar, enableTips } from "./charts.js";
 
 const $ = (id) => document.getElementById(id);
 
-const REWIND_SEASON = 2026;   // 되감기 파일이 있는 유일한 시즌 (rewind/2026/)
+const FALLBACK_REWIND = [2026]; // seasons/index.json을 못 읽을 때 되감기가 있다고 보는 시즌
 const PLAYOFF_SPOTS = 5;      // 가을야구: 정규시즌 5위까지 (2015년부터 와일드카드 포함)
 const REWIND_STRIDE = 7;      // 되감기 날짜 표본 간격 (매 7번째 날 + 마지막 날 → 최대 25개 파일)
 const LABEL_SHARE = 0.08;     // 로스터 막대 안에 %를 쓰는 최소 비중
@@ -32,8 +32,15 @@ const state = {
   teams: null, report: null, status: null, errors: {},
   seasons: [],          // 내림차순
   season: null,
-  rewind: { phase: "idle", index: null, days: null, failed: 0, error: null },
+  rewindSeasons: FALLBACK_REWIND,   // 되감기 파일이 있는 시즌 (seasons/index.json의 rewind_seasons)
+  rewinds: new Map(),               // 시즌 → { phase, index, days, failed, error }
 };
+
+/** 그 시즌의 되감기 상태 (처음이면 idle로 만든다). */
+function rewindOf(season) {
+  if (!state.rewinds.has(season)) state.rewinds.set(season, { phase: "idle", index: null, days: null, failed: 0, error: null });
+  return state.rewinds.get(season);
+}
 
 // ---------- 작은 도우미 ----------
 
@@ -64,7 +71,10 @@ const loadReport = () => settle(state, "report", fetchJSON("model_report.json"))
 
 async function init() {
   renderNav("teams.html");
-  await Promise.all([loadTeams(), loadReport(), settle(state, "status", fetchJSON("status.json", { fresh: true }))]);
+  const seasonsIndex = { errors: {} };   // 시즌 목록은 없어도 페이지는 그린다(되감기는 FALLBACK_REWIND만)
+  await Promise.all([loadTeams(), loadReport(), settle(state, "status", fetchJSON("status.json", { fresh: true })),
+    settle(seasonsIndex, "data", fetchJSON("seasons/index.json", { fresh: true }))]);
+  if (Array.isArray(seasonsIndex.data?.rewind_seasons)) state.rewindSeasons = seasonsIndex.data.rewind_seasons;
   renderFooter(state.status);
   setupSeasons();
   renderAll();
@@ -266,7 +276,7 @@ function renderStandings(rows) {
     el("li", {}, "득실 기대 승률(피타고리안): 득점과 실점만으로 계산한 '이만큼은 이겼어야 할' 승률입니다. 실제 승률이 이보다 높으면 접전에서 많이 이긴 편입니다."),
     hasModel
       ? el("li", {}, `모델 예상 승률: 모델이 ${season} 경기마다 낸 이 팀의 승리 확률을 평균한 값입니다. 실제 승률과는 다른 숫자입니다. 모델은 ${season} 시즌을 배우지 않았습니다. 확률이 50% 근처에 모이는 편이라 팀 사이 차이가 실제 승률보다 작게 나옵니다.`)
-      : el("li", {}, `모델 예상 승률은 모델이 배우지 않은 ${REWIND_SEASON} 시즌에만 있습니다. ${season} 시즌은 모델이 이미 본 시즌이라 뺐습니다.`),
+      : el("li", {}, `모델 예상 승률은 모델이 배우지 않은 시즌(${modelSeasons().join("·") || "없음"})에만 있습니다. ${season} 시즌은 모델이 이미 본 시즌이라 뺐습니다.`),
     ...tieNotes(rows, season).map((t) => el("li", {}, `†: ${t}`)),
     TIEBREAK_GAMES[String(season)] && rows.some((r) => r.tied)
       ? el("li", {}, "결정전은 정규시즌 경기가 아니라 데이터에 없어서 실제 결과를 따로 적었습니다. 승패와 승률에는 넣지 않았습니다.")
@@ -391,21 +401,32 @@ ${fmtRate3(v)}`,
   enableTips(grid);
 }
 
-// ---------- ④ 가을야구 확률 되감기 (2026만) ----------
+/** teams.json에 모델 예상 승률(model_expected)이 있는 시즌 — 모델이 배우지 않은 시즌. */
+function modelSeasons() {
+  return [...new Set((state.teams?.teams ?? []).filter((t) => fin(t.model_expected)).map((t) => t.season))].sort();
+}
+
+// ---------- ④ 가을야구 확률 되감기 (다시 보기가 있는 시즌) ----------
 
 function renderRewind() {
   const section = $("playoff-rewind");
-  section.hidden = state.season !== REWIND_SEASON;
+  const season = state.season;
+  section.hidden = !state.rewindSeasons.includes(season);
   if (section.hidden) return;
-  const rw = state.rewind;
+  $("rewind-title").textContent = `${season} 가을야구 확률 변화`;
+  $("rewind-lead").textContent = `${season} 시즌 동안 날짜별로 계산한 5위 안에 들 확률입니다.` +
+    (modelSeasons().includes(season) ? "" : ` 그 시즌보다 앞선 시즌들로만 학습한 모델로 계산했습니다.`);
+  const rw = rewindOf(season);
   if (rw.phase === "idle") { loadRewind(); return; }
   if (rw.phase === "done") drawRewind();
   else if (rw.phase === "error") showRewindError();
+  else $("rewind-body").replaceChildren(el("div", { class: "inset" }, el("div", { class: "skeleton skel-line" })),
+    el("p", { class: "rewind__progress", role: "status" }, "날짜별 확률을 불러오는 중…")); // 다른 시즌을 보다 돌아왔는데 아직 받는 중
 }
 
-/** 되감기 실패 상자 (다른 시즌을 보는 사이에 실패했어도 2026으로 돌아오면 이것을 보여 준다). */
+/** 되감기 실패 상자 (다른 시즌을 보는 사이에 실패했어도 그 시즌으로 돌아오면 이것을 보여 준다). */
 function showRewindError() {
-  const rw = state.rewind;
+  const rw = rewindOf(state.season);
   const body = $("rewind-body");
   body.setAttribute("aria-busy", "false");
   const box = showError(body, rw.error ?? "", () => { rw.phase = "idle"; renderRewind(); });
@@ -420,18 +441,19 @@ function sampleDates(dates) {
 }
 
 async function loadRewind() {
-  const rw = state.rewind;
+  const season = state.season;
+  const rw = rewindOf(season);
   const body = $("rewind-body");
   rw.phase = "loading";
   body.setAttribute("aria-busy", "true");
   const progress = el("p", { class: "rewind__progress", role: "status" }, "날짜별 확률을 불러오는 중…");
   body.replaceChildren(el("div", { class: "inset" }, el("div", { class: "skeleton skel-line" })), progress);
   try {
-    rw.index = await fetchJSON(`rewind/${REWIND_SEASON}/index.json`, { fresh: true });
+    rw.index = await fetchJSON(`rewind/${season}/index.json`, { fresh: true });
     const dates = sampleDates((rw.index.dates ?? []).map((d) => d.date).filter(Boolean));
     let done = 0;
     progress.textContent = `날짜 ${dates.length}개 중 0개 불러옴…`;
-    const results = await Promise.allSettled(dates.map((d) => fetchJSON(`rewind/${REWIND_SEASON}/${d}.json`).finally(() => {
+    const results = await Promise.allSettled(dates.map((d) => fetchJSON(`rewind/${season}/${d}.json`).finally(() => {
       done += 1;
       progress.textContent = `날짜 ${dates.length}개 중 ${done}개 불러옴…`;
     })));
@@ -443,8 +465,8 @@ async function loadRewind() {
     rw.phase = "error";
     rw.error = err.message;
   }
+  if (state.season !== season) return; // 받는 사이 시즌을 바꿨으면 그 시즌을 다시 고를 때 그린다
   body.setAttribute("aria-busy", "false");
-  if (state.season !== REWIND_SEASON) return; // 받는 사이 시즌을 바꿨으면 다음에 2026을 고를 때 그린다
   if (rw.phase === "done") drawRewind();
   else showRewindError();
 }
@@ -453,7 +475,8 @@ async function loadRewind() {
 const LINE_DASH = { KT: "7 5", LT: "2 4" };
 
 function drawRewind() {
-  const rw = state.rewind;
+  const season = state.season;
+  const rw = rewindOf(season);
   const body = $("rewind-body");
   const days = rw.days;
   const x = (d) => { const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(d.outlook?.as_of ?? d.date); return m ? `${+m[1]}.${+m[2]}` : d.date; }; // 짧은 날짜는 사이트 전체 "11.3"
@@ -464,9 +487,9 @@ function drawRewind() {
   const series = codes
     .sort((a, b) => (final(b) ?? -1) - (final(a) ?? -1) || a.localeCompare(b))
     .map((c) => ({
-      name: shortName(c, REWIND_SEASON),
-      short: shortName(c, REWIND_SEASON),
-      legend: `${shortName(c, REWIND_SEASON)} ${fmtProb(final(c))}`,
+      name: shortName(c, season),
+      short: shortName(c, season),
+      legend: `${shortName(c, season)} ${fmtProb(final(c))}`,
       color: TEAMS[c].color,
       ink: teamColors(c).ink,                       // 오른쪽 끝 이름표 = 그 팀 글자색 (어느 선이 어느 팀인지 범례 없이)
       dash: LINE_DASH[c] ?? false,
@@ -483,7 +506,7 @@ function drawRewind() {
   );
   lineChart(chart, series, {
     yDomain: [0, 1], yFormat: (v) => fmtPct(v), height: 300, endLabels: true,
-    label: `${REWIND_SEASON} 팀별 가을야구 진출 확률 추이`,
+    label: `${season} 팀별 가을야구 진출 확률 추이`,
   });
 }
 
