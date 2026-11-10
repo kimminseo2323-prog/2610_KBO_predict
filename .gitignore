@@ -39,3 +39,5 @@ proxy/**/.wrangler/
 .env
 .env.*
 .dev.vars
+# 머리 띠 글자 효과 빌드 (web/ → site/assets/wordmark.js)
+web/node_modules/

@@ -1,0 +1,14 @@
+{
+  "name": "kbo-predict-web",
+  "private": true,
+  "description": "이번 시즌 페이지 머리 띠의 글자 효과(Originkit Vector Wordmark 3)를 site/assets/wordmark.js 한 파일로 묶는다. React 대신 Preact(같은 사용법, 약 1/5 크기).",
+  "scripts": {
+    "build": "esbuild src/wordmark.tsx --bundle --minify --format=iife --target=es2020 --outfile=../site/assets/wordmark.js --jsx=automatic --jsx-import-source=preact --alias:react=preact/compat --alias:react-dom/client=preact/compat/client --alias:react-dom=preact/compat --alias:react/jsx-runtime=preact/jsx-runtime --define:process.env.NODE_ENV=\\\"production\\\" --legal-comments=none"
+  },
+  "dependencies": {
+    "preact": "10.24.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0"
+  }
+}

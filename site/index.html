@@ -32,10 +32,12 @@
 </header>
 
 <main id="main" class="wrap">
-  <!-- 시즌이 끝나면: 우승 팀 한 줄과 지난 시즌 바로가기 (status.season_result) -->
-  <section class="season" id="season" aria-labelledby="season-title" hidden>
-    <h2 class="sr-only" id="season-title">가을야구 결과</h2>
-    <div id="season-body"></div>
+  <!-- 머리 띠: Baseball 글자 효과(마우스가 있는 화면만 움직임 — wordmark-loader.js) + 시즌이 끝나면 우승 한 줄(home.js renderSeason) -->
+  <section class="wm-band" id="wm-band" aria-labelledby="wm-title">
+    <h2 class="sr-only" id="wm-title">KBO Predict</h2>
+    <div class="wm-band__stage" id="wm-stage" aria-hidden="true"></div>
+    <p class="wm-band__hint" aria-hidden="true">마우스를 글자 위로 움직여 보세요</p>
+    <div class="wm-band__foot" id="wm-foot" hidden></div>
   </section>
   <!-- 날짜 칩: 라이브면 날짜 + "라이브" + 되감기 토글, 되감기면 2026 날짜 슬라이더 + "라이브로" -->
   <div class="page-head home-head">
@@ -143,5 +145,6 @@
   <svg class="footer__field" viewBox="0 0 200 200" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2"><path d="M100 182 L188 94 M100 182 L12 94"/><path d="M12 94 Q100 -24 188 94"/><path d="M100 172 L148 124 L100 76 L52 124 Z"/><circle cx="100" cy="126" r="7"/><rect x="144" y="120" width="8" height="8" transform="rotate(45 148 124)"/><rect x="96" y="72" width="8" height="8" transform="rotate(45 100 76)"/><rect x="48" y="120" width="8" height="8" transform="rotate(45 52 124)"/><path d="M95 170 h10 v4 l-5 5 l-5 -5 z"/></svg>
 </footer>
 <script type="module" src="assets/home.js"></script>
+<script src="assets/wordmark-loader.js" defer></script>
 </body>
 </html>

@@ -457,7 +457,7 @@ def test_home_markup_has_sections():
     # 매치업이 벤토보다 앞, 그 앞에 날짜 칩
     html = str(soup)
     assert html.index('id="date-bar"') < html.index('id="matchups"') < html.index('id="factors"')
-    assert [s["src"] for s in soup.find_all("script", src=True)] == ["assets/home.js"]
+    assert [s["src"] for s in soup.find_all("script", src=True)] == ["assets/home.js", "assets/wordmark-loader.js"]
     assert soup.find("script", src="assets/home.js").get("type") == "module"
 
 
@@ -878,7 +878,7 @@ def test_seasons_page_and_this_season_cards():
     assert "function teamStrip" in news and "function sortSwitch" in news and 'get("sort") === "date"' in news
     assert "href: `seasons.html?season=${yr}`" in home and "season_result" in home and "const endedSeason" in home
     idx = BeautifulSoup((SITE / "index.html").read_text(encoding="utf-8"), "html.parser")
-    assert idx.title.get_text().startswith("이번 시즌") and idx.find(id="season") is not None
+    assert idx.title.get_text().startswith("이번 시즌") and idx.find(id="wm-foot") is not None   # 시즌 종료 한 줄은 머리 띠 아래
 
 
 def test_security_hardening():
@@ -925,3 +925,28 @@ def test_offseason_home_shows_final_results():
     assert 'if (PAGE === "live" && o.type === "series" && sr?.name === o.name) return outlookFinal(o, sr, title, body);' in js
     news = (ASSETS / "news.js").read_text(encoding="utf-8")
     assert "2026 정규시즌 순위 순" not in news                          # 순위 기준 시즌은 teams.json의 가장 최근 시즌
+
+
+
+def test_wordmark_band_loads_effect_only_where_it_shows():
+    """이번 시즌 머리 띠: 글자 효과 묶음(wordmark.js = Originkit Vector Wordmark 3 + Preact)은 마우스가 있는 화면에서,
+    동작 줄이기가 아닐 때만, 페이지가 다 뜬 뒤에 받는다. 같은 출처 파일이라 CSP(script-src 'self')를 지킨다."""
+    from bs4 import BeautifulSoup
+    idx = BeautifulSoup((SITE / "index.html").read_text(encoding="utf-8"), "html.parser")
+    band = idx.find("section", id="wm-band")
+    assert band is not None and band.find(id="wm-stage") is not None and band.find(id="wm-foot") is not None
+    html = str(idx)
+    assert html.index('id="wm-band"') < html.index('id="day-title"')                          # 페이지 맨 위
+    replay = BeautifulSoup((SITE / "replay.html").read_text(encoding="utf-8"), "html.parser")
+    assert replay.find(id="wm-band") is None and replay.find(id="season") is None
+    loader = (ASSETS / "wordmark-loader.js").read_text(encoding="utf-8")
+    assert '"(hover: hover) and (pointer: fine)"' in loader and '"(prefers-reduced-motion: reduce)"' in loader
+    assert 's.src = "assets/wordmark.js"' in loader and "requestIdleCallback" in loader
+    bundle = ASSETS / "wordmark.js"
+    assert bundle.exists() and bundle.stat().st_size < 60_000                                # Preact 묶음 (React면 약 156KB)
+    assert "https://" not in bundle.read_text(encoding="utf-8")                              # 외부 요청 없음
+    web = ROOT / "web"
+    pkg = json.loads((web / "package.json").read_text(encoding="utf-8"))
+    assert pkg["dependencies"] == {"preact": "10.24.3"} and pkg["devDependencies"] == {"esbuild": "0.24.0"}
+    assert "--outfile=../site/assets/wordmark.js" in pkg["scripts"]["build"] and "--alias:react=preact/compat" in pkg["scripts"]["build"]
+    assert (web / "src" / "components" / "originkit" / "vector-wordmark-03.tsx").exists()

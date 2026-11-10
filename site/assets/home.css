@@ -201,6 +201,7 @@
 /* 가을야구 결과 (시즌이 끝난 뒤) */
 .season { margin-top: var(--sp-24); }
 .season + .page-head { margin-top: var(--sp-32); }
+.wm-band + .page-head { margin-top: var(--sp-32); }
 .season__hero { display: flex; align-items: center; gap: var(--sp-16); padding: 20px 24px; }
 .season__hero .tlogo { width: 88px; height: 88px; flex: none; }
 .season__kicker { font-size: 14px; font-weight: 800; opacity: .85; }
@@ -239,16 +240,6 @@
 }
 
 /* 시즌 종료 카드 */
-.season-end { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--sp-24); align-items: center; }
-.season-end__champ { display: flex; align-items: center; gap: var(--sp-16); padding: 18px 22px; }
-.season-end__champ .tlogo { width: 64px; height: 64px; }
-.season-end__k { font-size: 13px; font-weight: 800; opacity: .85; }
-.season-end__t { font-family: var(--font-num); font-style: italic; font-size: 48px; font-weight: 800; line-height: 1; }
-.season-end__s { margin-top: 4px; font-size: 14px; font-weight: 700; }
-.season-end__h { font-size: 20px; font-weight: 800; color: var(--ink); }
-.season-end__text p + p { margin-top: 6px; font-size: 14px; color: var(--body); }
-.season-end__text .btn { margin-top: var(--sp-12); }
-@media (max-width: 767px) { .season-end { grid-template-columns: minmax(0, 1fr); gap: var(--sp-12); } }
 
 /* 순위표 · 다가오는 경기 */
 .stand { margin-top: var(--sp-12); }
@@ -390,3 +381,24 @@ b.wi-side__num { color: var(--body); }
 /* 다시 보기: 시즌 고르기 */
 .replay-season { display: inline-flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; font-weight: 800; color: var(--ink); }
 .replay-season__select { min-height: 36px; padding: 0 10px; border: 0; outline: 2px solid var(--ink); outline-offset: -2px; background: var(--canvas); color: var(--ink); font: inherit; font-weight: 700; }
+
+/* ---------- 머리 띠: Baseball 글자 효과 (index.html #wm-band) ----------
+   마우스가 있는 화면은 wordmark.js(Originkit Vector Wordmark 3, Preact로 묶음)가 캔버스를 그리고 .is-live를 붙인다 —
+   마우스가 지나간 자리만 글자가 채워진다. 그 밖(휴대폰·동작 줄이기)은 같은 글꼴의 정지된 윤곽 글자. 바탕은 컴포넌트 바탕색과 같은 잉크 고정. */
+.wm-band { margin-top: var(--sp-24); background: #1c2127; color: var(--on-dark); position: relative; overflow: hidden; }
+.wm-band__stage { height: clamp(220px, 30vh, 340px); }
+.wm-band__stage > div { width: 100%; height: 100%; }
+.wm-band__hint { position: absolute; right: 16px; top: 12px; margin: 0; font-size: 12px; color: #8d929a; pointer-events: none; }
+.wm-band:not(.is-live) .wm-band__hint { display: none; }
+.wm-band:not(.is-live) .wm-band__stage {
+  display: grid; place-items: center; height: auto; padding-block: 36px;
+  font-family: var(--font-num); font-style: italic; font-weight: 800; font-size: clamp(64px, 20vw, 160px); line-height: 0.9;
+  color: transparent; -webkit-text-stroke: 1.5px #8d929a;
+}
+.wm-band__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 20px; border-top: 1px solid #2b313a; font-size: 14px; }
+.wm-band__foot[hidden] { display: none; }
+.wm-band__foot p { margin: 0; min-width: 0; }
+.wm-band__foot b { font-weight: 800; }
+.wm-band__foot a { color: inherit; font-weight: 700; text-underline-offset: 3px; }
+.wm-band__foot a:focus-visible { outline: 2px solid var(--on-dark); outline-offset: 2px; }
+.wm-band__foot .tlogo { width: 28px; height: 28px; background: #fff; border-radius: 50%; padding: 3px; box-sizing: border-box; flex: none; }

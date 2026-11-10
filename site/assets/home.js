@@ -398,34 +398,26 @@ function renderBug() {
   }));
 }
 
-// ---------- 시즌 종료 카드 (이번 시즌 페이지, 비시즌) ----------
-// 한국시리즈 승부가 나면(status.season_result) 맨 위에 짧게 알리고, 자세한 결과는 지난 시즌 페이지로 보낸다.
+// ---------- 머리 띠 아래 한 줄 (이번 시즌 페이지, 시즌이 끝났을 때) ----------
+// 한국시리즈 승부가 나면(status.season_result) 머리 띠 아래에 우승 팀과 지난 시즌 바로가기를 한 줄로. 시즌 중에는 숨긴다.
 
 /** 끝난 시즌(우승 팀이 정해진 시즌)의 연도 — 마지막으로 예측을 낸 날(latest.json)의 연도. */
 const endedSeason = () => Number(String(state.latest?.date ?? "").slice(0, 4)) || null;
 
 function renderSeason() {
-  const box = $("season");
-  if (PAGE === "replay") { box.hidden = true; return; }
+  const foot = $("wm-foot");
+  if (!foot) return; // 다시 보기 페이지에는 머리 띠가 없다
   const r = state.status?.season_result;
   const yr = endedSeason();
-  if (!r || !yr) { box.hidden = true; return; }
-  box.hidden = false;
+  if (PAGE === "replay" || !r || !yr) { foot.hidden = true; return; }
+  foot.hidden = false;
   const champ = r.champion, loser = r.teams.find((t) => t !== champ);
   const cw = r.wins[r.teams.indexOf(champ)], cl = r.wins[r.teams.indexOf(loser)];
-  const tc = teamColors(champ);
-  $("season-body").replaceChildren(el("div", { class: "season-end" }, [
-    el("div", { class: "season-end__champ", style: { background: tc.bg, color: tc.fg } }, [
-      teamLogo(champ, { size: "md" }),
-      el("div", {}, [el("p", { class: "season-end__k" }, `${yr} ${r.name} 우승`), el("p", { class: "season-end__t" }, teamName(champ)),
-        el("p", { class: "season-end__s" }, `${teamName(loser)}에 ${cw}승 ${cl}패`)]),
-    ]),
-    el("div", { class: "season-end__text" }, [
-      el("p", { class: "season-end__h" }, `${yr} 시즌이 끝났습니다`),
-      el("p", {}, `${yr + 1} 시즌 일정이 나오면 이 페이지에서 매일 경기 예측과 일정, 순위표를 보여 줍니다. 그전까지는 지난 시즌에서 ${yr} 한국시리즈와 가을야구, 최종 순위를 다시 볼 수 있습니다.`),
-      el("a", { class: "btn", href: `seasons.html?season=${yr}` }, `지난 시즌에서 ${yr} 다시 보기`),
-    ]),
-  ]));
+  foot.replaceChildren(
+    teamLogo(champ, { size: "sm" }),
+    el("p", {}, [`${yr} ${r.name} 우승 `, el("b", {}, teamName(champ)), ` (${teamName(loser)}에 ${cw}승 ${cl}패). ${yr + 1} 일정이 나오면 매일 예측이 다시 시작됩니다.`]),
+    el("a", { href: `seasons.html?season=${yr}` }, `지난 시즌에서 ${yr} 다시 보기`),
+  );
 }
 
 /** 다시 보기가 있는 가장 최근 시즌 (seasons/index.json의 rewind_seasons). 못 읽으면 FALLBACK_REWIND. */
