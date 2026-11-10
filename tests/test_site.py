@@ -949,4 +949,8 @@ def test_wordmark_band_loads_effect_only_where_it_shows():
     pkg = json.loads((web / "package.json").read_text(encoding="utf-8"))
     assert pkg["dependencies"] == {"preact": "10.24.3"} and pkg["devDependencies"] == {"esbuild": "0.24.0"}
     assert "--outfile=../site/assets/wordmark.js" in pkg["scripts"]["build"] and "--alias:react=preact/compat" in pkg["scripts"]["build"]
-    assert (web / "src" / "components" / "originkit" / "vector-wordmark-03.tsx").exists()
+    comp = (web / "src" / "components" / "originkit" / "vector-wordmark-03.tsx").read_text(encoding="utf-8")
+    # 공개 저장소에는 "수정한" 컴포넌트만 둔다(Originkit Licensing & Usage 2절) — 수정 내역 주석과 사이트용 기본값
+    assert "KBO Predict 수정본" in comp and "https://www.originkit.dev/docs/licensing" in comp
+    assert 'text = "Baseball"' in comp and '"fontFamily":"Barlow Condensed"' in comp and 'background = "#1c2127"' in comp
+    assert "minWidth: 1200" not in comp and "minHeight: 800" not in comp

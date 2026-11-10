@@ -1,5 +1,13 @@
 /* eslint-disable */
 // Originkit — props baked into the default export.
+//
+// KBO Predict 수정본 (2026-11-10): Originkit "Vector Wordmark 3"(vector-wordmark-03)를 이 사이트의 이번 시즌 머리 띠용으로 고쳤다.
+// Originkit Licensing & Usage(https://www.originkit.dev/docs/licensing) 2절 — 실제 앱·사이트인 오픈소스 코드에 수정한 컴포넌트를 넣는 것은 허용.
+// 바꾼 것:
+//  · 기본값: 글자 "Baseball", 글꼴 = 사이트 숫자 글꼴(Barlow Condensed 800 기울임, 크기 210), 바탕 = 사이트 잉크(#1c2127),
+//    글자 #f4f4f6, 그림자 #2b313a, 강조색 = 로고 공의 실밥 빨강(#d8232a, 90%)
+//  · 최소 크기 1200×800 바닥값 제거 — 페이지의 띠 높이(약 30vh)에 맞춰 그린다
+// 그 밖의 렌더링(WebGL 셰이더, 포인터 따라가는 펜 핸들)은 원본 그대로. React 대신 Preact로 묶는다(web/package.json).
 "use client"
 
 import * as React from "react"
@@ -358,12 +366,12 @@ export interface VectorWordmarkBezierProps {
 /** @framerDisableUnlink */
 function __OriginkitBase_VectorWordmarkBezier(props: VectorWordmarkBezierProps) {
     const {
-        text = "Bezier",
-        font = {"variant":"Medium","fontSize":240,"textAlign":"left","fontFamily":"Inter","fontWeight":400,"lineHeight":"1em","letterSpacing":"-0.02em"},
-        background = "#111111",
-        textColor = "#F5F5F5",
-        shade = "#2A2A2A",
-        accent = "rgba(255, 92, 57, 0.85)",
+        text = "Baseball",
+        font = {"variant":"Medium","fontSize":210,"textAlign":"left","fontFamily":"Barlow Condensed","fontWeight":800,"fontStyle":"italic","lineHeight":"1em","letterSpacing":"0em"},
+        background = "#1c2127",
+        textColor = "#f4f4f6",
+        shade = "#2b313a",
+        accent = "rgba(216, 35, 42, 0.9)",
         reach = 220,
         speed = 50,
         damping = 30,
@@ -782,8 +790,7 @@ function __OriginkitBase_VectorWordmarkBezier(props: VectorWordmarkBezierProps) 
                 background,
                 // Floor before the spread, so an explicit size on the instance
                 // still wins and Fit Content can't collapse the root to 0x0.
-                minWidth: 1200,
-                minHeight: 800,
+                // (KBO Predict) 원본의 minWidth 1200 · minHeight 800 바닥값을 뺐다 — 띠 높이에 맞춘다
                 width: "100%",
                 height: "100%",
                 ...style,
